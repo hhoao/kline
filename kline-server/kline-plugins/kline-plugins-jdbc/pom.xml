@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.hhoa.kline</groupId>
+        <artifactId>kline-plugins</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>kline-plugins-jdbc</artifactId>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.hhoa.kline</groupId>
+            <artifactId>kline-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.hhoa.kline</groupId>
+            <artifactId>kline-web-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.hhoa.kline</groupId>
+            <artifactId>kline-core</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.github.openfeign.querydsl</groupId>
+            <artifactId>querydsl-apt</artifactId>
+            <classifier>jpa</classifier>
+        </dependency>
+        <!-- Apache POI for Excel file processing -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-scratchpad</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+            <version>3.4.1</version>
+            <scope>compile</scope>
+        </dependency>
+    </dependencies>
+</project>

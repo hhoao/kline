@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "jsx": "react",
+    "jsxImportSource": "",
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noLib": false,
+    "forceConsistentCasingInFileNames": true,
+    "allowSyntheticDefaultImports": true,
+    "strictFunctionTypes": false,
+    // "jsx": "preserve",
+    "baseUrl": ".",
+    "allowJs": true,
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "experimentalDecorators": true,
+    "lib": ["dom", "esnext"],
+    "noImplicitAny": false,
+    "skipLibCheck": true,
+    "types": ["vite/client"],
+    "removeComments": true,
+
+    "declaration": true,
+    "noImplicitOverride": true,
+    "useUnknownInCatchVariables": false,
+    "composite": false,
+    "declarationMap": false,
+    "inlineSources": false,
+    "isolatedModules": true,
+    "preserveWatchOutput": true,
+    // 不生成输出文件。例如你想用 Babel 来编译文件，TypeScript 仅作为提供编辑器集成的工具，或用来对源码进行类型检查
+    "noEmit": true,
+    "paths": {
+      "@/*": ["src/*"],
+      "/#/*": ["types/*"],
+      "#/*": ["types/*"]
+    }
+  },
+  "include": [
+    "tests/**/*.ts",
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "src/**/*.tsx",
+    "src/**/*.vue",
+    "types/**/*.d.ts",
+    "types/**/*.ts",
+    "internal/**/*.ts",
+    "internal/**/*.d.ts",
+    "mock/**/*.ts",
+    "vite.config.ts"
+  ],
+  "exclude": ["node_modules", "tests/server/**/*.ts", "../src/main/resources/static/ai-web-ui/dist", "**/*.js"]
+}

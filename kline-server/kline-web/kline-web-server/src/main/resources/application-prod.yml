@@ -1,0 +1,39 @@
+---
+
+server:
+  port: 9527
+
+---
+devIp: localhost
+spring:
+  application:
+    name: kline
+
+  datasource:
+    url: jdbc:postgresql://${devIp}:5432/postgres
+    username: postgres
+    password: root
+    driver-class-name: org.postgresql.Driver
+    dynamic:
+      primary: master
+      datasource:
+        master:
+          url: jdbc:postgresql://${devIp}:5432/postgres
+          username: postgres
+          password: root
+          driver-class-name: org.postgresql.Driver
+  profiles:
+    active: dev
+
+kline:
+  prompt:
+    default-chat:
+      api-key: 'xxxx'
+      base-url: null
+      model-id: "3"
+      provider-id: deepseek
+
+
+mybatis-plus:
+  encryptor:
+    password: 'xxx' # 加解密的秘钥，可使用 https://www.imaegoo.com/2020/aes-key-generator/ 网站生成

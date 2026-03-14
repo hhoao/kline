@@ -1,0 +1,4 @@
+export { ClineError, ClineErrorType } from "./ClineError"
+export { type ErrorProviderConfig, ErrorProviderFactory, type ErrorProviderType } from "./ErrorProviderFactory"
+export { ErrorService } from "./ErrorService"
+export type { ErrorSettings, IErrorProvider } from "./providers/IErrorProvider"

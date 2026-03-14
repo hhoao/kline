@@ -1,0 +1,5 @@
+com.hhoa.kline.web.common.web.config.KlineWebAutoConfiguration
+com.hhoa.kline.web.common.mybatis.config.KlineMybatisAutoConfiguration
+com.hhoa.kline.web.common.apilog.config.KlineApiLogAutoConfiguration
+com.hhoa.kline.web.common.swagger.config.KlineSwaggerAutoConfiguration
+com.hhoa.kline.web.common.xss.config.KlineXssAutoConfiguration

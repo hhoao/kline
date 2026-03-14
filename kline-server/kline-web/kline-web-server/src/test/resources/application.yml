@@ -1,0 +1,47 @@
+---
+server:
+  port: 9527
+---
+spring:
+  ai:
+    mcp:
+      server:
+        name: stdio-mcp-server
+        version: 1.0.0
+        type: SYNC
+        sse-message-endpoint: /sse
+
+easy-trans:
+  is-enable-global: true
+
+---
+# 测试环境配置
+devIp: localhost
+spring:
+  application:
+    name: kline
+
+  datasource:
+    url: jdbc:postgresql://${devIp}:5432/postgres
+    username: postgres
+    password: root
+    driver-class-name: org.postgresql.Driver
+    dynamic:
+      primary: master
+      datasource:
+        master:
+          url: jdbc:postgresql://${devIp}:5432/postgres
+          username: postgres
+          password: root
+          driver-class-name: org.postgresql.Driver
+
+  # JPA配置
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+login:
+  no-login: true
+

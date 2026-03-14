@@ -1,0 +1,2 @@
+org.springframework.boot.env.EnvironmentPostProcessor=\
+  com.hhoa.kline.web.common.mybatis.config.IdTypeEnvironmentPostProcessor

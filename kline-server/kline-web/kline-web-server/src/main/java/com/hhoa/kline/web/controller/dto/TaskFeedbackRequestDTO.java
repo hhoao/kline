@@ -1,0 +1,18 @@
+package com.hhoa.kline.web.controller.dto;
+
+import jakarta.validation.constraints.NotBlank;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class TaskFeedbackRequestDTO {
+    @NotBlank(message = "反馈类型不能为空")
+    private Boolean value;
+
+    private String taskId;
+}

@@ -1,0 +1,102 @@
+---
+description: kline-server 项目架构说明，包含项目背景、核心使命、模块架构、技术栈和通信协议
+alwaysApply: true
+---
+
+# kline-server 项目架构
+
+## 项目背景
+
+**kline-server** 是一个基于 Spring Boot 3 的 AI 编码助手后端服务，深度集成 Cline（AI 代码助手引擎），提供任务管理、对话管理、知识库（RAG）、MCP 工具调用等能力，服务于前端 UI 与 AI 模型之间的完整交互链路。
+
+## 核心使命
+
+kline-server 为 AI 编码助手提供可靠的后端支撑，主要解决以下问题：
+
+- **任务生命周期管理**：新建、执行、取消、导出 Cline 任务
+- **多模型接入**：统一接入 OpenAI、Azure OpenAI、Ollama、ZhipuAI、MiniMax 等主流 LLM
+- **知识库（RAG）**：支持文档上传、切片、向量化、检索增强生成
+- **MCP 工具集成**：作为 MCP Client/Server 双端，扩展 AI 工具能力
+- **多租户支持**：全数据模型携带 `tenant_id`，支持企业级多租户隔离
+
+## Monorepo 模块架构
+
+```plaintext
+kline-server/
+├── kline-common/           # 公共工具层：异常、枚举、校验器、工具函数
+├── kline-core/             # 核心业务层：AI 引擎、任务执行、Cline 集成
+├── kline-plugins/          # 插件层
+│   └── kline-plugins-jdbc/ # JDBC 数据库插件
+└── kline-web/              # Web 层
+    ├── kline-web-common/   # Web 公共层：数据库配置、多数据源
+    └── kline-web-server/   # 主应用入口：REST API、Spring Boot 启动类
+```
+
+### 模块职责
+
+**kline-common**（公共工具层）：
+
+- 轻量级工具模块，无 Spring 依赖
+- 统一异常定义、枚举类型、参数校验器
+- 工具函数（Jackson、Guava 工具封装）
+- SpringDoc OpenAPI 集成
+
+**kline-core**（核心业务层）：
+
+- Cline AI 引擎集成（任务执行框架）
+- 工具执行处理器（Checkpoints、Diagnostics、Editor、Notifications、Terminal）
+- Prompt 系统（XS、Generic、GPT5、GLM、NextGen 多变体）
+- 状态管理（StateManager、FileBasedStorageContext）
+- 服务集成：MCP、Telemetry、Ripgrep
+- 工作区与上下文管理
+- Project Reactor 响应式支持
+
+**kline-plugins-jdbc**（JDBC 插件）：
+
+- JDBC 数据库连接扩展
+- Apache POI Excel 处理
+- PostgreSQL 驱动
+
+**kline-web-common**（Web 公共层）：
+
+- Spring Boot Web 基础配置
+- Druid 连接池 + MyBatis Plus ORM
+- 多数据源（Dynamic DataSource）
+- 国产数据库支持：MySQL、Oracle、PostgreSQL、SQL Server、达梦、人大金仓、OpenGauss、TaosDB
+- Easy-Trans 翻译框架
+
+**kline-web-server**（主应用入口）：
+
+- Spring Boot 启动类：`KlineApplication`（端口 9527）
+- REST API 控制器（17 个）
+- AI 模型集成：OpenAI、Azure OpenAI、Ollama、Stability AI、ZhipuAI、MiniMax
+- 向量库：Qdrant、Milvus
+- MCP Client & Server 双端支持
+- 文档解析（Apache Tika）
+- 数据库迁移（Flyway）
+
+## 分层架构
+
+```plaintext
+HTTP Client ↔ Controller Layer ↔ Service Layer ↔ DAO Layer ↔ Database
+                                      ↕
+                              kline-core（AI 引擎）
+                                      ↕
+                              MCP Server ↔ LLM Provider
+```
+
+**职责分工**：
+
+- **Controller 层**：接收 HTTP 请求，参数校验，返回统一响应
+- **Service 层**：业务逻辑实现（`*ServiceImpl`），协调 DAO 与 AI 引擎
+- **DAO 层**：MyBatis Plus Mapper + Data Object，负责数据持久化
+- **kline-core**：AI 任务执行、Prompt 管理、工具调用，不直接依赖 Web 层
+
+## REST API 结构
+
+**路径前缀**：
+
+- `/app-api` - 应用 API（面向前端用户）
+- `/admin-api` - 管理 API（面向管理后台）
+- `/api/cline/task` - Cline 任务 API
+- `/cline/ui/` - 前端静态资源

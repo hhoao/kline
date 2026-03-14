@@ -1,0 +1,239 @@
+// type that represents json data that is sent from extension to webview, called ExtensionMessage and has 'type' enum which can be 'plusButtonClicked' or 'settingsButtonClicked' or 'hello'
+
+import { ApiConfiguration } from "./api"
+import { AutoApprovalSettings } from "./AutoApprovalSettings"
+import { BrowserSettings } from "./BrowserSettings"
+import { ClineRulesToggles } from "./cline-rules"
+import { ClineFeatureSetting } from "./ClineFeatureSetting"
+import { DictationSettings } from "./DictationSettings"
+import { FocusChainSettings } from "./FocusChainSettings"
+import { HistoryItem } from "./HistoryItem"
+import { McpDisplayMode } from "./McpDisplayMode"
+import { WorkspaceRoot } from "./multi-root/types"
+import { GlobalStateAndSettings } from "./storage/state-keys"
+import { Mode, OpenaiReasoningEffort } from "./storage/types"
+import { TelemetrySetting } from "./TelemetrySetting"
+import { UserInfo } from "./UserInfo"
+
+
+export type Platform = "aix" | "darwin" | "freebsd" | "linux" | "openbsd" | "sunos" | "win32" | "unknown"
+
+export const DEFAULT_PLATFORM = "unknown"
+
+export const COMMAND_CANCEL_TOKEN = "__cline_command_cancel__"
+
+export interface ExtensionState {
+	isNewUser: boolean
+	welcomeViewCompleted: boolean
+	apiConfiguration?: ApiConfiguration
+	autoApprovalSettings: AutoApprovalSettings
+	browserSettings: BrowserSettings
+	remoteBrowserHost?: string
+	preferredLanguage?: string
+	openaiReasoningEffort?: OpenaiReasoningEffort
+	mode: Mode
+	checkpointManagerErrorMessage?: string
+	clineMessages: ClineMessage[]
+	currentTaskItem?: HistoryItem
+	currentFocusChainChecklist?: string | null
+	mcpMarketplaceEnabled?: boolean
+	mcpDisplayMode: McpDisplayMode
+	planActSeparateModelsSetting: boolean
+	enableCheckpointsSetting?: boolean
+	platform: Platform
+	shouldShowAnnouncement: boolean
+	taskHistory: HistoryItem[]
+	telemetrySetting: TelemetrySetting
+	shellIntegrationTimeout: number
+	terminalReuseEnabled?: boolean
+	terminalOutputLineLimit: number
+	maxConsecutiveMistakes: number
+	subagentTerminalOutputLineLimit: number
+	defaultTerminalProfile?: string
+	vscodeTerminalExecutionMode: string
+	backgroundCommandRunning?: boolean
+	backgroundCommandTaskId?: string
+	lastCompletedCommandTs?: number
+	userInfo?: UserInfo
+	version: string
+	distinctId: string
+	globalClineRulesToggles: ClineRulesToggles
+	localClineRulesToggles: ClineRulesToggles
+	localWorkflowToggles: ClineRulesToggles
+	globalWorkflowToggles: ClineRulesToggles
+	localCursorRulesToggles: ClineRulesToggles
+	localWindsurfRulesToggles: ClineRulesToggles
+	mcpResponsesCollapsed?: boolean
+	strictPlanModeEnabled?: boolean
+	yoloModeToggled?: boolean
+	useAutoCondense?: boolean
+	focusChainSettings: FocusChainSettings
+	dictationSettings: DictationSettings
+	customPrompt?: string
+	autoCondenseThreshold?: number
+	favoritedModelIds: string[]
+	// NEW: Add workspace information
+	workspaceRoots: WorkspaceRoot[]
+	primaryRootIndex: number
+	isMultiRootWorkspace: boolean
+	multiRootSetting: ClineFeatureSetting
+	lastDismissedInfoBannerVersion: number
+	lastDismissedModelBannerVersion: number
+	lastDismissedCliBannerVersion: number
+	hooksEnabled?: ClineFeatureSetting
+	remoteConfigSettings?: Partial<GlobalStateAndSettings>
+	subagentsEnabled?: boolean
+	totalTasksSize?: number
+}
+
+export interface ClineMessage {
+	ts: number
+	type: "ask" | "say"
+	ask?: ClineAsk
+	say?: ClineSay
+	text?: string
+	reasoning?: string
+	images?: string[]
+	files?: string[]
+	partial?: boolean
+	format?: "json" | "plain"
+	commandCompleted?: boolean
+	lastCheckpointHash?: string
+	isCheckpointCheckedOut?: boolean
+	isOperationOutsideWorkspace?: boolean
+	conversationHistoryIndex?: number
+	conversationHistoryDeletedRange?: [number, number] // for when conversation history is truncated for API requests
+}
+
+export type ClineAsk =
+	| "followup"
+	| "plan_mode_respond"
+	| "command"
+	| "command_output"
+	| "completion_result"
+	| "tool"
+	| "api_req_failed"
+	| "resume_task"
+	| "resume_completed_task"
+	| "mistake_limit_reached"
+	| "auto_approval_max_req_reached"
+	| "browser_action_launch"
+	| "use_mcp_server"
+	| "new_task"
+	| "condense"
+	| "summarize_task"
+	| "report_bug"
+
+export type ClineSay =
+	| "task"
+	| "error"
+	| "error_retry"
+	| "api_req_started"
+	| "api_req_finished"
+	| "text"
+	| "reasoning"
+	| "completion_result"
+	| "user_feedback"
+	| "user_feedback_diff"
+	| "api_req_retried"
+	| "command"
+	| "command_output"
+	| "tool"
+	| "shell_integration_warning"
+	| "shell_integration_warning_with_suggestion"
+	| "browser_action_launch"
+	| "browser_action"
+	| "browser_action_result"
+	| "mcp_server_request_started"
+	| "mcp_server_response"
+	| "mcp_notification"
+	| "use_mcp_server"
+	| "diff_error"
+	| "deleted_api_reqs"
+	| "clineignore_error"
+	| "checkpoint_created"
+	| "load_mcp_documentation"
+	| "load_tool_set"
+	| "info" // Added for general informational messages like retry status
+	| "task_progress"
+
+export interface ClineSayTool {
+	tool:
+		| "editedExistingFile"
+		| "newFileCreated"
+		| "readFile"
+		| "listFilesTopLevel"
+		| "listFilesRecursive"
+		| "listCodeDefinitionNames"
+		| "searchFiles"
+		| "webFetch"
+		| "summarizeTask"
+	path?: string
+	diff?: string
+	content?: string
+	regex?: string
+	filePattern?: string
+	operationIsLocatedInWorkspace?: boolean
+}
+
+// must keep in sync with system prompt
+export const browserActions = ["launch", "click", "type", "scroll_down", "scroll_up", "close"] as const
+export type BrowserAction = (typeof browserActions)[number]
+
+export interface ClineSayBrowserAction {
+	action: BrowserAction
+	coordinate?: string
+	text?: string
+}
+
+export type BrowserActionResult = {
+	screenshot?: string
+	logs?: string
+	currentUrl?: string
+	currentMousePosition?: string
+}
+
+export interface ClineAskUseMcpServer {
+	serverName: string
+	type: "use_mcp_tool" | "access_mcp_resource"
+	toolName?: string
+	arguments?: string
+	uri?: string
+}
+
+export interface ClinePlanModeResponse {
+	response: string
+	options?: string[]
+	selected?: string
+}
+
+export interface ClineAskQuestion {
+	question: string
+	options?: string[]
+	selected?: string
+}
+
+export interface ClineAskNewTask {
+	context: string
+}
+
+export interface ClineApiReqInfo {
+	request?: string
+	tokensIn?: number
+	tokensOut?: number
+	cacheWrites?: number
+	cacheReads?: number
+	cost?: number
+	cancelReason?: ClineApiReqCancelReason
+	streamingFailedMessage?: string
+	retryStatus?: {
+		attempt: number
+		maxAttempts: number
+		delaySec: number
+		errorSnippet?: string
+	}
+}
+
+export type ClineApiReqCancelReason = "streaming_failed" | "user_cancelled" | "retries_exhausted"
+
+export const COMPLETION_RESULT_CHANGES_FLAG = "HAS_CHANGES"
