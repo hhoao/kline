@@ -1,8 +1,8 @@
-package com.hhoa.kline.web.common.utils.object;
+package com.hhoa.ai.kline.commons.utils.object;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.bean.copier.CopyOptions;
 import com.hhoa.ai.kline.commons.utils.collection.CollectionUtils;
-import com.hhoa.kline.web.common.pojo.PageResult;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -11,7 +11,6 @@ import java.util.function.Consumer;
  *
  * <p>1. 默认使用 {@link BeanUtil} 作为实现类，虽然不同 bean 工具的性能有差别，但是对绝大多数同学的项目，不用在意这点性能 2. 针对复杂的对象转换，可以搜参考
  * AuthConvert 实现，通过 mapstruct + default 配合实现
- *
  */
 public class BeanUtils {
 
@@ -42,22 +41,6 @@ public class BeanUtils {
         return list;
     }
 
-    public static <S, T> PageResult<T> toBean(PageResult<S> source, Class<T> targetType) {
-        return toBean(source, targetType, null);
-    }
-
-    public static <S, T> PageResult<T> toBean(
-            PageResult<S> source, Class<T> targetType, Consumer<T> peek) {
-        if (source == null) {
-            return null;
-        }
-        List<T> list = toBean(source.getList(), targetType);
-        if (peek != null) {
-            list.forEach(peek);
-        }
-        return new PageResult<>(list, source.getTotal());
-    }
-
     public static void copyProperties(Object source, Object target) {
         if (source == null || target == null) {
             return;
@@ -65,19 +48,10 @@ public class BeanUtils {
         BeanUtil.copyProperties(source, target, false);
     }
 
-    public static <S, T> PageResult<T> toPageResultBean(PageResult<S> source, Class<T> targetType) {
-        return toPageResultBean(source, targetType, null);
-    }
-
-    public static <S, T> PageResult<T> toPageResultBean(
-            PageResult<S> source, Class<T> targetType, Consumer<T> peek) {
-        if (source == null || source.getList() == null) {
-            return new PageResult<>(0L);
+    public static void copyPropertiesIgnoreNull(Object source, Object target) {
+        if (source == null || target == null) {
+            return;
         }
-        List<T> list = toBean(source.getList(), targetType);
-        if (peek != null && list != null) {
-            list.forEach(peek);
-        }
-        return new PageResult<>(list, source.getTotal());
+        BeanUtil.copyProperties(source, target, CopyOptions.create().ignoreNullValue());
     }
 }

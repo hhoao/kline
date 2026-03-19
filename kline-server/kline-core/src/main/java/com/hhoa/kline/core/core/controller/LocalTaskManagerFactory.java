@@ -16,6 +16,7 @@ import com.hhoa.kline.core.core.task.ApiHandler;
 import com.hhoa.kline.core.core.task.ContextFactory;
 import com.hhoa.kline.core.core.task.focuschain.FocusChainManagerFactory;
 import com.hhoa.kline.core.core.task.focuschain.LocalFocusChainManagerFactory;
+import com.hhoa.kline.core.core.task.tools.DefaultExecutor;
 import com.hhoa.kline.core.core.task.tools.ToolExecutor;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -95,7 +96,7 @@ public class LocalTaskManagerFactory implements TaskManagerFactory {
                                 cacheDirectory);
                 FocusChainManagerFactory focusChainManagerFactory =
                         new LocalFocusChainManagerFactory(stateManager, tasksDirectory);
-                ToolExecutor toolExecutor = new ToolExecutor(null, new ResponseFormatter());
+                ToolExecutor toolExecutor = new DefaultExecutor(null, new ResponseFormatter());
                 IMcpHub mcpHub = new DefaultMcpHub(stateManager);
                 if (mcpHubInitializer != null) {
                     mcpHubInitializer.initialize(mcpHub);
@@ -115,7 +116,7 @@ public class LocalTaskManagerFactory implements TaskManagerFactory {
                         };
                 taskManagers.put(
                         taskManagerId,
-                        new TaskManager(
+                        new DefaultTaskManager(
                                 mcpHub,
                                 stateManager,
                                 systemPromptService,

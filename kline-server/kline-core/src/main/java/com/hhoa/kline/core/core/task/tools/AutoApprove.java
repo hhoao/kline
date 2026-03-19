@@ -8,7 +8,6 @@ import com.hhoa.kline.core.core.workspace.WorkspaceRootManager;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.Arrays;
 
-/** 工具自动批准逻辑，对齐 TS 版本 autoApprove：yolo 模式、按工具/路径的自动批准设置、本地/外部区分。 */
 public class AutoApprove {
 
     private final StateManager stateManager;

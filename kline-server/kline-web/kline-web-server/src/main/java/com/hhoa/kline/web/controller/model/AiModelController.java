@@ -7,7 +7,7 @@ import cn.hutool.core.bean.BeanUtil;
 import com.hhoa.kline.web.common.enums.CommonStatusEnum;
 import com.hhoa.kline.web.common.pojo.CommonResult;
 import com.hhoa.kline.web.common.pojo.PageResult;
-import com.hhoa.kline.web.common.utils.object.BeanUtils;
+import com.hhoa.kline.web.common.utils.PageUtils;
 import com.hhoa.kline.web.dal.dataobject.AiModelDO;
 import com.hhoa.kline.web.dto.model.model.AiModelPageReqVO;
 import com.hhoa.kline.web.dto.model.model.AiModelRespVO;
@@ -70,7 +70,7 @@ public class AiModelController {
     @Operation(summary = "获得模型分页")
     public CommonResult<PageResult<AiModelRespVO>> getModelPage(@Valid AiModelPageReqVO pageReqVO) {
         PageResult<AiModelDO> pageResult = modelService.getModelPage(pageReqVO);
-        return success(BeanUtils.toPageResultBean(pageResult, AiModelRespVO.class));
+        return success(PageUtils.toPageResult(pageResult, AiModelRespVO.class));
     }
 
     @GetMapping("/simple-list")

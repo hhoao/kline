@@ -5,10 +5,7 @@ import java.util.Arrays;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
-/**
- * 终端的枚举
- *
- */
+/** 终端的枚举 */
 @RequiredArgsConstructor
 @Getter
 public enum TerminalEnum implements ArrayValuable<Integer> {

@@ -10,9 +10,10 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
 import com.hhoa.ai.kline.commons.utils.collection.MapUtils;
+import com.hhoa.ai.kline.commons.utils.object.BeanUtils;
 import com.hhoa.kline.web.common.pojo.CommonResult;
 import com.hhoa.kline.web.common.pojo.PageResult;
-import com.hhoa.kline.web.common.utils.object.BeanUtils;
+import com.hhoa.kline.web.common.utils.PageUtils;
 import com.hhoa.kline.web.dal.dataobject.AiChatConversationDO;
 import com.hhoa.kline.web.dal.dataobject.AiChatMessageDO;
 import com.hhoa.kline.web.dal.dataobject.AiChatRoleDO;
@@ -171,7 +172,7 @@ public class AiChatMessageController {
                 chatRoleService.getChatRoleMap(
                         convertSet(pageResult.getList(), AiChatMessageDO::getRoleId));
         return success(
-                BeanUtils.toPageResultBean(
+                PageUtils.toPageResult(
                         pageResult,
                         AiChatMessageRespVO.class,
                         respVO ->

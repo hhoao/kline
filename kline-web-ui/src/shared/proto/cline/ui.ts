@@ -647,6 +647,8 @@ export interface ClineApiReqInfo {
 /** Main ClineMessage type */
 export interface ClineMessage {
   ts?: number;
+  /** PendingAsk 的唯一标识，前端响应时需要回传 */
+  pendingId?: string;
   type: ClineMessageType;
   ask?: ClineAsk;
   say?: ClineSay;

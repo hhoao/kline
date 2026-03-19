@@ -6,9 +6,10 @@ import static com.hhoa.kline.web.common.pojo.CommonResult.success;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import com.hhoa.ai.kline.commons.utils.collection.MapUtils;
+import com.hhoa.ai.kline.commons.utils.object.BeanUtils;
 import com.hhoa.kline.web.common.pojo.CommonResult;
 import com.hhoa.kline.web.common.pojo.PageResult;
-import com.hhoa.kline.web.common.utils.object.BeanUtils;
+import com.hhoa.kline.web.common.utils.PageUtils;
 import com.hhoa.kline.web.dal.dataobject.AiKnowledgeDocumentDO;
 import com.hhoa.kline.web.dal.dataobject.AiKnowledgeSegmentDO;
 import com.hhoa.kline.web.dto.knowledge.segment.AiKnowledgeSegmentPageReqVO;
@@ -64,7 +65,7 @@ public class AiKnowledgeSegmentController {
             @Valid AiKnowledgeSegmentPageReqVO pageReqVO) {
         PageResult<AiKnowledgeSegmentDO> pageResult =
                 segmentService.getKnowledgeSegmentPage(pageReqVO);
-        return success(BeanUtils.toPageResultBean(pageResult, AiKnowledgeSegmentRespVO.class));
+        return success(PageUtils.toPageResult(pageResult, AiKnowledgeSegmentRespVO.class));
     }
 
     @PostMapping("/create")

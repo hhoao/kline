@@ -8,10 +8,7 @@ import com.hhoa.kline.web.enums.ApiErrorLogProcessStatusEnum;
 import java.time.LocalDateTime;
 import lombok.*;
 
-/**
- * API 异常数据
- *
- */
+/** API 异常数据 */
 @TableName("infra_api_error_log")
 @Data
 @EqualsAndHashCode(callSuper = true)

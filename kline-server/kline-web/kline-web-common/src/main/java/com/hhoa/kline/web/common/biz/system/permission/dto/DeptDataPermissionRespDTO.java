@@ -4,10 +4,7 @@ import java.util.HashSet;
 import java.util.Set;
 import lombok.Data;
 
-/**
- * 部门的数据权限 Response DTO
- *
- */
+/** 部门的数据权限 Response DTO */
 @Data
 public class DeptDataPermissionRespDTO {
 

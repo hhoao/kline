@@ -4,10 +4,7 @@ import jakarta.validation.constraints.NotEmpty;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/**
- * Swagger 配置属性
- *
- */
+/** Swagger 配置属性 */
 @ConfigurationProperties("kline.swagger")
 @Data
 public class SwaggerProperties {

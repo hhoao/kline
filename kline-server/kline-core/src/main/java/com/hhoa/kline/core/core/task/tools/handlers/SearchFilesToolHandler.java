@@ -2,7 +2,6 @@ package com.hhoa.kline.core.core.task.tools.handlers;
 
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ToolUse;
-import com.hhoa.kline.core.core.assistant.UserContentBlock;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
 import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
@@ -12,8 +11,11 @@ import com.hhoa.kline.core.core.services.telemetry.TelemetryService;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
+import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.TaskUtils;
-import com.hhoa.kline.core.core.task.tools.types.TaskConfig;
+import com.hhoa.kline.core.core.task.tools.types.ToolContext;
+import com.hhoa.kline.core.core.task.tools.types.ToolExecuteResult;
+import com.hhoa.kline.core.core.task.tools.types.ToolState;
 import com.hhoa.kline.core.core.task.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.task.tools.utils.ToolResultUtils;
 import com.hhoa.kline.core.core.workspace.WorkspaceConfig;
@@ -30,15 +32,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class SearchFilesToolHandler implements FullyManagedTool {
+public class SearchFilesToolHandler implements StateFullToolHandler {
 
     private static final String NAME = "search_files";
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
     private final RipgrepService ripgrepService = new RipgrepService();
+
+    /** SearchFilesToolHandler 的阶段状态 */
+    @Getter
+    @Setter
+    public static class SearchFilesToolState extends ToolState {
+        private String results;
+        private TelemetryService.WorkspaceContext workspaceContext;
+    }
 
     private static boolean arePathsEqual(String path1, String path2) {
         if (path1 == null && path2 == null) {
@@ -54,6 +66,11 @@ public class SearchFilesToolHandler implements FullyManagedTool {
         } catch (Exception e) {
             return path1.equals(path2);
         }
+    }
+
+    @Override
+    public ToolState createToolState() {
+        return new SearchFilesToolState();
     }
 
     @Override
@@ -85,7 +102,7 @@ public class SearchFilesToolHandler implements FullyManagedTool {
         String regex = HandlerUtils.getStringParam(block, "regex");
         String filePattern = HandlerUtils.getStringParam(block, "file_pattern");
 
-        TaskConfig config = ui.getConfig();
+        ToolContext config = ui.getContext();
         Map<String, Object> messageMap = new HashMap<>();
         messageMap.put("tool", "searchFiles");
         messageMap.put("path", HandlerUtils.getReadablePath(config.getCwd(), relPath));
@@ -106,7 +123,7 @@ public class SearchFilesToolHandler implements FullyManagedTool {
     }
 
     private List<SearchPathInfo> determineSearchPaths(
-            TaskConfig config, String parsedPath, String workspaceHint, String originalPath) {
+            ToolContext config, String parsedPath, String workspaceHint, String originalPath) {
         List<SearchPathInfo> searchPaths = new ArrayList<>();
 
         WorkspaceRootManager manager = config.getWorkspaceManager();
@@ -145,7 +162,7 @@ public class SearchFilesToolHandler implements FullyManagedTool {
     }
 
     private SearchResult executeSearch(
-            TaskConfig config,
+            ToolContext config,
             String absolutePath,
             String workspaceName,
             String workspaceRoot,
@@ -180,7 +197,9 @@ public class SearchFilesToolHandler implements FullyManagedTool {
     }
 
     private String formatSearchResults(
-            TaskConfig config, List<SearchResult> searchResults, List<SearchPathInfo> searchPaths) {
+            ToolContext config,
+            List<SearchResult> searchResults,
+            List<SearchPathInfo> searchPaths) {
         List<String> allResults = new ArrayList<>();
         int totalResultCount = 0;
 
@@ -225,34 +244,24 @@ public class SearchFilesToolHandler implements FullyManagedTool {
     }
 
     @Override
-    public List<UserContentBlock> execute(TaskConfig config, ToolUse block) {
+    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
         String relDirPath = HandlerUtils.getStringParam(block, "path");
         String regex = HandlerUtils.getStringParam(block, "regex");
         String filePattern = HandlerUtils.getStringParam(block, "file_pattern");
-
-        if (regex == null || regex.isEmpty()) {
-            config.getTaskState()
-                    .setConsecutiveMistakeCount(
-                            config.getTaskState().getConsecutiveMistakeCount() + 1);
-            String errorResult = config.getCallbacks().sayAndCreateMissingParamError(NAME, "regex");
-            return HandlerUtils.createTextBlocks(errorResult);
-        }
-
-        config.getTaskState().setConsecutiveMistakeCount(0);
 
         ParsedWorkspacePath parsed = WorkspacePathParser.parseWorkspaceInlinePath(relDirPath);
         String workspaceHint = parsed.getWorkspaceHint();
         String parsedPath = parsed.getRelPath();
 
         List<SearchPathInfo> searchPaths =
-                determineSearchPaths(config, parsedPath, workspaceHint, relDirPath);
+                determineSearchPaths(context, parsedPath, workspaceHint, relDirPath);
 
         String primaryWorkspaceRoot =
                 searchPaths.isEmpty() ? null : searchPaths.get(0).workspaceRoot;
         boolean resolvedToNonPrimary =
                 searchPaths.isEmpty()
                         || (primaryWorkspaceRoot != null
-                                && !arePathsEqual(primaryWorkspaceRoot, config.getCwd()));
+                                && !arePathsEqual(primaryWorkspaceRoot, context.getCwd()));
         TelemetryService.WorkspaceContext workspaceContext =
                 new TelemetryService.WorkspaceContext(
                         workspaceHint != null && !workspaceHint.isEmpty(),
@@ -261,19 +270,19 @@ public class SearchFilesToolHandler implements FullyManagedTool {
                                 ? "hint"
                                 : searchPaths.size() > 1 ? "path_detection" : "primary_fallback");
 
-        if (config.getWorkspaceManager() != null
-                && config.getServices() != null
-                && config.getServices().getTelemetryService() != null) {
+        if (context.getWorkspaceManager() != null
+                && context.getServices() != null
+                && context.getServices().getTelemetryService() != null) {
             String resolutionType =
                     workspaceHint != null && !workspaceHint.isEmpty()
                             ? "hint_provided"
                             : searchPaths.size() > 1
                                     ? "cross_workspace_search"
                                     : "fallback_to_primary";
-            config.getServices()
+            context.getServices()
                     .getTelemetryService()
                     .captureWorkspacePathResolved(
-                            config.getUlid(),
+                            context.getUlid(),
                             "SearchFilesToolHandler",
                             resolutionType,
                             workspaceHint != null && !workspaceHint.isEmpty()
@@ -289,7 +298,7 @@ public class SearchFilesToolHandler implements FullyManagedTool {
         for (SearchPathInfo pathInfo : searchPaths) {
             SearchResult result =
                     executeSearch(
-                            config,
+                            context,
                             pathInfo.absolutePath,
                             pathInfo.workspaceName,
                             pathInfo.workspaceRoot,
@@ -299,11 +308,11 @@ public class SearchFilesToolHandler implements FullyManagedTool {
         }
         long searchDurationMs = (System.nanoTime() / 1_000_000) - searchStartTime;
 
-        String results = formatSearchResults(config, searchResults, searchPaths);
+        String results = formatSearchResults(context, searchResults, searchPaths);
 
-        if (config.getWorkspaceManager() != null
-                && config.getServices() != null
-                && config.getServices().getTelemetryService() != null) {
+        if (context.getWorkspaceManager() != null
+                && context.getServices() != null
+                && context.getServices().getTelemetryService() != null) {
             String searchType =
                     workspaceHint != null && !workspaceHint.isEmpty()
                             ? "targeted"
@@ -311,10 +320,10 @@ public class SearchFilesToolHandler implements FullyManagedTool {
             boolean resultsFound =
                     searchResults.stream().anyMatch(result -> result.resultCount > 0);
 
-            config.getServices()
+            context.getServices()
                     .getTelemetryService()
                     .captureWorkspaceSearchPattern(
-                            config.getUlid(),
+                            context.getUlid(),
                             searchType,
                             searchPaths.size(),
                             workspaceHint != null && !workspaceHint.isEmpty(),
@@ -324,96 +333,87 @@ public class SearchFilesToolHandler implements FullyManagedTool {
 
         Map<String, Object> messageMap = new HashMap<>();
         messageMap.put("tool", "searchFiles");
-        messageMap.put("path", HandlerUtils.getReadablePath(config.getCwd(), relDirPath));
+        messageMap.put("path", HandlerUtils.getReadablePath(context.getCwd(), relDirPath));
         messageMap.put("content", results);
         messageMap.put("regex", regex);
         messageMap.put("filePattern", filePattern);
         messageMap.put(
                 "operationIsLocatedInWorkspace",
-                String.valueOf(HandlerUtils.isLocatedInWorkspace(parsedPath, config)));
+                String.valueOf(HandlerUtils.isLocatedInWorkspace(parsedPath, context)));
         String message = JsonUtils.toJsonString(messageMap);
 
         Boolean approve =
-                config.getCallbacks().shouldAutoApproveToolWithPath(block.getName(), relDirPath);
+                context.getCallbacks().shouldAutoApproveToolWithPath(block.getName(), relDirPath);
         if (Boolean.TRUE.equals(approve)) {
-            config.getCallbacks()
+            context.getCallbacks()
                     .say(ClineSay.TOOL, message, null, null, false, ClineMessageFormat.JSON);
-            if (!config.isYoloModeToggled()) {
-                config.getTaskState()
-                        .setConsecutiveAutoApprovedRequestsCount(
-                                config.getTaskState().getConsecutiveAutoApprovedRequestsCount()
-                                        + 1);
-            }
 
-            if (config.getServices() != null
-                    && config.getServices().getTelemetryService() != null) {
-                String modelId =
-                        config.getApi() != null && config.getApi().getModel() != null
-                                ? config.getApi().getModel().getId()
-                                : "unknown";
-                config.getServices()
-                        .getTelemetryService()
-                        .captureToolUsage(
-                                config.getUlid(),
-                                block.getName(),
-                                modelId,
-                                true,
-                                true,
-                                workspaceContext);
-            }
+            captureTelemetry(context, block, true, true, workspaceContext);
 
-            return HandlerUtils.createTextBlocks(results);
-        } else {
-            String notificationMessage = "Cline wants to search files for " + regex;
-            TaskUtils.showNotificationForApprovalIfAutoApprovalEnabled(
-                    notificationMessage,
-                    config.getAutoApprovalSettings() != null
-                            && config.getAutoApprovalSettings().isEnabled(),
-                    config.getAutoApprovalSettings() != null
-                            && config.getAutoApprovalSettings().isEnableNotifications(),
-                    (subtitle, msg) -> {});
+            return HandlerUtils.createToolExecuteResult(results);
+        }
 
-            Boolean didApprove =
-                    ToolResultUtils.askApprovalAndPushFeedback(
-                            ClineAsk.TOOL, message, config, ClineMessageFormat.JSON);
-            if (!didApprove) {
-                if (config.getServices() != null
-                        && config.getServices().getTelemetryService() != null) {
-                    String modelId =
-                            config.getApi() != null && config.getApi().getModel() != null
-                                    ? config.getApi().getModel().getId()
-                                    : "unknown";
-                    config.getServices()
-                            .getTelemetryService()
-                            .captureToolUsage(
-                                    config.getUlid(),
-                                    block.getName(),
-                                    modelId,
-                                    false,
-                                    false,
-                                    workspaceContext);
-                }
-                return HandlerUtils.createTextBlocks(formatResponse.toolDenied());
-            }
+        // 需要 ask 用户 —— 保存状态并返回 PendingAsk
+        String notificationMessage = "Cline wants to search files for " + regex;
+        TaskUtils.showNotificationForApprovalIfAutoApprovalEnabled(
+                notificationMessage,
+                context.getAutoApprovalSettings() != null
+                        && context.getAutoApprovalSettings().isEnabled(),
+                context.getAutoApprovalSettings() != null
+                        && context.getAutoApprovalSettings().isEnableNotifications(),
+                (subtitle, msg) -> {});
 
-            if (config.getServices() != null
-                    && config.getServices().getTelemetryService() != null) {
-                String modelId =
-                        config.getApi() != null && config.getApi().getModel() != null
-                                ? config.getApi().getModel().getId()
-                                : "unknown";
-                config.getServices()
-                        .getTelemetryService()
-                        .captureToolUsage(
-                                config.getUlid(),
-                                block.getName(),
-                                modelId,
-                                false,
-                                true,
-                                workspaceContext);
-            }
+        SearchFilesToolState state = (SearchFilesToolState) context.getToolState();
+        state.setPhase(1);
+        state.setResults(results);
+        state.setWorkspaceContext(workspaceContext);
 
-            return HandlerUtils.createTextBlocks(results);
+        var token =
+                ToolResultUtils.askApprovalAndPushFeedbackForToken(
+                        ClineAsk.TOOL,
+                        message,
+                        context,
+                        ClineMessageFormat.JSON,
+                        block,
+                        getDescription(block));
+        return new ToolExecuteResult.PendingAsk(token);
+    }
+
+    @Override
+    public ToolExecuteResult resume(
+            ToolContext context, ToolUse block, ToolState toolState, AskResult askResult) {
+        SearchFilesToolState state = (SearchFilesToolState) toolState;
+
+        boolean approved = ToolResultUtils.processAskResult(askResult, context);
+        if (!approved) {
+            captureTelemetry(context, block, false, false, state.getWorkspaceContext());
+            return HandlerUtils.createToolExecuteResult(formatResponse.toolDenied());
+        }
+
+        captureTelemetry(context, block, false, true, state.getWorkspaceContext());
+        return HandlerUtils.createToolExecuteResult(state.getResults());
+    }
+
+    private void captureTelemetry(
+            ToolContext context,
+            ToolUse block,
+            boolean autoApproved,
+            boolean approved,
+            TelemetryService.WorkspaceContext workspaceContext) {
+        if (context.getServices() != null && context.getServices().getTelemetryService() != null) {
+            String modelId =
+                    context.getApi() != null && context.getApi().getModel() != null
+                            ? context.getApi().getModel().getId()
+                            : "unknown";
+            context.getServices()
+                    .getTelemetryService()
+                    .captureToolUsage(
+                            context.getUlid(),
+                            block.getName(),
+                            modelId,
+                            autoApproved,
+                            approved,
+                            workspaceContext);
         }
     }
 

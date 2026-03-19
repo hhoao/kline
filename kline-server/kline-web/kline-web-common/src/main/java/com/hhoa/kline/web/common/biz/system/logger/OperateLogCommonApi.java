@@ -4,10 +4,7 @@ import com.hhoa.kline.web.common.biz.system.logger.dto.OperateLogCreateReqDTO;
 import jakarta.validation.Valid;
 import org.springframework.scheduling.annotation.Async;
 
-/**
- * 操作日志 API 接口
- *
- */
+/** 操作日志 API 接口 */
 public interface OperateLogCommonApi {
 
     /**

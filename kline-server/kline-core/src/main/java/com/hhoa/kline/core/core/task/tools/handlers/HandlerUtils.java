@@ -3,7 +3,8 @@ package com.hhoa.kline.core.core.task.tools.handlers;
 import com.hhoa.kline.core.core.assistant.TextContentBlock;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.assistant.UserContentBlock;
-import com.hhoa.kline.core.core.task.tools.types.TaskConfig;
+import com.hhoa.kline.core.core.task.tools.types.ToolContext;
+import com.hhoa.kline.core.core.task.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.workspace.WorkspaceConfig;
 import com.hhoa.kline.core.core.workspace.WorkspaceResolver;
 import com.hhoa.kline.core.core.workspace.WorkspaceResolver.WorkspacePathResult;
@@ -74,7 +75,7 @@ public class HandlerUtils {
      * @param config 任务配置（用于获取工作区信息）
      * @return 如果路径在工作区中则返回 true
      */
-    public static boolean isLocatedInWorkspace(String pathToCheck, TaskConfig config) {
+    public static boolean isLocatedInWorkspace(String pathToCheck, ToolContext config) {
         if (pathToCheck == null || pathToCheck.isEmpty()) {
             return false;
         }
@@ -98,6 +99,13 @@ public class HandlerUtils {
      * @param text 文本内容
      * @return UserContentBlock 列表
      */
+    public static ToolExecuteResult createToolExecuteResult(String text) {
+        List<UserContentBlock> blocks = new ArrayList<>();
+        TextContentBlock block = new TextContentBlock(text);
+        blocks.add(block);
+        return new ToolExecuteResult.Immediate(blocks);
+    }
+
     public static List<UserContentBlock> createTextBlocks(String text) {
         List<UserContentBlock> blocks = new ArrayList<>();
         TextContentBlock block = new TextContentBlock(text);

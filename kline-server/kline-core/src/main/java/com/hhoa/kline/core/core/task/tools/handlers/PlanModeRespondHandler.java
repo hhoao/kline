@@ -2,7 +2,6 @@ package com.hhoa.kline.core.core.task.tools.handlers;
 
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ToolUse;
-import com.hhoa.kline.core.core.assistant.UserContentBlock;
 import com.hhoa.kline.core.core.integrations.misc.ExtractText;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
 import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
@@ -11,8 +10,11 @@ import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.shared.storage.types.Mode;
 import com.hhoa.kline.core.core.task.AskResult;
-import com.hhoa.kline.core.core.task.tools.types.TaskConfig;
+import com.hhoa.kline.core.core.task.tools.types.ToolContext;
+import com.hhoa.kline.core.core.task.tools.types.ToolExecuteResult;
+import com.hhoa.kline.core.core.task.tools.types.ToolState;
 import com.hhoa.kline.core.core.task.tools.types.UIHelpers;
+import com.hhoa.kline.core.core.task.tools.utils.ToolResultUtils;
 import com.hhoa.kline.core.core.utils.PartialJsonUtils;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -20,8 +22,25 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.Getter;
+import lombok.Setter;
 
-public class PlanModeRespondHandler implements FullyManagedTool {
+public class PlanModeRespondHandler implements StateFullToolHandler {
+
+    private final ResponseFormatter formatResponse = new ResponseFormatter();
+
+    @Getter
+    @Setter
+    public static class PlanModeRespondToolState extends ToolState {
+        private List<String> options;
+        private String optionsRaw;
+        private String response;
+    }
+
+    @Override
+    public ToolState createToolState() {
+        return new PlanModeRespondToolState();
+    }
 
     @Override
     public String getName() {
@@ -60,7 +79,7 @@ public class PlanModeRespondHandler implements FullyManagedTool {
     }
 
     @Override
-    public List<UserContentBlock> execute(TaskConfig config, ToolUse block) {
+    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
         String response = HandlerUtils.getStringParam(block, "response");
         String optionsRaw = HandlerUtils.getStringParam(block, "options");
         boolean needsMoreExploration =
@@ -68,20 +87,16 @@ public class PlanModeRespondHandler implements FullyManagedTool {
                         .equalsIgnoreCase(
                                 HandlerUtils.getStringParam(block, "needs_more_exploration"));
 
-        config.getTaskState().setConsecutiveMistakeCount(0);
-
-        ResponseFormatter formatResponse = new ResponseFormatter();
-
         if (needsMoreExploration) {
-            return HandlerUtils.createTextBlocks(
+            return HandlerUtils.createToolExecuteResult(
                     formatResponse.toolResult(
                             "[You have indicated that you need more exploration. Proceed with calling tools to continue the planning process.]",
                             null,
                             null));
         }
 
-        if (config.isYoloModeToggled() && Mode.ACT.equals(config.getMode())) {
-            return HandlerUtils.createTextBlocks(
+        if (context.isYoloModeToggled() && Mode.ACT.equals(context.getMode())) {
+            return HandlerUtils.createToolExecuteResult(
                     formatResponse.toolResult("[Go ahead and execute.]", null, null));
         }
 
@@ -92,128 +107,127 @@ public class PlanModeRespondHandler implements FullyManagedTool {
         sharedMessageMap.put("options", String.join(",", options));
         String sharedMessage = JsonUtils.toJsonString(sharedMessageMap);
 
-        if (Mode.PLAN.equals(config.getMode())
-                && config.isYoloModeToggled()
+        if (Mode.PLAN.equals(context.getMode())
+                && context.isYoloModeToggled()
                 && !needsMoreExploration) {
-            Boolean switched = config.getCallbacks().switchToActMode();
+            Boolean switched = context.getCallbacks().switchToActMode();
             if (Boolean.TRUE.equals(switched)) {
-                return HandlerUtils.createTextBlocks(
-                        new ResponseFormatter()
-                                .toolResult(
-                                        "[The user has switched to ACT MODE, so you may now proceed with the task.]",
-                                        null,
-                                        null));
-            } else {
-                return askAndFormat(config, sharedMessage, options, response, optionsRaw);
+                return HandlerUtils.createToolExecuteResult(
+                        formatResponse.toolResult(
+                                "[The user has switched to ACT MODE, so you may now proceed with the task.]",
+                                null,
+                                null));
             }
         }
 
-        config.getTaskState().setAwaitingPlanResponse(true);
+        PlanModeRespondToolState state = (PlanModeRespondToolState) context.getToolState();
+        state.setPhase(1);
+        state.setOptions(options);
+        state.setOptionsRaw(optionsRaw);
+        state.setResponse(response);
 
-        return askAndFormat(config, sharedMessage, options, response, optionsRaw);
+        var token =
+                ToolResultUtils.askApprovalAndPushFeedbackForToken(
+                        ClineAsk.PLAN_MODE_RESPOND,
+                        sharedMessage,
+                        context,
+                        ClineMessageFormat.JSON,
+                        block,
+                        getDescription(block));
+        return new ToolExecuteResult.PendingAsk(token);
     }
 
-    private static List<UserContentBlock> askAndFormat(
-            TaskConfig config,
-            String sharedMessage,
-            List<String> options,
-            String response,
-            String optionsRaw) {
-        ResponseFormatter formatResponse = new ResponseFormatter();
-        AskResult res =
-                config.getCallbacks()
-                        .ask(
-                                ClineAsk.PLAN_MODE_RESPOND,
-                                sharedMessage,
-                                false,
-                                ClineMessageFormat.JSON);
-        config.getTaskState().setAwaitingPlanResponse(false);
+    @Override
+    public ToolExecuteResult resume(
+            ToolContext context, ToolUse block, ToolState toolState, AskResult askResult) {
+        PlanModeRespondToolState state = (PlanModeRespondToolState) toolState;
 
-        String text = res != null ? res.getText() : null;
+        String text = askResult != null ? askResult.getText() : null;
         String[] images =
-                res != null && res.getImages() != null
-                        ? res.getImages().toArray(new String[0])
+                askResult != null && askResult.getImages() != null
+                        ? askResult.getImages().toArray(new String[0])
                         : null;
         String[] files =
-                res != null && res.getFiles() != null
-                        ? res.getFiles().toArray(new String[0])
+                askResult != null && askResult.getFiles() != null
+                        ? askResult.getFiles().toArray(new String[0])
                         : null;
 
         String finalText =
                 "PLAN_MODE_TOGGLE_RESPONSE".equals(text) ? "" : (text == null ? "" : text);
-        String[] finalImages = images;
-        String[] finalFiles = files;
 
-        if (optionsRaw != null
+        if (state.getOptionsRaw() != null
                 && finalText != null
                 && !finalText.isEmpty()
-                && PartialJsonUtils.parseArrayString(optionsRaw).contains(finalText)) {
-            if (config.getServices() != null
-                    && config.getServices().getTelemetryService() != null) {
-                config.getServices()
+                && PartialJsonUtils.parseArrayString(state.getOptionsRaw()).contains(finalText)) {
+            if (context.getServices() != null
+                    && context.getServices().getTelemetryService() != null) {
+                context.getServices()
                         .getTelemetryService()
-                        .captureOptionSelected(config.getUlid(), options.size(), "plan");
+                        .captureOptionSelected(
+                                context.getUlid(), state.getOptions().size(), "plan");
             }
 
-            return HandlerUtils.createTextBlocks(
+            return HandlerUtils.createToolExecuteResult(
                     formatResponse.toolResult(
                             "<user_message>\n" + finalText + "\n</user_message>", null, null));
-        } else {
-            if ((finalText != null && !finalText.isEmpty())
-                    || (finalImages != null && finalImages.length > 0)
-                    || (finalFiles != null && finalFiles.length > 0)) {
-                if (config.getServices() != null
-                        && config.getServices().getTelemetryService() != null) {
-                    config.getServices()
-                            .getTelemetryService()
-                            .captureOptionsIgnored(config.getUlid(), options.size(), "plan");
+        }
+
+        boolean hasFeedback =
+                (finalText != null && !finalText.isEmpty())
+                        || (images != null && images.length > 0)
+                        || (files != null && files.length > 0);
+        if (hasFeedback) {
+            if (context.getServices() != null
+                    && context.getServices().getTelemetryService() != null) {
+                context.getServices()
+                        .getTelemetryService()
+                        .captureOptionsIgnored(
+                                context.getUlid(), state.getOptions().size(), "plan");
+            }
+
+            String fileContentString = "";
+            if (files != null && files.length > 0) {
+                List<Path> filePaths = new ArrayList<>();
+                for (String file : files) {
+                    filePaths.add(Paths.get(file));
                 }
+                fileContentString = ExtractText.processFilesIntoText(filePaths);
+            }
 
-                String fileContentString = "";
-                if (finalFiles != null && finalFiles.length > 0) {
-                    List<Path> filePaths = new ArrayList<>();
-                    for (String file : finalFiles) {
-                        filePaths.add(Paths.get(file));
-                    }
-                    fileContentString = ExtractText.processFilesIntoText(filePaths);
-                }
+            context.getCallbacks()
+                    .say(
+                            ClineSay.USER_FEEDBACK,
+                            finalText == null ? "" : finalText,
+                            images,
+                            files,
+                            false,
+                            null);
 
-                config.getCallbacks()
-                        .say(
-                                ClineSay.USER_FEEDBACK,
-                                finalText == null ? "" : finalText,
-                                finalImages,
-                                finalFiles,
-                                false,
-                                null);
-
-                if (config.getTaskState().isDidRespondToPlanAskBySwitchingMode()) {
-                    StringBuilder sb = new StringBuilder();
+            if (context.getTaskState().isDidRespondToPlanAskBySwitchingMode()) {
+                StringBuilder sb = new StringBuilder();
+                sb.append(
+                        "[The user has switched to ACT MODE, so you may now proceed with the task.]");
+                if (finalText != null && !finalText.isEmpty()) {
                     sb.append(
-                            "[The user has switched to ACT MODE, so you may now proceed with the task.]");
-                    if (finalText != null && !finalText.isEmpty()) {
-                        sb.append(
-                                        "\n\nThe user also provided the following message when switching to ACT MODE:\n<user_message>\n")
-                                .append(finalText)
-                                .append("\n</user_message>");
-                    }
-                    config.getTaskState().setDidRespondToPlanAskBySwitchingMode(false);
-                    return HandlerUtils.createTextBlocks(
-                            formatResponse.toolResult(
-                                    sb.toString(), finalImages, fileContentString));
-                } else {
-                    return HandlerUtils.createTextBlocks(
-                            formatResponse.toolResult(
-                                    "<user_message>\n"
-                                            + (finalText == null ? "" : finalText)
-                                            + "\n</user_message>",
-                                    finalImages,
-                                    fileContentString));
+                                    "\n\nThe user also provided the following message when switching to ACT MODE:\n<user_message>\n")
+                            .append(finalText)
+                            .append("\n</user_message>");
                 }
+                context.getTaskState().setDidRespondToPlanAskBySwitchingMode(false);
+                return HandlerUtils.createToolExecuteResult(
+                        formatResponse.toolResult(sb.toString(), images, fileContentString));
             } else {
-                return HandlerUtils.createTextBlocks(
-                        formatResponse.toolResult("<user_message>\n\n</user_message>", null, null));
+                return HandlerUtils.createToolExecuteResult(
+                        formatResponse.toolResult(
+                                "<user_message>\n"
+                                        + (finalText == null ? "" : finalText)
+                                        + "\n</user_message>",
+                                images,
+                                fileContentString));
             }
         }
+
+        return HandlerUtils.createToolExecuteResult(
+                formatResponse.toolResult("<user_message>\n\n</user_message>", null, null));
     }
 }

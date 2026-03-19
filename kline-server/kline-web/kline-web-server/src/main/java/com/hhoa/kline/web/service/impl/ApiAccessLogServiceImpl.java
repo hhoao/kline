@@ -3,9 +3,9 @@ package com.hhoa.kline.web.service.impl;
 import static com.hhoa.kline.web.dal.dataobject.ApiAccessLogDO.REQUEST_PARAMS_MAX_LENGTH;
 import static com.hhoa.kline.web.dal.dataobject.ApiAccessLogDO.RESULT_MSG_MAX_LENGTH;
 
+import com.hhoa.ai.kline.commons.utils.object.BeanUtils;
 import com.hhoa.kline.web.common.biz.infra.logger.dto.ApiAccessLogCreateReqDTO;
 import com.hhoa.kline.web.common.pojo.PageResult;
-import com.hhoa.kline.web.common.utils.object.BeanUtils;
 import com.hhoa.kline.web.common.utils.string.StrUtils;
 import com.hhoa.kline.web.dal.ApiAccessLogMapper;
 import com.hhoa.kline.web.dal.dataobject.ApiAccessLogDO;
@@ -17,10 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
-/**
- * API 访问日志 Service 实现类
- *
- */
+/** API 访问日志 Service 实现类 */
 @Slf4j
 @Service
 @Validated

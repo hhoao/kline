@@ -19,6 +19,9 @@ public class AskResponseRequestDTO {
 
     @NonNull private String taskId;
 
+    /** PendingAsk 的唯一标识，前端从 ClineMessage.pendingId 获取 */
+    private String pendingId;
+
     private List<String> images;
 
     private List<String> files;

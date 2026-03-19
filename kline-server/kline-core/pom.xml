@@ -50,5 +50,9 @@
             <artifactId>byte-buddy</artifactId>
             <version>1.15.11</version>
         </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-text</artifactId>
+        </dependency>
     </dependencies>
 </project>

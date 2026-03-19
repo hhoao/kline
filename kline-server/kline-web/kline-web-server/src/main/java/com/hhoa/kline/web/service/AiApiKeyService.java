@@ -7,10 +7,7 @@ import com.hhoa.kline.web.dto.AiApiKeySaveReqVO;
 import jakarta.validation.Valid;
 import java.util.List;
 
-/**
- * AI API 密钥 Service 接口
- *
- */
+/** AI API 密钥 Service 接口 */
 public interface AiApiKeyService {
 
     /**

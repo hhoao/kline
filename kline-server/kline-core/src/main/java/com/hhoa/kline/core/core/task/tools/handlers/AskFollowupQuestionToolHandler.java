@@ -3,7 +3,6 @@ package com.hhoa.kline.core.core.task.tools.handlers;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hhoa.kline.core.core.assistant.ToolUse;
-import com.hhoa.kline.core.core.assistant.UserContentBlock;
 import com.hhoa.kline.core.core.integrations.misc.ExtractText;
 import com.hhoa.kline.core.core.integrations.notifications.NotificationType;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
@@ -15,8 +14,11 @@ import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.ClineMessage;
 import com.hhoa.kline.core.core.task.MessageUtils;
-import com.hhoa.kline.core.core.task.tools.types.TaskConfig;
+import com.hhoa.kline.core.core.task.tools.types.ToolContext;
+import com.hhoa.kline.core.core.task.tools.types.ToolExecuteResult;
+import com.hhoa.kline.core.core.task.tools.types.ToolState;
 import com.hhoa.kline.core.core.task.tools.types.UIHelpers;
+import com.hhoa.kline.core.core.task.tools.utils.ToolResultUtils;
 import com.hhoa.kline.core.core.utils.PartialJsonUtils;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.nio.file.Path;
@@ -25,16 +27,26 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.Getter;
+import lombok.Setter;
 
-/**
- * 追问工具处理器 处理向用户提问、选项选择、用户反馈
- *
- * @author hhoa
- */
-public class AskFollowupQuestionToolHandler implements FullyManagedTool {
+public class AskFollowupQuestionToolHandler implements StateFullToolHandler {
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Getter
+    @Setter
+    public static class AskFollowupToolState extends ToolState {
+        private String question;
+        private List<String> options;
+        private String optionsRaw;
+    }
+
+    @Override
+    public ToolState createToolState() {
+        return new AskFollowupToolState();
+    }
 
     @Override
     public String getName() {
@@ -76,20 +88,18 @@ public class AskFollowupQuestionToolHandler implements FullyManagedTool {
     }
 
     @Override
-    public List<UserContentBlock> execute(TaskConfig config, ToolUse block) {
+    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
         String question = HandlerUtils.getStringParam(block, "question");
         String optionsRaw = HandlerUtils.getStringParam(block, "options");
 
-        config.getTaskState().setConsecutiveMistakeCount(0);
-
-        if (config.getAutoApprovalSettings() != null
-                && config.getAutoApprovalSettings().isEnabled()
-                && config.getAutoApprovalSettings().isEnableNotifications()) {
+        if (context.getAutoApprovalSettings() != null
+                && context.getAutoApprovalSettings().isEnabled()
+                && context.getAutoApprovalSettings().isEnableNotifications()) {
             String notificationMsg = question.replace("\n", " ");
             if (notificationMsg.length() > 100) {
                 notificationMsg = notificationMsg.substring(0, 100) + "...";
             }
-            config.getServices()
+            context.getServices()
                     .getNotificationService()
                     .showNotification(
                             "Cline has a question...", notificationMsg, NotificationType.INFO);
@@ -108,39 +118,60 @@ public class AskFollowupQuestionToolHandler implements FullyManagedTool {
             throw new RuntimeException("Failed to serialize options", e);
         }
 
-        AskResult res = config.getCallbacks().ask(ClineAsk.FOLLOWUP, sharedMessage, false, null);
-        String text = res != null ? res.getText() : null;
+        AskFollowupToolState state = (AskFollowupToolState) context.getToolState();
+        state.setPhase(1);
+        state.setQuestion(question);
+        state.setOptions(options);
+        state.setOptionsRaw(optionsRaw);
+
+        var token =
+                ToolResultUtils.askApprovalAndPushFeedbackForToken(
+                        ClineAsk.FOLLOWUP,
+                        sharedMessage,
+                        context,
+                        null,
+                        block,
+                        getDescription(block));
+        return new ToolExecuteResult.PendingAsk(token);
+    }
+
+    @Override
+    public ToolExecuteResult resume(
+            ToolContext context, ToolUse block, ToolState toolState, AskResult askResult) {
+        AskFollowupToolState state = (AskFollowupToolState) toolState;
+
+        String text = askResult != null ? askResult.getText() : null;
         String[] images =
-                res != null && res.getImages() != null
-                        ? res.getImages().toArray(new String[0])
+                askResult != null && askResult.getImages() != null
+                        ? askResult.getImages().toArray(new String[0])
                         : null;
         String[] followupFiles =
-                res != null && res.getFiles() != null
-                        ? res.getFiles().toArray(new String[0])
+                askResult != null && askResult.getFiles() != null
+                        ? askResult.getFiles().toArray(new String[0])
                         : null;
 
-        if (optionsRaw != null && text != null && options.contains(text)) {
-            if (config.getServices() != null
-                    && config.getServices().getTelemetryService() != null) {
-                config.getServices()
+        if (state.getOptionsRaw() != null && text != null && state.getOptions().contains(text)) {
+            if (context.getServices() != null
+                    && context.getServices().getTelemetryService() != null) {
+                context.getServices()
                         .getTelemetryService()
-                        .captureOptionSelected(config.getUlid(), options.size(), "act");
+                        .captureOptionSelected(context.getUlid(), state.getOptions().size(), "act");
             }
 
-            List<ClineMessage> clineMessages = config.getMessageState().getClineMessages();
+            List<ClineMessage> clineMessages = context.getMessageState().getClineMessages();
             ClineMessage lastFollowupMessage =
                     MessageUtils.findLast(
                             clineMessages, m -> m != null && ClineAsk.FOLLOWUP.equals(m.getAsk()));
             if (lastFollowupMessage != null) {
                 try {
                     Map<String, Object> updatedPayload = new HashMap<>();
-                    updatedPayload.put("question", question);
-                    updatedPayload.put("options", options);
+                    updatedPayload.put("question", state.getQuestion());
+                    updatedPayload.put("options", state.getOptions());
                     updatedPayload.put("selected", text);
 
                     String updatedMessage = objectMapper.writeValueAsString(updatedPayload);
                     lastFollowupMessage.setText(updatedMessage);
-                    config.getMessageState().saveClineMessagesAndUpdateHistory();
+                    context.getMessageState().saveClineMessagesAndUpdateHistory();
                 } catch (JsonProcessingException e) {
                     throw new RuntimeException("Failed to serialize updated followup message", e);
                 }
@@ -149,13 +180,13 @@ public class AskFollowupQuestionToolHandler implements FullyManagedTool {
             return formatAnswer(text, images, followupFiles);
         }
 
-        if (config.getServices() != null && config.getServices().getTelemetryService() != null) {
-            config.getServices()
+        if (context.getServices() != null && context.getServices().getTelemetryService() != null) {
+            context.getServices()
                     .getTelemetryService()
-                    .captureOptionsIgnored(config.getUlid(), options.size(), "act");
+                    .captureOptionsIgnored(context.getUlid(), state.getOptions().size(), "act");
         }
 
-        config.getCallbacks()
+        context.getCallbacks()
                 .say(
                         ClineSay.USER_FEEDBACK,
                         text == null ? "" : text,
@@ -166,7 +197,7 @@ public class AskFollowupQuestionToolHandler implements FullyManagedTool {
         return formatAnswer(text, images, followupFiles);
     }
 
-    private List<UserContentBlock> formatAnswer(String text, String[] images, String[] files) {
+    private ToolExecuteResult formatAnswer(String text, String[] images, String[] files) {
         String t = text == null ? "" : text;
 
         String fileContentString = "";
@@ -182,7 +213,7 @@ public class AskFollowupQuestionToolHandler implements FullyManagedTool {
             }
         }
 
-        return HandlerUtils.createTextBlocks(
+        return HandlerUtils.createToolExecuteResult(
                 formatResponse.toolResult(
                         "<answer>\n" + t + "\n</answer>", images, fileContentString));
     }

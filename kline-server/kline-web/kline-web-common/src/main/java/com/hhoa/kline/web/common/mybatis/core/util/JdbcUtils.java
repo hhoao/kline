@@ -11,10 +11,7 @@ import java.sql.SQLException;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 
-/**
- * JDBC 工具类
- *
- */
+/** JDBC 工具类 */
 public class JdbcUtils {
 
     /**

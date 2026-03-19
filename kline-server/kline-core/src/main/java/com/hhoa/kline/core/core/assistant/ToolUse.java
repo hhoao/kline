@@ -8,6 +8,9 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 public class ToolUse extends AssistantMessageContent {
 
+    /** 工具使用的唯一标识，由执行框架在工具执行前分配 */
+    private String id;
+
     private String name;
 
     private Map<String, Object> params;

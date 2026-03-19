@@ -3,10 +3,7 @@ package com.hhoa.kline.web.enums;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
-/**
- * API 异常数据的处理状态
- *
- */
+/** API 异常数据的处理状态 */
 @AllArgsConstructor
 @Getter
 public enum ApiErrorLogProcessStatusEnum {

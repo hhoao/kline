@@ -6,10 +6,7 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
-/**
- * Xss 配置属性
- *
- */
+/** Xss 配置属性 */
 @ConfigurationProperties(prefix = "kline.xss")
 @Validated
 @Data

@@ -3,10 +3,7 @@ package com.hhoa.kline.web.common.biz.system.dict;
 import com.hhoa.kline.web.common.biz.system.dict.dto.DictDataRespDTO;
 import java.util.List;
 
-/**
- * 字典数据 API 接口
- *
- */
+/** 字典数据 API 接口 */
 public interface DictDataCommonApi {
 
     /**

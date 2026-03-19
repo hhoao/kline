@@ -13,10 +13,7 @@ import org.apache.ibatis.type.MappedJdbcTypes;
 import org.apache.ibatis.type.MappedTypes;
 import org.apache.ibatis.type.TypeHandler;
 
-/**
- * Set<Long> 的类型转换器实现类，对应数据库的 varchar 类型
- *
- */
+/** Set<Long> 的类型转换器实现类，对应数据库的 varchar 类型 */
 @MappedJdbcTypes(JdbcType.VARCHAR)
 @MappedTypes(List.class)
 public class LongSetTypeHandler implements TypeHandler<Set<Long>> {

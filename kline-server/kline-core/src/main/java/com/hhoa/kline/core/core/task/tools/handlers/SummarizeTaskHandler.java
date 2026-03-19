@@ -3,7 +3,6 @@ package com.hhoa.kline.core.core.task.tools.handlers;
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.MessageParam;
 import com.hhoa.kline.core.core.assistant.ToolUse;
-import com.hhoa.kline.core.core.assistant.UserContentBlock;
 import com.hhoa.kline.core.core.context.management.ContextTelemetryData;
 import com.hhoa.kline.core.core.context.management.KeepStrategy;
 import com.hhoa.kline.core.core.ignore.ClineIgnoreController;
@@ -13,7 +12,8 @@ import com.hhoa.kline.core.core.prompts.ResponseFormatter;
 import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
-import com.hhoa.kline.core.core.task.tools.types.TaskConfig;
+import com.hhoa.kline.core.core.task.tools.types.ToolContext;
+import com.hhoa.kline.core.core.task.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.task.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.workspace.WorkspaceConfig;
 import com.hhoa.kline.core.core.workspace.WorkspaceResolver;
@@ -37,7 +37,7 @@ import lombok.extern.slf4j.Slf4j;
  * @author hhoa
  */
 @Slf4j
-public class SummarizeTaskHandler implements FullyManagedTool {
+public class SummarizeTaskHandler implements ToolHandler {
 
     private static final String NAME = "summarize_task";
     private static final int MAX_FILES_LOADED = 8;
@@ -102,22 +102,21 @@ public class SummarizeTaskHandler implements FullyManagedTool {
     }
 
     @Override
-    public List<UserContentBlock> execute(TaskConfig config, ToolUse block) {
+    public ToolExecuteResult execute(ToolContext toolContext, ToolUse block) {
         String context = HandlerUtils.getStringParam(block, "context");
-
-        config.getTaskState().setConsecutiveMistakeCount(0);
 
         Map<String, Object> completeMessageMap = new HashMap<>();
         completeMessageMap.put("tool", "summarizeTask");
         completeMessageMap.put("content", context);
         String completeMessage = JsonUtils.toJsonString(completeMessageMap);
 
-        config.getCallbacks()
+        toolContext
+                .getCallbacks()
                 .say(ClineSay.TOOL, completeMessage, null, null, false, ClineMessageFormat.JSON);
-        return summarize(config, block, context);
+        return summarize(toolContext, block, context);
     }
 
-    private List<UserContentBlock> summarize(TaskConfig config, ToolUse block, String context) {
+    private ToolExecuteResult summarize(ToolContext config, ToolUse block, String context) {
         try {
             List<String> filePaths = parseRequiredFiles(context);
             StringBuilder fileContents = new StringBuilder();
@@ -162,12 +161,6 @@ public class SummarizeTaskHandler implements FullyManagedTool {
                         Path absolutePath = Paths.get(pathResult.absolutePath());
                         String displayPath = pathResult.displayPath();
 
-                        config.getTaskState()
-                                .setConsecutiveAutoApprovedRequestsCount(
-                                        config.getTaskState()
-                                                        .getConsecutiveAutoApprovedRequestsCount()
-                                                + 1);
-
                         FileContentExtractor.FileContentResult fileContent =
                                 FileContentExtractor.extractFileContent(absolutePath, false);
 
@@ -207,7 +200,7 @@ public class SummarizeTaskHandler implements FullyManagedTool {
                 }
             }
 
-            if (fileContents.length() > 0) {
+            if (!fileContents.isEmpty()) {
                 String fileMentionString =
                         String.join(
                                         ", ",
@@ -283,9 +276,9 @@ public class SummarizeTaskHandler implements FullyManagedTool {
                 }
             }
 
-            return HandlerUtils.createTextBlocks(toolResult);
+            return HandlerUtils.createToolExecuteResult(toolResult);
         } catch (Exception error) {
-            return HandlerUtils.createTextBlocks(
+            return HandlerUtils.createToolExecuteResult(
                     "Error summarizing context window: "
                             + (error.getMessage() != null ? error.getMessage() : "Unknown error"));
         }

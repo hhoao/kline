@@ -19,10 +19,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.ConfigurableEnvironment;
 
-/**
- * MyBaits 配置类
- *
- */
+/** MyBaits 配置类 */
 @AutoConfiguration(
         before =
                 MybatisPlusAutoConfiguration

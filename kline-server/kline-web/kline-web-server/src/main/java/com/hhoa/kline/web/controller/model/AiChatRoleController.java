@@ -7,7 +7,7 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.ObjUtil;
 import com.hhoa.kline.web.common.pojo.CommonResult;
 import com.hhoa.kline.web.common.pojo.PageResult;
-import com.hhoa.kline.web.common.utils.object.BeanUtils;
+import com.hhoa.kline.web.common.utils.PageUtils;
 import com.hhoa.kline.web.dal.dataobject.AiChatRoleDO;
 import com.hhoa.kline.web.dto.model.chatRole.AiChatRolePageReqVO;
 import com.hhoa.kline.web.dto.model.chatRole.AiChatRoleRespVO;
@@ -44,7 +44,7 @@ public class AiChatRoleController {
             @Valid AiChatRolePageReqVO pageReqVO) {
         PageResult<AiChatRoleDO> pageResult =
                 chatRoleService.getChatRoleMyPage(pageReqVO, getLoginIdDefaultNull());
-        return success(BeanUtils.toPageResultBean(pageResult, AiChatRoleRespVO.class));
+        return success(PageUtils.toPageResult(pageResult, AiChatRoleRespVO.class));
     }
 
     @GetMapping("/get-my")
@@ -124,6 +124,6 @@ public class AiChatRoleController {
     public CommonResult<PageResult<AiChatRoleRespVO>> getChatRolePage(
             @Valid AiChatRolePageReqVO pageReqVO) {
         PageResult<AiChatRoleDO> pageResult = chatRoleService.getChatRolePage(pageReqVO);
-        return success(BeanUtils.toPageResultBean(pageResult, AiChatRoleRespVO.class));
+        return success(PageUtils.toPageResult(pageResult, AiChatRoleRespVO.class));
     }
 }

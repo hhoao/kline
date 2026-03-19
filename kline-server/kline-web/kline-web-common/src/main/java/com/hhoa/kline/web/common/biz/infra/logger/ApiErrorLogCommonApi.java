@@ -4,10 +4,7 @@ import com.hhoa.kline.web.common.biz.infra.logger.dto.ApiErrorLogCreateReqDTO;
 import jakarta.validation.Valid;
 import org.springframework.scheduling.annotation.Async;
 
-/**
- * API 错误日志的 API 接口
- *
- */
+/** API 错误日志的 API 接口 */
 public interface ApiErrorLogCommonApi {
 
     /**

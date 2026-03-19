@@ -14,48 +14,52 @@ import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.shared.api.ApiProvider;
 import com.hhoa.kline.core.core.shared.storage.types.Mode;
 import com.hhoa.kline.core.core.storage.StateManager;
-import com.hhoa.kline.core.core.task.AskResult;
+import com.hhoa.kline.core.core.task.AskPending;
 import com.hhoa.kline.core.core.task.MessageStateHandler;
 import com.hhoa.kline.core.core.task.TaskState;
 import com.hhoa.kline.core.core.task.tools.AutoApprove;
-import com.hhoa.kline.core.core.task.tools.ToolExecutorCoordinator;
+import com.hhoa.kline.core.core.task.tools.ToolExecutor;
 import com.hhoa.kline.core.core.workspace.WorkspaceRootManager;
 import jakarta.validation.constraints.NotNull;
-import java.util.ArrayList;
-import java.util.List;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class TaskConfig {
-    @NotNull private String taskId;
+public class ToolContext {
+    private String taskId;
 
-    @NotNull private String ulid;
+    private String ulid;
 
-    @NotNull private String cwd;
+    private String cwd;
 
-    @NotNull private Mode mode;
+    private Mode mode;
 
     private WorkspaceRootManager workspaceManager;
 
     @Builder.Default private boolean yoloModeToggled = false;
 
-    @NotNull private TaskState taskState;
-
-    @NotNull private MessageStateHandler messageState;
+    private MessageStateHandler messageState;
 
     private Api api;
 
-    @NotNull private Services services;
+    private TaskState taskState;
 
-    @NotNull private AutoApprovalSettings autoApprovalSettings;
+    private Services services;
 
-    @NotNull private Callbacks callbacks;
+    private AutoApprovalSettings autoApprovalSettings;
 
-    @NotNull private ToolExecutorCoordinator coordinator;
+    private Callbacks callbacks;
+
+    private ToolExecutor coordinator;
+
+    private ToolState toolState;
 
     private AutoApprove autoApprover;
 
@@ -90,30 +94,6 @@ public class TaskConfig {
         private NotificationService notificationService;
     }
 
-    public static final class ResourceResult {
-        public List<ContentItem> contents;
-
-        public ResourceResult() {
-            this.contents = new ArrayList<>();
-        }
-
-        public ResourceResult(List<ContentItem> contents) {
-            this.contents = contents != null ? contents : new ArrayList<>();
-        }
-    }
-
-    public static final class ContentItem {
-        public String text;
-        public String type;
-
-        public ContentItem() {}
-
-        public ContentItem(String text) {
-            this.text = text;
-            this.type = "text";
-        }
-    }
-
     public interface ApiConfiguration {
         ApiProvider getPlanModeApiProvider();
 
@@ -133,7 +113,7 @@ public class TaskConfig {
                 Boolean partial,
                 ClineMessageFormat format);
 
-        AskResult ask(ClineAsk type, String text, Boolean partial, ClineMessageFormat format);
+        AskPending ask(ClineAsk type, String text, Boolean partial, ClineMessageFormat format);
 
         void saveCheckpoint(Boolean isAttemptCompletionMessage, Long completionMessageTs);
 

@@ -3,10 +3,7 @@ package com.hhoa.kline.web.common.utils;
 import cn.hutool.extra.spring.SpringUtil;
 import java.util.Objects;
 
-/**
- * Spring 工具类
- *
- */
+/** Spring 工具类 */
 public class SpringUtils extends SpringUtil {
 
     /**

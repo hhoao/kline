@@ -11,10 +11,7 @@ import java.sql.SQLException;
 import org.apache.ibatis.type.BaseTypeHandler;
 import org.apache.ibatis.type.JdbcType;
 
-/**
- * 字段字段的 TypeHandler 实现类，基于 {@link AES} 实现 可通过 jasypt.encryptor.password 配置项，设置密钥
- *
- */
+/** 字段字段的 TypeHandler 实现类，基于 {@link AES} 实现 可通过 jasypt.encryptor.password 配置项，设置密钥 */
 public class EncryptTypeHandler extends BaseTypeHandler<String> {
 
     private static final String ENCRYPTOR_PROPERTY_NAME = "mybatis-plus.encryptor.password";

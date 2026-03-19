@@ -2,10 +2,7 @@ package com.hhoa.kline.web.common.biz.system.permission;
 
 import com.hhoa.kline.web.common.biz.system.permission.dto.DeptDataPermissionRespDTO;
 
-/**
- * 权限 API 接口
- *
- */
+/** 权限 API 接口 */
 public interface PermissionCommonApi {
 
     /**

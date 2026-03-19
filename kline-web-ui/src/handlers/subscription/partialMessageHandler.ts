@@ -1,6 +1,3 @@
-/**
- * 部分消息处理器
- */
 import type { ClineMessage } from "@/shared/ExtensionMessage";
 import { convertProtoToClineMessage } from "@/shared/proto-conversions/cline-message";
 import type { ClineMessage as ProtoClineMessage } from "@/shared/proto/cline/ui";
@@ -200,8 +197,6 @@ export class PartialMessageHandler
 
         const updatedMessage: ClineMessage = {
           ...existingMessage,
-          // 如果后端携带了新的类型/ask/say 信息，则覆盖之
-          // 注意：沿用现有消息的 ts，避免因为后端 ts 变化导致前端找不到同一条消息
           ts: existingMessage.ts,
           ...(message.clineMessageType != null && {
             type:
@@ -217,7 +212,6 @@ export class PartialMessageHandler
           ...(message.files != null && { files: message.files || [] }),
           ...(typeof message.commandCompleted === "boolean" && {
             commandCompleted: message.commandCompleted,
-            // commandCompleted=true 视为 partial 结束
             partial: !message.commandCompleted,
           }),
         };

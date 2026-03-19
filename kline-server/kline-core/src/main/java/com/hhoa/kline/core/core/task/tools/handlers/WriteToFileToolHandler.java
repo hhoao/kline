@@ -2,7 +2,6 @@ package com.hhoa.kline.core.core.task.tools.handlers;
 
 import com.hhoa.kline.core.core.assistant.DiffProcessor;
 import com.hhoa.kline.core.core.assistant.ToolUse;
-import com.hhoa.kline.core.core.assistant.UserContentBlock;
 import com.hhoa.kline.core.core.ignore.ClineIgnoreController;
 import com.hhoa.kline.core.core.integrations.editor.DiffViewProvider;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
@@ -10,7 +9,10 @@ import com.hhoa.kline.core.core.services.telemetry.TelemetryService;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
-import com.hhoa.kline.core.core.task.tools.types.TaskConfig;
+import com.hhoa.kline.core.core.task.AskResult;
+import com.hhoa.kline.core.core.task.tools.types.ToolContext;
+import com.hhoa.kline.core.core.task.tools.types.ToolExecuteResult;
+import com.hhoa.kline.core.core.task.tools.types.ToolState;
 import com.hhoa.kline.core.core.task.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.task.tools.utils.ToolResultUtils;
 import com.hhoa.kline.core.core.utils.StringUtils;
@@ -23,16 +25,25 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.MessageFormat;
 import java.util.Arrays;
-import java.util.List;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * 写入/替换文件工具处理器 支持 write_to_file / replace_in_file / new_rule 三类操作
  *
  * @author hhoa
  */
-public class WriteToFileToolHandler implements FullyManagedTool {
+public class WriteToFileToolHandler implements StateFullToolHandler {
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
+
+    /** WriteToFileToolHandler 的阶段状态 */
+    @Getter
+    @Setter
+    public static class WriteFileToolState extends ToolState {
+        private FileOperationResult result;
+        private String completeMessage;
+    }
 
     private static String getStringParam(ToolUse block, String key) {
         return HandlerUtils.getStringParam(block, key);
@@ -63,7 +74,7 @@ public class WriteToFileToolHandler implements FullyManagedTool {
                 operationIsLocatedInWorkspace != null ? operationIsLocatedInWorkspace : "true");
     }
 
-    private static String getModelId(TaskConfig config) {
+    private static String getModelId(ToolContext config) {
         return config.getApi() != null && config.getApi().getModel() != null
                 ? config.getApi().getModel().getId()
                 : "unknown";
@@ -88,6 +99,11 @@ public class WriteToFileToolHandler implements FullyManagedTool {
     }
 
     @Override
+    public ToolState createToolState() {
+        return new WriteFileToolState();
+    }
+
+    @Override
     public String getDescription(ToolUse block) {
         return "[" + block.getName() + " for '" + getStringParam(block, "path") + "']";
     }
@@ -102,7 +118,7 @@ public class WriteToFileToolHandler implements FullyManagedTool {
             return;
         }
 
-        TaskConfig config = ui.getConfig();
+        ToolContext config = ui.getContext();
         try {
             FileOperationResult result =
                     validateAndPrepareFileOperation(config, block, rawRelPath, rawDiff, rawContent);
@@ -139,60 +155,88 @@ public class WriteToFileToolHandler implements FullyManagedTool {
     }
 
     @Override
-    public List<UserContentBlock> execute(TaskConfig config, ToolUse block) {
+    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
         String rawRelPath = getStringParam(block, "path");
         String rawContent = getStringParam(block, "content");
         String rawDiff = getStringParam(block, "diff");
 
-        if ("replace_in_file".equals(block.getName()) && StringUtils.isBlank(rawDiff)) {
-            config.getTaskState()
-                    .setConsecutiveMistakeCount(
-                            config.getTaskState().getConsecutiveMistakeCount() + 1);
-            if (config.getServices().getDiffViewProvider() != null) {
-                config.getServices().getDiffViewProvider().reset();
-            }
-            String errorResult =
-                    config.getCallbacks().sayAndCreateMissingParamError(block.getName(), "diff");
-            return HandlerUtils.createTextBlocks(errorResult);
-        }
-
-        if (("write_to_file".equals(block.getName()) || "new_rule".equals(block.getName()))
-                && StringUtils.isBlank(rawContent)) {
-            config.getTaskState()
-                    .setConsecutiveMistakeCount(
-                            config.getTaskState().getConsecutiveMistakeCount() + 1);
-            if (config.getServices().getDiffViewProvider() != null) {
-                config.getServices().getDiffViewProvider().reset();
-            }
-            String errorResult =
-                    config.getCallbacks().sayAndCreateMissingParamError(block.getName(), "content");
-            return HandlerUtils.createTextBlocks(errorResult);
-        }
-
-        config.getTaskState().setConsecutiveMistakeCount(0);
-
         try {
             FileOperationResult result =
-                    validateAndPrepareFileOperation(config, block, rawRelPath, rawDiff, rawContent);
+                    validateAndPrepareFileOperation(
+                            context, block, rawRelPath, rawDiff, rawContent);
             if (result == null) {
-                return HandlerUtils.createTextBlocks("");
+                return HandlerUtils.createToolExecuteResult("");
             }
-            return executeFileOperation(config, block, result);
+            if (result.error != null) {
+                return HandlerUtils.createToolExecuteResult(result.error);
+            }
+
+            return executeFileOperation(context, block, result);
         } catch (Exception e) {
-            if (config.getServices().getDiffViewProvider() != null) {
+            if (context.getServices().getDiffViewProvider() != null) {
                 try {
-                    config.getServices().getDiffViewProvider().revertChanges();
-                    config.getServices().getDiffViewProvider().reset();
+                    context.getServices().getDiffViewProvider().revertChanges();
+                    context.getServices().getDiffViewProvider().reset();
                 } catch (Exception ex) {
                 }
             }
-            return HandlerUtils.createTextBlocks(
+            return HandlerUtils.createToolExecuteResult(
                     formatResponse.toolError("File operation failed: " + e.getMessage()));
         }
     }
 
+    @Override
+    public ToolExecuteResult resume(
+            ToolContext context, ToolUse block, ToolState toolState, AskResult askResult) {
+        WriteFileToolState state = (WriteFileToolState) toolState;
+        FileOperationResult result = state.getResult();
+
+        boolean approved = ToolResultUtils.processAskResult(askResult, context);
+        String modelId = getModelId(context);
+        TelemetryService telemetry = context.getServices().getTelemetryService();
+
+        if (!approved) {
+            if (telemetry != null) {
+                telemetry.captureToolUsage(
+                        context.getUlid(),
+                        block.getName(),
+                        modelId,
+                        false,
+                        false,
+                        result.workspaceContext);
+            }
+
+            DiffViewProvider dvp = context.getServices().getDiffViewProvider();
+            if (dvp != null) {
+                try {
+                    dvp.revertChanges();
+                } catch (IOException e) {
+                }
+            }
+
+            String fileDeniedNote =
+                    result.fileExists
+                            ? "The file was not updated, and maintains its original contents."
+                            : "The file was not created.";
+            return HandlerUtils.createToolExecuteResult(
+                    formatResponse.toolDenied() + " " + fileDeniedNote);
+        }
+
+        if (telemetry != null) {
+            telemetry.captureToolUsage(
+                    context.getUlid(),
+                    block.getName(),
+                    modelId,
+                    false,
+                    true,
+                    result.workspaceContext);
+        }
+
+        return performFileSave(context, block, result);
+    }
+
     private FileOperationResult validateAndPrepareFileOperation(
-            TaskConfig config,
+            ToolContext config,
             ToolUse block,
             String rawRelPath,
             String rawDiff,
@@ -224,22 +268,14 @@ public class WriteToFileToolHandler implements FullyManagedTool {
 
                 String errorResponse =
                         formatResponse.toolError(formatResponse.clineIgnoreError(resolvedPath));
-                ToolResultUtils.pushToolResult(
-                        errorResponse,
-                        block,
-                        config.getTaskState().getUserMessageContent(),
-                        WriteToFileToolHandler::getToolDescription,
-                        () -> {
-                            config.getTaskState().setDidAlreadyUseTool(true);
-                        },
-                        config.getCoordinator());
-                return null;
+
+                return new FileOperationResult(errorResponse);
             }
 
             DiffViewProvider dvp = config.getServices().getDiffViewProvider();
             boolean fileExists = determineFileExists(dvp, absolutePath);
 
-            String newContent;
+            String newContent = "";
 
             String diff = rawDiff;
 
@@ -250,7 +286,7 @@ public class WriteToFileToolHandler implements FullyManagedTool {
                 }
 
                 if (!config.getServices().getDiffViewProvider().isEditing()) {
-                    TaskConfig.OpenOptions opts = new TaskConfig.OpenOptions();
+                    ToolContext.OpenOptions opts = new ToolContext.OpenOptions();
                     opts.displayPath = rawRelPath;
                     try {
                         config.getServices()
@@ -296,15 +332,6 @@ public class WriteToFileToolHandler implements FullyManagedTool {
                                                     dvp != null && dvp.getOriginalContent() != null
                                                             ? dvp.getOriginalContent()
                                                             : ""));
-                    ToolResultUtils.pushToolResult(
-                            errorResponse,
-                            block,
-                            config.getTaskState().getUserMessageContent(),
-                            WriteToFileToolHandler::getToolDescription,
-                            () -> {
-                                config.getTaskState().setDidAlreadyUseTool(true);
-                            },
-                            config.getCoordinator());
 
                     if (dvp != null) {
                         try {
@@ -314,7 +341,7 @@ public class WriteToFileToolHandler implements FullyManagedTool {
                         }
                     }
 
-                    return null;
+                    return new FileOperationResult(errorResponse);
                 }
             } else if (rawContent != null) {
                 newContent = rawContent;
@@ -359,8 +386,8 @@ public class WriteToFileToolHandler implements FullyManagedTool {
         }
     }
 
-    private List<UserContentBlock> executeFileOperation(
-            TaskConfig config, ToolUse block, FileOperationResult result) {
+    private ToolExecuteResult executeFileOperation(
+            ToolContext config, ToolUse block, FileOperationResult result) {
 
         String tool = result.fileExists ? "editedExistingFile" : "newFileCreated";
         String contentValue = result.diff != null ? result.diff : result.content;
@@ -376,16 +403,11 @@ public class WriteToFileToolHandler implements FullyManagedTool {
         }
     }
 
-    private List<UserContentBlock> executeAutoApprovedFileOperation(
-            TaskConfig config, ToolUse block, FileOperationResult result, String completeMessage) {
+    private ToolExecuteResult executeAutoApprovedFileOperation(
+            ToolContext config, ToolUse block, FileOperationResult result, String completeMessage) {
 
         config.getCallbacks()
                 .say(ClineSay.TOOL, completeMessage, null, null, false, ClineMessageFormat.JSON);
-        if (!config.isYoloModeToggled()) {
-            config.getTaskState()
-                    .setConsecutiveAutoApprovedRequestsCount(
-                            config.getTaskState().getConsecutiveAutoApprovedRequestsCount() + 1);
-        }
 
         TelemetryService telemetry = config.getServices().getTelemetryService();
         if (telemetry != null) {
@@ -398,7 +420,7 @@ public class WriteToFileToolHandler implements FullyManagedTool {
                     result.workspaceContext);
         }
 
-        List<UserContentBlock> saveResult = performFileSave(config, block, result);
+        ToolExecuteResult saveResult = performFileSave(config, block, result);
         try {
             Thread.sleep(3_500);
         } catch (InterruptedException e) {
@@ -407,64 +429,34 @@ public class WriteToFileToolHandler implements FullyManagedTool {
         return saveResult;
     }
 
-    private List<UserContentBlock> executeManualApprovedFileOperation(
-            TaskConfig config, ToolUse block, FileOperationResult result, String completeMessage) {
+    private ToolExecuteResult executeManualApprovedFileOperation(
+            ToolContext config, ToolUse block, FileOperationResult result, String completeMessage) {
 
-        Boolean didApprove =
-                ToolResultUtils.askApprovalAndPushFeedback(
-                        ClineAsk.TOOL, completeMessage, config, ClineMessageFormat.JSON);
-        String modelId = getModelId(config);
-        TelemetryService telemetry = config.getServices().getTelemetryService();
+        WriteFileToolState state = (WriteFileToolState) config.getToolState();
+        state.setPhase(1);
+        state.setResult(result);
+        state.setCompleteMessage(completeMessage);
 
-        if (!didApprove) {
-            if (telemetry != null) {
-                telemetry.captureToolUsage(
-                        config.getUlid(),
-                        block.getName(),
-                        modelId,
-                        false,
-                        false,
-                        result.workspaceContext);
-            }
-
-            DiffViewProvider dvp = config.getServices().getDiffViewProvider();
-            if (dvp != null) {
-                try {
-                    dvp.revertChanges();
-                } catch (IOException e) {
-                }
-            }
-
-            String fileDeniedNote =
-                    result.fileExists
-                            ? "The file was not updated, and maintains its original contents."
-                            : "The file was not created.";
-            return HandlerUtils.createTextBlocks(
-                    formatResponse.toolDenied() + " " + fileDeniedNote);
-        }
-
-        if (telemetry != null) {
-            telemetry.captureToolUsage(
-                    config.getUlid(),
-                    block.getName(),
-                    modelId,
-                    false,
-                    true,
-                    result.workspaceContext);
-        }
-
-        return performFileSave(config, block, result);
+        var token =
+                ToolResultUtils.askApprovalAndPushFeedbackForToken(
+                        ClineAsk.TOOL,
+                        completeMessage,
+                        config,
+                        ClineMessageFormat.JSON,
+                        block,
+                        getDescription(block));
+        return new ToolExecuteResult.PendingAsk(token);
     }
 
-    private List<UserContentBlock> performFileSave(
-            TaskConfig config, ToolUse block, FileOperationResult result) {
+    private ToolExecuteResult performFileSave(
+            ToolContext config, ToolUse block, FileOperationResult result) {
 
         DiffViewProvider dvp = config.getServices().getDiffViewProvider();
         if (dvp == null) {
             throw new IllegalStateException("DiffViewProvider is required but not available");
         }
 
-        TaskConfig.OpenOptions opts = new TaskConfig.OpenOptions();
+        ToolContext.OpenOptions opts = new ToolContext.OpenOptions();
         opts.displayPath = result.relPath;
 
         if (!dvp.isEditing()) {
@@ -491,8 +483,6 @@ public class WriteToFileToolHandler implements FullyManagedTool {
 
         config.getServices().getFileContextTracker().markFileAsEditedByCline(result.relPath);
 
-        config.getTaskState().setDidEditFile(true);
-
         config.getServices()
                 .getFileContextTracker()
                 .trackFileContext(result.relPath, "cline_edited")
@@ -502,7 +492,7 @@ public class WriteToFileToolHandler implements FullyManagedTool {
         if (save.userEdits != null && !save.userEdits.isEmpty()) {
             return handleUserEdits(config, result, save);
         } else {
-            return HandlerUtils.createTextBlocks(
+            return HandlerUtils.createToolExecuteResult(
                     formatResponse.fileEditWithoutUserChanges(
                             result.relPath,
                             save.autoFormattingEdits,
@@ -511,8 +501,8 @@ public class WriteToFileToolHandler implements FullyManagedTool {
         }
     }
 
-    private List<UserContentBlock> handleUserEdits(
-            TaskConfig config, FileOperationResult result, DiffViewProvider.SaveResult save) {
+    private ToolExecuteResult handleUserEdits(
+            ToolContext config, FileOperationResult result, DiffViewProvider.SaveResult save) {
         config.getServices()
                 .getFileContextTracker()
                 .trackFileContext(result.relPath, "user_edited")
@@ -521,7 +511,7 @@ public class WriteToFileToolHandler implements FullyManagedTool {
         String userFeedbackMsg = buildUserFeedbackMessage(tool, result.relPath, save.userEdits);
         config.getCallbacks()
                 .say(ClineSay.USER_FEEDBACK_DIFF, userFeedbackMsg, null, null, false, null);
-        return HandlerUtils.createTextBlocks(
+        return HandlerUtils.createToolExecuteResult(
                 formatResponse.fileEditWithUserChanges(
                         result.relPath,
                         save.userEdits,
@@ -538,6 +528,7 @@ public class WriteToFileToolHandler implements FullyManagedTool {
         String content;
         String newContent;
         TelemetryService.WorkspaceContext workspaceContext;
+        String error;
 
         FileOperationResult(
                 String relPath,
@@ -554,6 +545,10 @@ public class WriteToFileToolHandler implements FullyManagedTool {
             this.content = content;
             this.newContent = newContent;
             this.workspaceContext = workspaceContext;
+        }
+
+        FileOperationResult(String error) {
+            this.error = error;
         }
     }
 }

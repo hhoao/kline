@@ -5,10 +5,7 @@ import com.hhoa.kline.web.common.pojo.PageResult;
 import com.hhoa.kline.web.dal.dataobject.ApiErrorLogDO;
 import com.hhoa.kline.web.dto.ApiErrorLogPageReqVO;
 
-/**
- * API 错误日志 Service 接口
- *
- */
+/** API 错误日志 Service 接口 */
 public interface ApiErrorLogService {
 
     /**

@@ -5,10 +5,7 @@ import com.hhoa.kline.web.common.biz.system.oauth2.dto.OAuth2AccessTokenCreateRe
 import com.hhoa.kline.web.common.biz.system.oauth2.dto.OAuth2AccessTokenRespDTO;
 import jakarta.validation.Valid;
 
-/**
- * OAuth2.0 Token API 接口
- *
- */
+/** OAuth2.0 Token API 接口 */
 public interface OAuth2TokenCommonApi {
 
     /**

@@ -4,10 +4,7 @@ import jakarta.validation.constraints.NotNull;
 import java.time.LocalDateTime;
 import lombok.Data;
 
-/**
- * API 错误日志
- *
- */
+/** API 错误日志 */
 @Data
 public class ApiErrorLogCreateReqDTO {
 

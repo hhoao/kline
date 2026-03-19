@@ -5,10 +5,7 @@ import java.time.LocalDateTime;
 import lombok.Data;
 import lombok.experimental.Accessors;
 
-/**
- * OAuth2.0 访问令牌的信息 Response DTO
- *
- */
+/** OAuth2.0 访问令牌的信息 Response DTO */
 @Data
 @Accessors(chain = true)
 public class OAuth2AccessTokenRespDTO implements Serializable {

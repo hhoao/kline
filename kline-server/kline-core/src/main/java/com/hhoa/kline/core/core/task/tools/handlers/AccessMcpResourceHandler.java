@@ -2,7 +2,6 @@ package com.hhoa.kline.core.core.task.tools.handlers;
 
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ToolUse;
-import com.hhoa.kline.core.core.assistant.UserContentBlock;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
 import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
@@ -10,26 +9,43 @@ import com.hhoa.kline.core.core.prompts.systemprompt.tools.AccessMcpResourceTool
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
+import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.TaskUtils;
-import com.hhoa.kline.core.core.task.tools.types.TaskConfig;
+import com.hhoa.kline.core.core.task.tools.types.ToolContext;
+import com.hhoa.kline.core.core.task.tools.types.ToolExecuteResult;
+import com.hhoa.kline.core.core.task.tools.types.ToolState;
 import com.hhoa.kline.core.core.task.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.task.tools.utils.ToolResultUtils;
-import com.hhoa.kline.core.core.utils.StringUtils;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import io.modelcontextprotocol.spec.McpSchema;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.Getter;
+import lombok.Setter;
 
 /** 访问 MCP 资源的工具处理器。 */
-public class AccessMcpResourceHandler implements FullyManagedTool {
+public class AccessMcpResourceHandler implements StateFullToolHandler {
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
+
+    /** AccessMcpResourceHandler 的阶段状态 */
+    @Getter
+    @Setter
+    public static class AccessMcpToolState extends ToolState {
+        private String serverName;
+        private String uri;
+    }
 
     @Override
     public String getName() {
         return ClineDefaultTool.MCP_ACCESS.getValue();
+    }
+
+    @Override
+    public ToolState createToolState() {
+        return new AccessMcpToolState();
     }
 
     @Override
@@ -72,32 +88,9 @@ public class AccessMcpResourceHandler implements FullyManagedTool {
     }
 
     @Override
-    public List<UserContentBlock> execute(TaskConfig config, ToolUse block) {
+    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
         String serverName = HandlerUtils.getStringParam(block, "server_name");
         String uri = HandlerUtils.getStringParam(block, "uri");
-
-        if (StringUtils.isBlank(serverName)) {
-            config.getTaskState()
-                    .setConsecutiveMistakeCount(
-                            config.getTaskState().getConsecutiveMistakeCount() + 1);
-            String errorResult =
-                    config.getCallbacks()
-                            .sayAndCreateMissingParamError(
-                                    ClineDefaultTool.MCP_ACCESS.getValue(), "server_name");
-            return HandlerUtils.createTextBlocks(errorResult);
-        }
-        if (StringUtils.isBlank(uri)) {
-            config.getTaskState()
-                    .setConsecutiveMistakeCount(
-                            config.getTaskState().getConsecutiveMistakeCount() + 1);
-            String errorResult =
-                    config.getCallbacks()
-                            .sayAndCreateMissingParamError(
-                                    ClineDefaultTool.MCP_ACCESS.getValue(), "uri");
-            return HandlerUtils.createTextBlocks(errorResult);
-        }
-
-        config.getTaskState().setConsecutiveMistakeCount(0);
 
         Map<String, Object> completeMessageMap = new HashMap<>();
         completeMessageMap.put("type", "access_mcp_resource");
@@ -107,10 +100,10 @@ public class AccessMcpResourceHandler implements FullyManagedTool {
         completeMessageMap.put("arguments", null);
         String completeMessage = JsonUtils.toJsonString(completeMessageMap);
 
-        Boolean shouldApprove = config.getCallbacks().shouldAutoApproveTool(block.getName());
+        Boolean shouldApprove = context.getCallbacks().shouldAutoApproveTool(block.getName());
         if (Boolean.TRUE.equals(shouldApprove)) {
             // Auto-approval flow
-            config.getCallbacks()
+            context.getCallbacks()
                     .say(
                             ClineSay.USE_MCP_SERVER,
                             completeMessage,
@@ -118,87 +111,79 @@ public class AccessMcpResourceHandler implements FullyManagedTool {
                             null,
                             false,
                             ClineMessageFormat.JSON);
-            if (!config.isYoloModeToggled()) {
-                config.getTaskState()
-                        .setConsecutiveAutoApprovedRequestsCount(
-                                config.getTaskState().getConsecutiveAutoApprovedRequestsCount()
-                                        + 1);
-            }
 
             // Capture telemetry
-            if (config.getServices() != null
-                    && config.getServices().getTelemetryService() != null) {
-                String modelId =
-                        config.getApi() != null && config.getApi().getModel() != null
-                                ? config.getApi().getModel().getId()
-                                : "unknown";
-                config.getServices()
-                        .getTelemetryService()
-                        .captureToolUsage(config.getUlid(), block.getName(), modelId, true, true);
-            }
+            captureTelemetry(context, block, true, true);
 
-            config.getCallbacks()
+            context.getCallbacks()
                     .say(ClineSay.MCP_SERVER_REQUEST_STARTED, null, null, null, null, null);
-            return executeMcpReadAndRespond(config, serverName, uri);
-        } else {
-            // Manual approval flow
-            String notificationMessage =
-                    "Cline wants to access "
-                            + (uri == null ? "unknown resource" : uri)
-                            + " on "
-                            + (serverName == null ? "unknown server" : serverName);
+            return executeMcpReadAndRespond(context, serverName, uri);
+        }
 
-            TaskUtils.showNotificationForApprovalIfAutoApprovalEnabled(
-                    notificationMessage,
-                    config.getAutoApprovalSettings() != null
-                            && config.getAutoApprovalSettings().isEnabled(),
-                    config.getAutoApprovalSettings() != null
-                            && config.getAutoApprovalSettings().isEnableNotifications(),
-                    (subtitle, message) -> {});
+        // Manual approval flow — save state and return PendingAsk
+        String notificationMessage =
+                "Cline wants to access "
+                        + (uri == null ? "unknown resource" : uri)
+                        + " on "
+                        + (serverName == null ? "unknown server" : serverName);
 
-            Boolean didApprove =
-                    ToolResultUtils.askApprovalAndPushFeedback(
-                            ClineAsk.USE_MCP_SERVER,
-                            completeMessage,
-                            config,
-                            ClineMessageFormat.JSON);
-            if (!didApprove) {
-                // Capture telemetry for denial
-                if (config.getServices() != null
-                        && config.getServices().getTelemetryService() != null) {
-                    String modelId =
-                            config.getApi() != null && config.getApi().getModel() != null
-                                    ? config.getApi().getModel().getId()
-                                    : "unknown";
-                    config.getServices()
-                            .getTelemetryService()
-                            .captureToolUsage(
-                                    config.getUlid(), block.getName(), modelId, false, false);
-                }
-                return HandlerUtils.createTextBlocks(formatResponse.toolDenied());
-            } else {
-                // Capture telemetry for approval
-                if (config.getServices() != null
-                        && config.getServices().getTelemetryService() != null) {
-                    String modelId =
-                            config.getApi() != null && config.getApi().getModel() != null
-                                    ? config.getApi().getModel().getId()
-                                    : "unknown";
-                    config.getServices()
-                            .getTelemetryService()
-                            .captureToolUsage(
-                                    config.getUlid(), block.getName(), modelId, false, true);
-                }
+        TaskUtils.showNotificationForApprovalIfAutoApprovalEnabled(
+                notificationMessage,
+                context.getAutoApprovalSettings() != null
+                        && context.getAutoApprovalSettings().isEnabled(),
+                context.getAutoApprovalSettings() != null
+                        && context.getAutoApprovalSettings().isEnableNotifications(),
+                (subtitle, message) -> {});
 
-                config.getCallbacks()
-                        .say(ClineSay.MCP_SERVER_REQUEST_STARTED, null, null, null, null, null);
-                return executeMcpReadAndRespond(config, serverName, uri);
-            }
+        AccessMcpToolState state = (AccessMcpToolState) context.getToolState();
+        state.setPhase(1);
+        state.setServerName(serverName);
+        state.setUri(uri);
+
+        var token =
+                ToolResultUtils.askApprovalAndPushFeedbackForToken(
+                        ClineAsk.USE_MCP_SERVER,
+                        completeMessage,
+                        context,
+                        ClineMessageFormat.JSON,
+                        block,
+                        getDescription(block));
+        return new ToolExecuteResult.PendingAsk(token);
+    }
+
+    @Override
+    public ToolExecuteResult resume(
+            ToolContext context, ToolUse block, ToolState toolState, AskResult askResult) {
+        AccessMcpToolState state = (AccessMcpToolState) toolState;
+
+        boolean approved = ToolResultUtils.processAskResult(askResult, context);
+        if (!approved) {
+            captureTelemetry(context, block, false, false);
+            return HandlerUtils.createToolExecuteResult(formatResponse.toolDenied());
+        }
+
+        captureTelemetry(context, block, false, true);
+        context.getCallbacks()
+                .say(ClineSay.MCP_SERVER_REQUEST_STARTED, null, null, null, null, null);
+        return executeMcpReadAndRespond(context, state.getServerName(), state.getUri());
+    }
+
+    private void captureTelemetry(
+            ToolContext context, ToolUse block, boolean autoApproved, boolean approved) {
+        if (context.getServices() != null && context.getServices().getTelemetryService() != null) {
+            String modelId =
+                    context.getApi() != null && context.getApi().getModel() != null
+                            ? context.getApi().getModel().getId()
+                            : "unknown";
+            context.getServices()
+                    .getTelemetryService()
+                    .captureToolUsage(
+                            context.getUlid(), block.getName(), modelId, autoApproved, approved);
         }
     }
 
-    private List<UserContentBlock> executeMcpReadAndRespond(
-            TaskConfig config, String serverName, String uri) {
+    private ToolExecuteResult executeMcpReadAndRespond(
+            ToolContext config, String serverName, String uri) {
         try {
             if (config.getServices().getMcpHub() == null) {
                 throw new IllegalArgumentException("未找到服务器: " + serverName);
@@ -207,9 +192,10 @@ public class AccessMcpResourceHandler implements FullyManagedTool {
                     config.getServices().getMcpHub().readResource(serverName, uri);
             String pretty = formatExternalResourceResult(resourceResult);
             config.getCallbacks().say(ClineSay.MCP_SERVER_RESPONSE, pretty, null, null, null, null);
-            return HandlerUtils.createTextBlocks(formatResponse.toolResult(pretty, null, null));
+            return HandlerUtils.createToolExecuteResult(
+                    formatResponse.toolResult(pretty, null, null));
         } catch (Exception e) {
-            return HandlerUtils.createTextBlocks(
+            return HandlerUtils.createToolExecuteResult(
                     formatResponse.toolError("Error reading resource: " + e.getMessage()));
         }
     }

@@ -51,9 +51,7 @@ public class PromptAutoConfiguration {
                         AiPlatformEnum.DEEP_SEEK, apiKey, defaultChatProps.getBaseUrl());
 
         String modelId =
-                defaultChatProps.getModelId() != null
-                        ? defaultChatProps.getModelId()
-                        : "3";
+                defaultChatProps.getModelId() != null ? defaultChatProps.getModelId() : "3";
         String providerId =
                 defaultChatProps.getProviderId() != null
                         ? defaultChatProps.getProviderId()

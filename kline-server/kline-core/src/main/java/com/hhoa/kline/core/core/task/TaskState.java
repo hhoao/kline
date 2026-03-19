@@ -3,8 +3,14 @@ package com.hhoa.kline.core.core.task;
 import com.hhoa.kline.core.core.assistant.AssistantMessageContent;
 import com.hhoa.kline.core.core.assistant.UserContentBlock;
 import com.hhoa.kline.core.core.shared.ClineAskResponse;
+import com.hhoa.kline.core.core.task.tools.types.PendingAskToken;
+import com.hhoa.kline.core.core.task.tools.types.ToolState;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.Data;
 
 @Data
@@ -16,7 +22,8 @@ public class TaskState {
 
     private int currentStreamingContentIndex = 0;
     private List<AssistantMessageContent> assistantMessageContent = new ArrayList<>();
-    private List<UserContentBlock> userMessageContent = new ArrayList<>();
+    // 系统自动获取的信息，用于下一轮次的用户内容
+    private List<UserContentBlock> nextUserMessageContent = new ArrayList<>();
     private boolean userMessageContentReady = false;
 
     private ClineAskResponse askResponse;
@@ -55,5 +62,22 @@ public class TaskState {
 
     private boolean currentlySummarizing = false;
     private Integer lastAutoCompactTriggerIndex;
-    private boolean running = false;
+
+    /** 当前 API 轮次的用户内容 */
+    private List<UserContentBlock> currentUserContent;
+
+    /** 当前轮次是否需要包含文件详情 */
+    private boolean currentIncludeFileDetails;
+
+    /** 当前轮次的 previousApiReqIndex（由 doPrepareContext 计算，供 doCallApi 使用） */
+    private int currentPreviousApiReqIndex = -1;
+
+    private ApiRequestResult apiRequestResult;
+
+    private final ConcurrentHashMap<String, PendingAskToken> pendingAskTokens =
+            new ConcurrentHashMap<>();
+
+    private Queue<AskResult> pendingUserResponses = new ArrayDeque<>();
+
+    private Map<String, ToolState> toolStates = new ConcurrentHashMap<>();
 }

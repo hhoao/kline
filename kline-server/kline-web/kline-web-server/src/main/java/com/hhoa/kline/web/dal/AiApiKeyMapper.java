@@ -8,10 +8,7 @@ import com.hhoa.kline.web.dal.dataobject.AiApiKeyDO;
 import com.hhoa.kline.web.dto.AiApiKeyPageReqVO;
 import org.apache.ibatis.annotations.Mapper;
 
-/**
- * AI API 密钥 Mapper
- *
- */
+/** AI API 密钥 Mapper */
 @Mapper
 public interface AiApiKeyMapper extends BaseMapperX<AiApiKeyDO> {
 

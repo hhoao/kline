@@ -11,10 +11,7 @@ import lombok.AllArgsConstructor;
 import org.springframework.util.PathMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-/**
- * Xss 过滤器
- *
- */
+/** Xss 过滤器 */
 @AllArgsConstructor
 public class XssFilter extends OncePerRequestFilter {
 

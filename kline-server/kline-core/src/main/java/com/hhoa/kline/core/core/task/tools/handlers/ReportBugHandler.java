@@ -2,7 +2,6 @@ package com.hhoa.kline.core.core.task.tools.handlers;
 
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ToolUse;
-import com.hhoa.kline.core.core.assistant.UserContentBlock;
 import com.hhoa.kline.core.core.integrations.misc.ExtractText;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
 import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
@@ -12,8 +11,11 @@ import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.shared.api.ApiProvider;
 import com.hhoa.kline.core.core.shared.storage.types.Mode;
 import com.hhoa.kline.core.core.task.AskResult;
-import com.hhoa.kline.core.core.task.tools.types.TaskConfig;
+import com.hhoa.kline.core.core.task.tools.types.ToolContext;
+import com.hhoa.kline.core.core.task.tools.types.ToolExecuteResult;
+import com.hhoa.kline.core.core.task.tools.types.ToolState;
 import com.hhoa.kline.core.core.task.tools.types.UIHelpers;
+import com.hhoa.kline.core.core.task.tools.utils.ToolResultUtils;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -22,13 +24,33 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
-/** 报告问题（Bug）的工具处理器。 负责收集信息、走审批/反馈流程，并创建 GitHub Issue。 */
 @Slf4j
-public class ReportBugHandler implements FullyManagedTool {
+public class ReportBugHandler implements StateFullToolHandler {
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
+
+    @Getter
+    @Setter
+    public static class ReportBugToolState extends ToolState {
+        private String title;
+        private String what;
+        private String steps;
+        private String output;
+        private String ctx;
+        private String providerAndModel;
+        private String operatingSystem;
+        private String systemInfo;
+        private String clineVersion;
+    }
+
+    @Override
+    public ToolState createToolState() {
+        return new ReportBugToolState();
+    }
 
     @Override
     public String getName() {
@@ -92,18 +114,16 @@ public class ReportBugHandler implements FullyManagedTool {
     }
 
     @Override
-    public List<UserContentBlock> execute(TaskConfig config, ToolUse block) {
+    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
         String title = getStringParam(block, "title");
         String what = getStringParam(block, "what_happened");
         String steps = getStringParam(block, "steps_to_reproduce");
         String output = getStringParam(block, "api_request_output");
         String ctx = getStringParam(block, "additional_context");
 
-        config.getTaskState().setConsecutiveMistakeCount(0);
-
-        if (config.getAutoApprovalSettings() != null
-                && config.getAutoApprovalSettings().isEnabled()
-                && config.getAutoApprovalSettings().isEnableNotifications()) {
+        if (context.getAutoApprovalSettings() != null
+                && context.getAutoApprovalSettings().isEnabled()
+                && context.getAutoApprovalSettings().isEnableNotifications()) {
             showSystemNotification(
                     "Cline wants to create a github issue...",
                     "Cline is suggesting to create a github issue with the title: " + title);
@@ -111,7 +131,7 @@ public class ReportBugHandler implements FullyManagedTool {
 
         String operatingSystem =
                 System.getProperty("os.name") + " " + System.getProperty("os.version");
-        Mode currentMode = config.getMode();
+        Mode currentMode = context.getMode();
         String clineVersion = getClineVersion();
         String hostPlatform = getHostPlatform();
         String hostVersion = getHostVersion();
@@ -123,9 +143,9 @@ public class ReportBugHandler implements FullyManagedTool {
                         System.getProperty("java.version"),
                         System.getProperty("os.arch"));
 
-        ApiProvider apiProvider = getApiProvider(config, currentMode);
+        ApiProvider apiProvider = getApiProvider(context, currentMode);
         String providerAndModel =
-                String.format("%s / %s", apiProvider, config.getApi().getModel().getId());
+                String.format("%s / %s", apiProvider, context.getApi().getModel().getId());
 
         Map<String, Object> dataMap = new HashMap<>();
         dataMap.put("title", title);
@@ -139,17 +159,42 @@ public class ReportBugHandler implements FullyManagedTool {
         dataMap.put("cline_version", clineVersion);
         String data = JsonUtils.toJsonString(dataMap);
 
-        AskResult res =
-                config.getCallbacks()
-                        .ask(ClineAsk.REPORT_BUG, data, false, ClineMessageFormat.JSON);
-        String text = res != null ? res.getText() : null;
+        ReportBugToolState state = (ReportBugToolState) context.getToolState();
+        state.setPhase(1);
+        state.setTitle(title);
+        state.setWhat(what);
+        state.setSteps(steps);
+        state.setOutput(output);
+        state.setCtx(ctx);
+        state.setProviderAndModel(providerAndModel);
+        state.setOperatingSystem(operatingSystem);
+        state.setSystemInfo(systemInfo);
+        state.setClineVersion(clineVersion);
+
+        var token =
+                ToolResultUtils.askApprovalAndPushFeedbackForToken(
+                        ClineAsk.REPORT_BUG,
+                        data,
+                        context,
+                        ClineMessageFormat.JSON,
+                        block,
+                        getDescription(block));
+        return new ToolExecuteResult.PendingAsk(token);
+    }
+
+    @Override
+    public ToolExecuteResult resume(
+            ToolContext context, ToolUse block, ToolState toolState, AskResult askResult) {
+        ReportBugToolState state = (ReportBugToolState) toolState;
+
+        String text = askResult != null ? askResult.getText() : null;
         String[] images =
-                res != null && res.getImages() != null
-                        ? res.getImages().toArray(new String[0])
+                askResult != null && askResult.getImages() != null
+                        ? askResult.getImages().toArray(new String[0])
                         : null;
         String[] files =
-                res != null && res.getFiles() != null
-                        ? res.getFiles().toArray(new String[0])
+                askResult != null && askResult.getFiles() != null
+                        ? askResult.getFiles().toArray(new String[0])
                         : null;
 
         boolean hasFeedback =
@@ -166,7 +211,7 @@ public class ReportBugHandler implements FullyManagedTool {
                 fileContentString = ExtractText.processFilesIntoText(filePaths);
             }
 
-            config.getCallbacks()
+            context.getCallbacks()
                     .say(
                             ClineSay.USER_FEEDBACK,
                             text == null ? "" : text,
@@ -175,7 +220,7 @@ public class ReportBugHandler implements FullyManagedTool {
                             false,
                             null);
 
-            return HandlerUtils.createTextBlocks(
+            return HandlerUtils.createToolExecuteResult(
                     formatResponse.toolResult(
                             "The user did not submit the bug, and provided feedback on the Github issue generated instead:\n<feedback>\n"
                                     + (text == null ? "" : text)
@@ -186,15 +231,15 @@ public class ReportBugHandler implements FullyManagedTool {
 
         try {
             Map<String, String> params = new HashMap<>();
-            params.put("title", title);
-            params.put("operating-system", operatingSystem);
-            params.put("cline-version", clineVersion);
-            params.put("system-info", systemInfo);
-            params.put("additional-context", ctx);
-            params.put("what-happened", what);
-            params.put("steps", steps);
-            params.put("provider-model", providerAndModel);
-            params.put("logs", output);
+            params.put("title", state.getTitle());
+            params.put("operating-system", state.getOperatingSystem());
+            params.put("cline-version", state.getClineVersion());
+            params.put("system-info", state.getSystemInfo());
+            params.put("additional-context", state.getCtx());
+            params.put("what-happened", state.getWhat());
+            params.put("steps", state.getSteps());
+            params.put("provider-model", state.getProviderAndModel());
+            params.put("logs", state.getOutput());
 
             String issueUrl = createGitHubIssueUrl("cline", "cline", "bug_report.yml", params);
             openUrlInBrowser(issueUrl);
@@ -205,13 +250,9 @@ public class ReportBugHandler implements FullyManagedTool {
                     error);
         }
 
-        return HandlerUtils.createTextBlocks(
+        return HandlerUtils.createToolExecuteResult(
                 formatResponse.toolResult(
                         "The user accepted the creation of the Github issue.", null, null));
-    }
-
-    private static boolean isBlank(String s) {
-        return s == null || s.trim().isEmpty();
     }
 
     private static String getStringParam(ToolUse block, String key) {
@@ -238,12 +279,12 @@ public class ReportBugHandler implements FullyManagedTool {
         return System.getProperty("os.version", "Unknown");
     }
 
-    private static ApiProvider getApiProvider(TaskConfig config, Mode mode) {
+    private static ApiProvider getApiProvider(ToolContext config, Mode mode) {
         try {
             if (config.getServices() != null
                     && config.getServices().getStateManager() != null
                     && config.getServices().getStateManager()
-                            instanceof TaskConfig.ApiConfiguration apiConfig) {
+                            instanceof ToolContext.ApiConfiguration apiConfig) {
                 return mode == Mode.PLAN
                         ? apiConfig.getPlanModeApiProvider()
                         : apiConfig.getActModeApiProvider();

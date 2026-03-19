@@ -7,7 +7,7 @@ import cn.hutool.core.bean.BeanUtil;
 import com.hhoa.kline.web.common.enums.CommonStatusEnum;
 import com.hhoa.kline.web.common.pojo.CommonResult;
 import com.hhoa.kline.web.common.pojo.PageResult;
-import com.hhoa.kline.web.common.utils.object.BeanUtils;
+import com.hhoa.kline.web.common.utils.PageUtils;
 import com.hhoa.kline.web.dal.dataobject.AiKnowledgeDO;
 import com.hhoa.kline.web.dto.knowledge.knowledge.AiKnowledgePageReqVO;
 import com.hhoa.kline.web.dto.knowledge.knowledge.AiKnowledgeRespVO;
@@ -42,7 +42,7 @@ public class AiKnowledgeController {
     public CommonResult<PageResult<AiKnowledgeRespVO>> getKnowledgePage(
             @Valid AiKnowledgePageReqVO pageReqVO) {
         PageResult<AiKnowledgeDO> pageResult = knowledgeService.getKnowledgePage(pageReqVO);
-        return success(BeanUtils.toPageResultBean(pageResult, AiKnowledgeRespVO.class));
+        return success(PageUtils.toPageResult(pageResult, AiKnowledgeRespVO.class));
     }
 
     @GetMapping("/get")
