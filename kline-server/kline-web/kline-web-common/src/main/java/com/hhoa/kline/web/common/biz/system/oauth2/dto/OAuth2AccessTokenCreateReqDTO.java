@@ -5,10 +5,7 @@ import java.io.Serializable;
 import java.util.List;
 import lombok.Data;
 
-/**
- * OAuth2.0 访问令牌创建 Request DTO
- *
- */
+/** OAuth2.0 访问令牌创建 Request DTO */
 @Data
 public class OAuth2AccessTokenCreateReqDTO implements Serializable {
 

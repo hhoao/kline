@@ -6,10 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-/**
- * 过滤 /admin-api、/app-api 等 API 请求的过滤器
- *
- */
+/** 过滤 /admin-api、/app-api 等 API 请求的过滤器 */
 @RequiredArgsConstructor
 public abstract class ApiRequestFilter extends OncePerRequestFilter {
 

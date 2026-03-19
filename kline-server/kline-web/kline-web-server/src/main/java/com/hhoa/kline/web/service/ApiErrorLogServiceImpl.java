@@ -5,9 +5,9 @@ import static com.hhoa.kline.web.constants.ErrorCodeConstants.API_ERROR_LOG_NOT_
 import static com.hhoa.kline.web.constants.ErrorCodeConstants.API_ERROR_LOG_PROCESSED;
 import static com.hhoa.kline.web.dal.dataobject.ApiErrorLogDO.REQUEST_PARAMS_MAX_LENGTH;
 
+import com.hhoa.ai.kline.commons.utils.object.BeanUtils;
 import com.hhoa.kline.web.common.biz.infra.logger.dto.ApiErrorLogCreateReqDTO;
 import com.hhoa.kline.web.common.pojo.PageResult;
-import com.hhoa.kline.web.common.utils.object.BeanUtils;
 import com.hhoa.kline.web.common.utils.string.StrUtils;
 import com.hhoa.kline.web.dal.dataobject.ApiErrorLogDO;
 import com.hhoa.kline.web.dto.ApiErrorLogPageReqVO;
@@ -18,10 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
-/**
- * API 错误日志 Service 实现类
- *
- */
+/** API 错误日志 Service 实现类 */
 @Service
 @Validated
 @Slf4j

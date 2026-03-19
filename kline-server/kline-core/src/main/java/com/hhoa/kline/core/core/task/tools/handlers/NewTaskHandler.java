@@ -1,7 +1,6 @@
 package com.hhoa.kline.core.core.task.tools.handlers;
 
 import com.hhoa.kline.core.core.assistant.ToolUse;
-import com.hhoa.kline.core.core.assistant.UserContentBlock;
 import com.hhoa.kline.core.core.integrations.misc.ExtractText;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
 import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
@@ -10,23 +9,34 @@ import com.hhoa.kline.core.core.prompts.systemprompt.tools.NewTaskTool;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
-import com.hhoa.kline.core.core.task.tools.types.TaskConfig;
+import com.hhoa.kline.core.core.task.tools.types.ToolContext;
+import com.hhoa.kline.core.core.task.tools.types.ToolExecuteResult;
+import com.hhoa.kline.core.core.task.tools.types.ToolState;
 import com.hhoa.kline.core.core.task.tools.types.UIHelpers;
+import com.hhoa.kline.core.core.task.tools.utils.ToolResultUtils;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
-/**
- * 新任务工具处理器 处理创建新任务、用户反馈、通知显示
- *
- * @author hhoa
- */
 @Slf4j
-public class NewTaskHandler implements FullyManagedTool {
+public class NewTaskHandler implements StateFullToolHandler {
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
+
+    @Getter
+    @Setter
+    public static class NewTaskToolState extends ToolState {
+        private String context;
+    }
+
+    @Override
+    public ToolState createToolState() {
+        return new NewTaskToolState();
+    }
 
     @Override
     public String getName() {
@@ -50,28 +60,44 @@ public class NewTaskHandler implements FullyManagedTool {
     }
 
     @Override
-    public List<UserContentBlock> execute(TaskConfig config, ToolUse block) {
+    public ToolExecuteResult execute(ToolContext toolContext, ToolUse block) {
         String context = HandlerUtils.getStringParam(block, "context");
 
-        config.getTaskState().setConsecutiveMistakeCount(0);
-
-        if (config.getAutoApprovalSettings() != null
-                && config.getAutoApprovalSettings().isEnabled()
-                && config.getAutoApprovalSettings().isEnableNotifications()) {
+        if (toolContext.getAutoApprovalSettings() != null
+                && toolContext.getAutoApprovalSettings().isEnabled()
+                && toolContext.getAutoApprovalSettings().isEnableNotifications()) {
             showSystemNotification(
                     "Cline wants to start a new task...",
                     "Cline is suggesting to start a new task with: " + context);
         }
 
-        AskResult res = config.getCallbacks().ask(ClineAsk.NEW_TASK, context, false, null);
-        String text = res != null ? res.getText() : null;
+        NewTaskToolState state = (NewTaskToolState) toolContext.getToolState();
+        state.setPhase(1);
+        state.setContext(context);
+
+        var token =
+                ToolResultUtils.askApprovalAndPushFeedbackForToken(
+                        ClineAsk.NEW_TASK,
+                        context,
+                        toolContext,
+                        null,
+                        block,
+                        getDescription(block));
+        return new ToolExecuteResult.PendingAsk(token);
+    }
+
+    @Override
+    public ToolExecuteResult resume(
+            ToolContext context, ToolUse block, ToolState toolState, AskResult askResult) {
+
+        String text = askResult != null ? askResult.getText() : null;
         String[] images =
-                res != null && res.getImages() != null
-                        ? res.getImages().toArray(new String[0])
+                askResult != null && askResult.getImages() != null
+                        ? askResult.getImages().toArray(new String[0])
                         : null;
         String[] files =
-                res != null && res.getFiles() != null
-                        ? res.getFiles().toArray(new String[0])
+                askResult != null && askResult.getFiles() != null
+                        ? askResult.getFiles().toArray(new String[0])
                         : null;
 
         boolean hasFeedback =
@@ -89,7 +115,7 @@ public class NewTaskHandler implements FullyManagedTool {
                 fileContentString = ExtractText.processFilesIntoText(filePaths);
             }
 
-            config.getCallbacks()
+            context.getCallbacks()
                     .say(
                             ClineSay.USER_FEEDBACK,
                             text == null ? "" : text,
@@ -99,20 +125,18 @@ public class NewTaskHandler implements FullyManagedTool {
                             null);
 
             String feedbackText = text == null ? "" : text;
-            return HandlerUtils.createTextBlocks(
+            return HandlerUtils.createToolExecuteResult(
                     formatResponse.toolResult(
                             "The user provided feedback instead of creating a new task:\n<feedback>\n"
                                     + feedbackText
                                     + "\n</feedback>",
                             images,
                             fileContentString));
-        } else {
-            return HandlerUtils.createTextBlocks(
-                    formatResponse.toolResult(
-                            "The user has created a new task with the provided context.",
-                            null,
-                            null));
         }
+
+        return HandlerUtils.createToolExecuteResult(
+                formatResponse.toolResult(
+                        "The user has created a new task with the provided context.", null, null));
     }
 
     private static void showSystemNotification(String subtitle, String message) {

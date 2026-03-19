@@ -1,4 +1,4 @@
-package com.hhoa.kline.web.common.utils.object;
+package com.hhoa.kline.web.common.utils;
 
 import static java.util.Collections.singletonList;
 
@@ -6,15 +6,15 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.lang.func.Func1;
 import cn.hutool.core.lang.func.LambdaUtil;
 import cn.hutool.core.util.ArrayUtil;
+import com.hhoa.ai.kline.commons.utils.object.BeanUtils;
 import com.hhoa.kline.web.common.pojo.PageParam;
+import com.hhoa.kline.web.common.pojo.PageResult;
 import com.hhoa.kline.web.common.pojo.SortablePageParam;
 import com.hhoa.kline.web.common.pojo.SortingField;
+import java.util.List;
+import java.util.function.Consumer;
 import org.springframework.util.Assert;
 
-/**
- * {@link com.hhoa.kline.framework.common.pojo.PageParam} 工具类
- *
- */
 public class PageUtils {
 
     private static final Object[] ORDER_TYPES =
@@ -64,5 +64,21 @@ public class PageUtils {
         if (sortablePageParam != null && CollUtil.isEmpty(sortablePageParam.getSortingFields())) {
             sortablePageParam.setSortingFields(singletonList(buildSortingField(func)));
         }
+    }
+
+    public static <S, T> PageResult<T> toPageResult(PageResult<S> source, Class<T> targetType) {
+        return toPageResult(source, targetType, null);
+    }
+
+    public static <S, T> PageResult<T> toPageResult(
+            PageResult<S> source, Class<T> targetType, Consumer<T> peek) {
+        if (source == null || source.getList() == null) {
+            return new PageResult<>(0L);
+        }
+        List<T> list = BeanUtils.toBean(source.getList(), targetType);
+        if (peek != null && list != null) {
+            list.forEach(peek);
+        }
+        return new PageResult<>(list, source.getTotal());
     }
 }

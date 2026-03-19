@@ -10,10 +10,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 
-/**
- * Request Body 缓存 Wrapper
- *
- */
+/** Request Body 缓存 Wrapper */
 public class CacheRequestBodyWrapper extends HttpServletRequestWrapper {
 
     /** 缓存的内容 */

@@ -6,10 +6,7 @@ import jakarta.servlet.http.HttpServletRequestWrapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/**
- * Xss 请求 Wrapper
- *
- */
+/** Xss 请求 Wrapper */
 public class XssRequestWrapper extends HttpServletRequestWrapper {
 
     private final XssCleaner xssCleaner;

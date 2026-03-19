@@ -6,10 +6,7 @@ import java.util.List;
 import java.util.Map;
 import lombok.Data;
 
-/**
- * OAuth2.0 访问令牌的校验 Response DTO
- *
- */
+/** OAuth2.0 访问令牌的校验 Response DTO */
 @Data
 public class OAuth2AccessTokenCheckRespDTO implements Serializable {
 

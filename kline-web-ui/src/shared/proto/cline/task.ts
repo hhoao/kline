@@ -60,6 +60,8 @@ export interface TaskItem {
 export interface AskResponseRequest {
   responseType: string;
   taskId: string;
+  /** PendingAsk 的唯一标识，从最后一条 ask 类型 ClineMessage 的 pendingId 获取 */
+  pendingId?: string;
   text?: string;
   images?: string[];
   files?: string[];

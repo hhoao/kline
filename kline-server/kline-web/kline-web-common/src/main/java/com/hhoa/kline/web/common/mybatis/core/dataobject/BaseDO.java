@@ -14,7 +14,6 @@ import org.apache.ibatis.type.JdbcType;
  * 基础实体对象
  *
  * <p>为什么实现 {@link TransPojo} 接口？ 因为使用 Easy-Trans TransType.SIMPLE 模式，集成 MyBatis Plus 查询
- *
  */
 @Data
 @JsonIgnoreProperties(

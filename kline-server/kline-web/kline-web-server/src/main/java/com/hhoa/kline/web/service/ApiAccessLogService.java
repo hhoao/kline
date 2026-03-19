@@ -5,10 +5,7 @@ import com.hhoa.kline.web.common.pojo.PageResult;
 import com.hhoa.kline.web.dal.dataobject.ApiAccessLogDO;
 import com.hhoa.kline.web.dto.ApiAccessLogPageReqVO;
 
-/**
- * API 访问日志 Service 接口
- *
- */
+/** API 访问日志 Service 接口 */
 public interface ApiAccessLogService {
 
     /**

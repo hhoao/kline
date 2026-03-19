@@ -11,5 +11,5 @@ public class ApiRequestResult {
     private List<Object> reasoningDetails;
     private List<UserContentBlock> antThinkingContent;
     private ClineApiReqInfo apiReqInfo;
-    private boolean didReceiveUsageddChunk;
+    private boolean didReceiveUsageChunk;
 }

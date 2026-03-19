@@ -1,0 +1,41 @@
+package com.hhoa.kline.core.core.task.event;
+
+public enum TaskEventType {
+    START_TASK,
+
+    RESUME_TASK,
+
+    PREPARE_CONTEXT,
+
+    CONTEXT_READY,
+
+    PREPARE_FAILED,
+
+    WAITING_API_CALL_COMPLETED,
+
+    API_COMPLETED,
+
+    API_CALLING_FAILED,
+
+    USER_RESPONDED,
+
+    CONTINUE_NEXT_TURN,
+
+    TASK_COMPLETE,
+
+    ASK_USER_FOR_RESET_RETRY_TIMES,
+
+    RETRY,
+
+    NO_RETRY,
+
+    ABORT,
+
+    RESTORE_TASK,
+
+    MAX_MISTAKE_LIMIT_REACHED,
+
+    AUTO_APPROVAL_MAX_REQ_REACHED,
+
+    API_CALLING_RETRY,
+}

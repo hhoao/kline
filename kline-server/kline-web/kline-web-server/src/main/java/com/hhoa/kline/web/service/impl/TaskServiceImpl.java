@@ -1,5 +1,6 @@
 package com.hhoa.kline.web.service.impl;
 
+import com.hhoa.ai.kline.commons.utils.object.BeanUtils;
 import com.hhoa.kline.core.core.controller.HistoryItem;
 import com.hhoa.kline.core.core.controller.TaskManager;
 import com.hhoa.kline.core.core.controller.TaskManagerFactory;
@@ -9,8 +10,6 @@ import com.hhoa.kline.core.core.shared.ClineAskResponse;
 import com.hhoa.kline.core.core.shared.proto.cline.TaskHistoryArray;
 import com.hhoa.kline.core.core.shared.proto.cline.TaskItem;
 import com.hhoa.kline.core.core.shared.storage.Settings;
-import com.hhoa.kline.core.core.task.Task;
-import com.hhoa.kline.web.common.utils.object.BeanUtils;
 import com.hhoa.kline.web.controller.dto.AskResponseRequestDTO;
 import com.hhoa.kline.web.controller.dto.DeleteTasksRequestDTO;
 import com.hhoa.kline.web.controller.dto.ExportTaskRequestDTO;
@@ -139,9 +138,9 @@ public class TaskServiceImpl implements TaskService {
             return;
         }
 
-        Task task = taskManager.getOrInitTask(request.getTaskId());
-
-        task.handleWebviewAskResponse(
+        taskManager.handleWebviewAskResponse(
+                request.getTaskId(),
+                request.getPendingId(),
                 responseType,
                 request.getText(),
                 request.getImages() != null ? new ArrayList<>(request.getImages()) : null,

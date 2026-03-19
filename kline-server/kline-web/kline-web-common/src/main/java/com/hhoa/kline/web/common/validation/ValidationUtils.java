@@ -10,10 +10,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 import org.springframework.util.StringUtils;
 
-/**
- * 校验工具类
- *
- */
+/** 校验工具类 */
 public class ValidationUtils {
 
     private static final Pattern PATTERN_MOBILE =

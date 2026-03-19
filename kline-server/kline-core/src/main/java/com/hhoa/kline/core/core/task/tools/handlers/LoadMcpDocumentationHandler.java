@@ -1,20 +1,20 @@
 package com.hhoa.kline.core.core.task.tools.handlers;
 
 import com.hhoa.kline.core.core.assistant.ToolUse;
-import com.hhoa.kline.core.core.assistant.UserContentBlock;
 import com.hhoa.kline.core.core.prompts.McpDocumentationLoader;
 import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.prompts.systemprompt.tools.LoadMcpDocumentationTool;
 import com.hhoa.kline.core.core.shared.ClineSay;
-import com.hhoa.kline.core.core.task.tools.types.TaskConfig;
+import com.hhoa.kline.core.core.task.tools.types.ToolContext;
+import com.hhoa.kline.core.core.task.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.task.tools.types.UIHelpers;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.ArrayList;
 import java.util.List;
 
 /** 加载 MCP 文档的工具处理器 */
-public class LoadMcpDocumentationHandler implements FullyManagedTool {
+public class LoadMcpDocumentationHandler implements ToolHandler {
 
     @Override
     public String getName() {
@@ -37,13 +37,12 @@ public class LoadMcpDocumentationHandler implements FullyManagedTool {
     }
 
     @Override
-    public List<UserContentBlock> execute(TaskConfig config, ToolUse block) {
-        config.getCallbacks().say(ClineSay.LOAD_MCP_DOCUMENTATION, "", null, null, false, null);
-        config.getTaskState().setConsecutiveMistakeCount(0);
+    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
+        context.getCallbacks().say(ClineSay.LOAD_MCP_DOCUMENTATION, "", null, null, false, null);
 
         try {
-            if (config.getServices().getMcpHub() == null) {
-                return HandlerUtils.createTextBlocks(
+            if (context.getServices().getMcpHub() == null) {
+                return HandlerUtils.createToolExecuteResult(
                         "Error loading MCP documentation: MCP Hub is not available.");
             }
 
@@ -56,9 +55,9 @@ public class LoadMcpDocumentationHandler implements FullyManagedTool {
                     loader.loadMcpDocumentation(
                             mcpServersPath, mcpSettingsFilePath, connectedServers);
 
-            return HandlerUtils.createTextBlocks(documentation);
+            return HandlerUtils.createToolExecuteResult(documentation);
         } catch (Exception error) {
-            return HandlerUtils.createTextBlocks(
+            return HandlerUtils.createToolExecuteResult(
                     "Error loading MCP documentation: "
                             + (error.getMessage() != null ? error.getMessage() : "Unknown error"));
         }

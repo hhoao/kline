@@ -6,10 +6,7 @@ import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.function.Consumer;
 
-/**
- * Object 工具类
- *
- */
+/** Object 工具类 */
 public class ObjectUtils {
 
     /**

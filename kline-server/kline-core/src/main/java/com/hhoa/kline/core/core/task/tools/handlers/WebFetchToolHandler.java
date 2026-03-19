@@ -2,7 +2,6 @@ package com.hhoa.kline.core.core.task.tools.handlers;
 
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ToolUse;
-import com.hhoa.kline.core.core.assistant.UserContentBlock;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
 import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
@@ -10,23 +9,40 @@ import com.hhoa.kline.core.core.prompts.systemprompt.tools.WebFetchTool;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
+import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.TaskUtils;
-import com.hhoa.kline.core.core.task.tools.types.TaskConfig;
+import com.hhoa.kline.core.core.task.tools.types.ToolContext;
+import com.hhoa.kline.core.core.task.tools.types.ToolExecuteResult;
+import com.hhoa.kline.core.core.task.tools.types.ToolState;
 import com.hhoa.kline.core.core.task.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.task.tools.utils.ToolResultUtils;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import lombok.Getter;
+import lombok.Setter;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
-public class WebFetchToolHandler implements FullyManagedTool {
+public class WebFetchToolHandler implements StateFullToolHandler {
+
+    private final ResponseFormatter formatResponse = new ResponseFormatter();
+
+    @Getter
+    @Setter
+    public static class WebFetchToolState extends ToolState {
+        private String url;
+    }
 
     @Override
     public String getName() {
         return ClineDefaultTool.WEB_FETCH.getValue();
+    }
+
+    @Override
+    public ToolState createToolState() {
+        return new WebFetchToolState();
     }
 
     @Override
@@ -53,19 +69,8 @@ public class WebFetchToolHandler implements FullyManagedTool {
     }
 
     @Override
-    public List<UserContentBlock> execute(TaskConfig config, ToolUse block) {
+    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
         String url = HandlerUtils.getStringParam(block, "url");
-        if (url == null || url.isEmpty()) {
-            config.getTaskState()
-                    .setConsecutiveMistakeCount(
-                            config.getTaskState().getConsecutiveMistakeCount() + 1);
-            String errorResult =
-                    config.getCallbacks()
-                            .sayAndCreateMissingParamError(
-                                    ClineDefaultTool.WEB_FETCH.getValue(), "url");
-            return HandlerUtils.createTextBlocks(errorResult);
-        }
-        config.getTaskState().setConsecutiveMistakeCount(0);
 
         Map<String, Object> messageProps = new HashMap<>();
         messageProps.put("tool", "webFetch");
@@ -75,80 +80,77 @@ public class WebFetchToolHandler implements FullyManagedTool {
 
         String message = JsonUtils.toJsonString(messageProps);
 
-        ResponseFormatter formatResponse = new ResponseFormatter();
-
         Boolean autoApprove =
-                config.getCallbacks().shouldAutoApproveTool(ClineDefaultTool.WEB_FETCH.getValue());
+                context.getCallbacks().shouldAutoApproveTool(ClineDefaultTool.WEB_FETCH.getValue());
         if (Boolean.TRUE.equals(autoApprove)) {
-            config.getCallbacks()
+            context.getCallbacks()
                     .say(ClineSay.TOOL, message, null, null, false, ClineMessageFormat.JSON);
-            if (!config.isYoloModeToggled()) {
-                config.getTaskState()
-                        .setConsecutiveAutoApprovedRequestsCount(
-                                config.getTaskState().getConsecutiveAutoApprovedRequestsCount()
-                                        + 1);
-            }
-            if (config.getServices() != null
-                    && config.getServices().getTelemetryService() != null) {
-                String modelId =
-                        config.getApi() != null && config.getApi().getModel() != null
-                                ? config.getApi().getModel().getId()
-                                : "unknown";
-                config.getServices()
-                        .getTelemetryService()
-                        .captureToolUsage(config.getUlid(), "web_fetch", modelId, true, true);
-            }
-            return executeWebFetch(config, url);
-        } else {
-            TaskUtils.showNotificationForApprovalIfAutoApprovalEnabled(
-                    "Cline wants to fetch content from " + url,
-                    config.getAutoApprovalSettings() != null
-                            && config.getAutoApprovalSettings().isEnabled(),
-                    config.getAutoApprovalSettings() != null
-                            && config.getAutoApprovalSettings().isEnableNotifications(),
-                    (subtitle, msg) -> {});
-            Boolean didApprove =
-                    ToolResultUtils.askApprovalAndPushFeedback(
-                            ClineAsk.TOOL, message, config, ClineMessageFormat.JSON);
-            if (!didApprove) {
-                if (config.getServices() != null
-                        && config.getServices().getTelemetryService() != null) {
-                    String modelId =
-                            config.getApi() != null && config.getApi().getModel() != null
-                                    ? config.getApi().getModel().getId()
-                                    : "unknown";
-                    config.getServices()
-                            .getTelemetryService()
-                            .captureToolUsage(
-                                    config.getUlid(), block.getName(), modelId, false, false);
-                }
-                return HandlerUtils.createTextBlocks(formatResponse.toolDenied());
-            } else {
-                if (config.getServices() != null
-                        && config.getServices().getTelemetryService() != null) {
-                    String modelId =
-                            config.getApi() != null && config.getApi().getModel() != null
-                                    ? config.getApi().getModel().getId()
-                                    : "unknown";
-                    config.getServices()
-                            .getTelemetryService()
-                            .captureToolUsage(
-                                    config.getUlid(), block.getName(), modelId, false, true);
-                }
-                return executeWebFetch(config, url);
-            }
+
+            captureTelemetry(context, block, true, true);
+            return executeWebFetch(context, url);
+        }
+
+        // Need to ask user -- save state and return PendingAsk
+        TaskUtils.showNotificationForApprovalIfAutoApprovalEnabled(
+                "Cline wants to fetch content from " + url,
+                context.getAutoApprovalSettings() != null
+                        && context.getAutoApprovalSettings().isEnabled(),
+                context.getAutoApprovalSettings() != null
+                        && context.getAutoApprovalSettings().isEnableNotifications(),
+                (subtitle, msg) -> {});
+
+        WebFetchToolState state = (WebFetchToolState) context.getToolState();
+        state.setPhase(1);
+        state.setUrl(url);
+
+        var token =
+                ToolResultUtils.askApprovalAndPushFeedbackForToken(
+                        ClineAsk.TOOL,
+                        message,
+                        context,
+                        ClineMessageFormat.JSON,
+                        block,
+                        getDescription(block));
+        return new ToolExecuteResult.PendingAsk(token);
+    }
+
+    @Override
+    public ToolExecuteResult resume(
+            ToolContext context, ToolUse block, ToolState toolState, AskResult askResult) {
+        WebFetchToolState state = (WebFetchToolState) toolState;
+
+        boolean approved = ToolResultUtils.processAskResult(askResult, context);
+        if (!approved) {
+            captureTelemetry(context, block, false, false);
+            return HandlerUtils.createToolExecuteResult(formatResponse.toolDenied());
+        }
+
+        captureTelemetry(context, block, false, true);
+        return executeWebFetch(context, state.getUrl());
+    }
+
+    private ToolExecuteResult executeWebFetch(ToolContext config, String url) {
+        try {
+            String content = fetchWebContent(url);
+            return HandlerUtils.createToolExecuteResult(
+                    formatResponse.toolResult(content, null, null));
+        } catch (Exception e) {
+            return HandlerUtils.createToolExecuteResult(
+                    formatResponse.toolError("Error fetching web content: " + e.getMessage()));
         }
     }
 
-    private List<UserContentBlock> executeWebFetch(TaskConfig config, String url) {
-        try {
-            String content = fetchWebContent(url);
-            ResponseFormatter formatResponse = new ResponseFormatter();
-            return HandlerUtils.createTextBlocks(formatResponse.toolResult(content, null, null));
-        } catch (Exception e) {
-            ResponseFormatter formatResponse = new ResponseFormatter();
-            return HandlerUtils.createTextBlocks(
-                    formatResponse.toolError("Error fetching web content: " + e.getMessage()));
+    private void captureTelemetry(
+            ToolContext context, ToolUse block, boolean autoApproved, boolean approved) {
+        if (context.getServices() != null && context.getServices().getTelemetryService() != null) {
+            String modelId =
+                    context.getApi() != null && context.getApi().getModel() != null
+                            ? context.getApi().getModel().getId()
+                            : "unknown";
+            context.getServices()
+                    .getTelemetryService()
+                    .captureToolUsage(
+                            context.getUlid(), block.getName(), modelId, autoApproved, approved);
         }
     }
 

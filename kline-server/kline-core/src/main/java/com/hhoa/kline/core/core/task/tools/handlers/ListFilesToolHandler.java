@@ -2,7 +2,6 @@ package com.hhoa.kline.core.core.task.tools.handlers;
 
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ToolUse;
-import com.hhoa.kline.core.core.assistant.UserContentBlock;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
 import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
@@ -11,8 +10,11 @@ import com.hhoa.kline.core.core.services.telemetry.TelemetryService;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
+import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.TaskUtils;
-import com.hhoa.kline.core.core.task.tools.types.TaskConfig;
+import com.hhoa.kline.core.core.task.tools.types.ToolContext;
+import com.hhoa.kline.core.core.task.tools.types.ToolExecuteResult;
+import com.hhoa.kline.core.core.task.tools.types.ToolState;
 import com.hhoa.kline.core.core.task.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.task.tools.utils.ToolResultUtils;
 import com.hhoa.kline.core.core.workspace.WorkspaceConfig;
@@ -29,21 +31,36 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * 列出目录文件的工具处理器 支持递归列表、ClineIgnore 检查、遥测数据收集
  *
  * @author hhoa
  */
-public class ListFilesToolHandler implements FullyManagedTool {
+public class ListFilesToolHandler implements StateFullToolHandler {
 
     private static final int MAX_FILES = 200;
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
 
+    /** ListFilesToolHandler 的阶段状态 */
+    @Getter
+    @Setter
+    public static class ListFilesToolState extends ToolState {
+        private String result;
+        private TelemetryService.WorkspaceContext workspaceContext;
+    }
+
     @Override
     public String getName() {
         return ClineDefaultTool.LIST_FILES.getValue();
+    }
+
+    @Override
+    public ToolState createToolState() {
+        return new ListFilesToolState();
     }
 
     @Override
@@ -60,7 +77,7 @@ public class ListFilesToolHandler implements FullyManagedTool {
     @Override
     public void handlePartialBlock(ToolUse block, UIHelpers ui) {
         String relPath = HandlerUtils.getStringParam(block, "path");
-        TaskConfig config = ui.getConfig();
+        ToolContext config = ui.getContext();
 
         String recursiveRaw = HandlerUtils.getStringParam(block, "recursive");
         boolean recursive = recursiveRaw != null && recursiveRaw.equalsIgnoreCase("true");
@@ -89,17 +106,15 @@ public class ListFilesToolHandler implements FullyManagedTool {
     }
 
     @Override
-    public List<UserContentBlock> execute(TaskConfig config, ToolUse block) {
+    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
         String relDirPath = HandlerUtils.getStringParam(block, "path");
         String recursiveRaw = HandlerUtils.getStringParam(block, "recursive");
         boolean recursive = recursiveRaw != null && recursiveRaw.equalsIgnoreCase("true");
 
-        config.getTaskState().setConsecutiveMistakeCount(0);
-
-        if (config.getWorkspaceManager() == null) {
+        if (context.getWorkspaceManager() == null) {
             throw new IllegalStateException("workspaceManager 未配置，无法列出工作区文件");
         }
-        WorkspaceConfig workspaceConfig = new WorkspaceConfig(config.getWorkspaceManager());
+        WorkspaceConfig workspaceConfig = new WorkspaceConfig(context.getWorkspaceManager());
         WorkspaceResolver.WorkspacePathResult pathResult =
                 WorkspaceResolver.resolveWorkspacePath(
                         workspaceConfig, relDirPath, "ListFilesToolHandler.execute");
@@ -108,7 +123,9 @@ public class ListFilesToolHandler implements FullyManagedTool {
         String displayPath = pathResult.displayPath();
 
         String fallbackAbsolutePath =
-                Paths.get(config.getCwd()).resolve(relDirPath != null ? relDirPath : "").toString();
+                Paths.get(context.getCwd())
+                        .resolve(relDirPath != null ? relDirPath : "")
+                        .toString();
         boolean resolvedToNonPrimary = !arePathsEqual(absolutePath, fallbackAbsolutePath);
         TelemetryService.WorkspaceContext workspaceContext =
                 new TelemetryService.WorkspaceContext(
@@ -118,7 +135,7 @@ public class ListFilesToolHandler implements FullyManagedTool {
 
         List<String> files;
         boolean didHitLimit;
-        List<String> filesList = listFiles(absolutePath, recursive, MAX_FILES, config);
+        List<String> filesList = listFiles(absolutePath, recursive, MAX_FILES, context);
         if (filesList.size() >= MAX_FILES) {
             files = filesList.subList(0, MAX_FILES);
             didHitLimit = true;
@@ -132,21 +149,21 @@ public class ListFilesToolHandler implements FullyManagedTool {
                         absolutePath,
                         files,
                         didHitLimit,
-                        config.getServices().getClineIgnoreController());
+                        context.getServices().getClineIgnoreController());
 
         Map<String, Object> completeMessageMap = new HashMap<>();
         completeMessageMap.put("tool", recursive ? "listFilesRecursive" : "listFilesTopLevel");
-        completeMessageMap.put("path", HandlerUtils.getReadablePath(config.getCwd(), displayPath));
+        completeMessageMap.put("path", HandlerUtils.getReadablePath(context.getCwd(), displayPath));
         completeMessageMap.put("content", result);
         completeMessageMap.put(
                 "operationIsLocatedInWorkspace",
-                String.valueOf(HandlerUtils.isLocatedInWorkspace(relDirPath, config)));
+                String.valueOf(HandlerUtils.isLocatedInWorkspace(relDirPath, context)));
         String completeMessage = JsonUtils.toJsonString(completeMessageMap);
 
         Boolean approve =
-                config.getCallbacks().shouldAutoApproveToolWithPath(block.getName(), relDirPath);
+                context.getCallbacks().shouldAutoApproveToolWithPath(block.getName(), relDirPath);
         if (Boolean.TRUE.equals(approve)) {
-            config.getCallbacks()
+            context.getCallbacks()
                     .say(
                             ClineSay.TOOL,
                             completeMessage,
@@ -154,91 +171,82 @@ public class ListFilesToolHandler implements FullyManagedTool {
                             null,
                             false,
                             ClineMessageFormat.JSON);
-            if (!config.isYoloModeToggled()) {
-                config.getTaskState()
-                        .setConsecutiveAutoApprovedRequestsCount(
-                                config.getTaskState().getConsecutiveAutoApprovedRequestsCount()
-                                        + 1);
-            }
 
-            if (config.getServices() != null
-                    && config.getServices().getTelemetryService() != null) {
-                String modelId =
-                        config.getApi() != null && config.getApi().getModel() != null
-                                ? config.getApi().getModel().getId()
-                                : "unknown";
-                config.getServices()
-                        .getTelemetryService()
-                        .captureToolUsage(
-                                config.getUlid(),
-                                block.getName(),
-                                modelId,
-                                true,
-                                true,
-                                workspaceContext);
-            }
+            captureTelemetry(context, block, true, true, workspaceContext);
 
-            return HandlerUtils.createTextBlocks(result);
-        } else {
-            String notificationMessage =
-                    "Cline wants to view directory "
-                            + WorkspaceResolver.getWorkspaceBasename(
-                                    absolutePath, "ListFilesToolHandler.notification")
-                            + "/";
-            TaskUtils.showNotificationForApprovalIfAutoApprovalEnabled(
-                    notificationMessage,
-                    config.getAutoApprovalSettings() != null
-                            && config.getAutoApprovalSettings().isEnabled(),
-                    config.getAutoApprovalSettings() != null
-                            && config.getAutoApprovalSettings().isEnableNotifications(),
-                    (subtitle, message) -> {});
+            return HandlerUtils.createToolExecuteResult(result);
+        }
 
-            Boolean didApprove =
-                    ToolResultUtils.askApprovalAndPushFeedback(
-                            ClineAsk.TOOL, completeMessage, config, ClineMessageFormat.JSON);
-            if (!didApprove) {
-                if (config.getServices() != null
-                        && config.getServices().getTelemetryService() != null) {
-                    String modelId =
-                            config.getApi() != null && config.getApi().getModel() != null
-                                    ? config.getApi().getModel().getId()
-                                    : "unknown";
-                    config.getServices()
-                            .getTelemetryService()
-                            .captureToolUsage(
-                                    config.getUlid(),
-                                    block.getName(),
-                                    modelId,
-                                    false,
-                                    false,
-                                    workspaceContext);
-                }
-                return HandlerUtils.createTextBlocks(formatResponse.toolDenied());
-            }
+        // 需要 ask 用户 —— 保存状态并返回 PendingAsk
+        String notificationMessage =
+                "Cline wants to view directory "
+                        + WorkspaceResolver.getWorkspaceBasename(
+                                absolutePath, "ListFilesToolHandler.notification")
+                        + "/";
+        TaskUtils.showNotificationForApprovalIfAutoApprovalEnabled(
+                notificationMessage,
+                context.getAutoApprovalSettings() != null
+                        && context.getAutoApprovalSettings().isEnabled(),
+                context.getAutoApprovalSettings() != null
+                        && context.getAutoApprovalSettings().isEnableNotifications(),
+                (subtitle, message) -> {});
 
-            if (config.getServices() != null
-                    && config.getServices().getTelemetryService() != null) {
-                String modelId =
-                        config.getApi() != null && config.getApi().getModel() != null
-                                ? config.getApi().getModel().getId()
-                                : "unknown";
-                config.getServices()
-                        .getTelemetryService()
-                        .captureToolUsage(
-                                config.getUlid(),
-                                block.getName(),
-                                modelId,
-                                false,
-                                true,
-                                workspaceContext);
-            }
+        ListFilesToolState state = (ListFilesToolState) context.getToolState();
+        state.setPhase(1);
+        state.setResult(result);
+        state.setWorkspaceContext(workspaceContext);
 
-            return HandlerUtils.createTextBlocks(result);
+        var token =
+                ToolResultUtils.askApprovalAndPushFeedbackForToken(
+                        ClineAsk.TOOL,
+                        completeMessage,
+                        context,
+                        ClineMessageFormat.JSON,
+                        block,
+                        getDescription(block));
+        return new ToolExecuteResult.PendingAsk(token);
+    }
+
+    @Override
+    public ToolExecuteResult resume(
+            ToolContext context, ToolUse block, ToolState toolState, AskResult askResult) {
+        ListFilesToolState state = (ListFilesToolState) toolState;
+
+        boolean approved = ToolResultUtils.processAskResult(askResult, context);
+        if (!approved) {
+            captureTelemetry(context, block, false, false, state.getWorkspaceContext());
+            return HandlerUtils.createToolExecuteResult(formatResponse.toolDenied());
+        }
+
+        captureTelemetry(context, block, false, true, state.getWorkspaceContext());
+        return HandlerUtils.createToolExecuteResult(state.getResult());
+    }
+
+    private void captureTelemetry(
+            ToolContext context,
+            ToolUse block,
+            boolean autoApproved,
+            boolean approved,
+            TelemetryService.WorkspaceContext workspaceContext) {
+        if (context.getServices() != null && context.getServices().getTelemetryService() != null) {
+            String modelId =
+                    context.getApi() != null && context.getApi().getModel() != null
+                            ? context.getApi().getModel().getId()
+                            : "unknown";
+            context.getServices()
+                    .getTelemetryService()
+                    .captureToolUsage(
+                            context.getUlid(),
+                            block.getName(),
+                            modelId,
+                            autoApproved,
+                            approved,
+                            workspaceContext);
         }
     }
 
     private List<String> listFiles(
-            String absolutePath, boolean recursive, int limit, TaskConfig config) {
+            String absolutePath, boolean recursive, int limit, ToolContext config) {
         List<String> files = new ArrayList<>();
         Path root = Paths.get(absolutePath);
 

@@ -9,10 +9,7 @@ import com.hhoa.kline.web.common.pojo.CommonResult;
 import java.time.LocalDateTime;
 import lombok.*;
 
-/**
- * API 访问日志
- *
- */
+/** API 访问日志 */
 @TableName("infra_api_access_log")
 @KeySequence(value = "infra_api_access_log_seq")
 @Data

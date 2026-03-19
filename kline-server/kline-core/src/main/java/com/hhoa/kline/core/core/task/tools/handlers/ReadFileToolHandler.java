@@ -14,8 +14,11 @@ import com.hhoa.kline.core.core.services.telemetry.TelemetryService;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
+import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.TaskUtils;
-import com.hhoa.kline.core.core.task.tools.types.TaskConfig;
+import com.hhoa.kline.core.core.task.tools.types.ToolContext;
+import com.hhoa.kline.core.core.task.tools.types.ToolExecuteResult;
+import com.hhoa.kline.core.core.task.tools.types.ToolState;
 import com.hhoa.kline.core.core.task.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.task.tools.utils.ToolResultUtils;
 import com.hhoa.kline.core.core.workspace.WorkspaceConfig;
@@ -23,285 +26,35 @@ import com.hhoa.kline.core.core.workspace.WorkspaceResolver;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * 读取文件的工具处理器
  *
  * @author hhoa
  */
-public class ReadFileToolHandler implements FullyManagedTool {
+public class ReadFileToolHandler implements StateFullToolHandler {
 
     private static final int MAX_LINES_WITHOUT_RANGE = 500;
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
 
-    @Override
-    public String getName() {
-        return ClineDefaultTool.FILE_READ.getValue();
+    /** ReadFileToolHandler 的阶段状态 */
+    @Getter
+    @Setter
+    public static class ReadFileToolState extends ToolState {
+        private String relPath;
+        private String absolutePath;
+        private String displayPath;
+        private TelemetryService.WorkspaceContext workspaceContext;
     }
 
-    @Override
-    public String getDescription(ToolUse block) {
-        String p = getStringParam(block, "path");
-        return "[" + block.getName() + " for '" + (p == null ? "" : p) + "']";
-    }
-
-    @Override
-    public ClineToolSpec getClineToolSpec() {
-        return ReadFileTool.create(ModelFamily.GENERIC);
-    }
-
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
-        String partialPath = getStringParam(block, "path");
-        TaskConfig config = ui.getConfig();
-
-        Map<String, Object> messageMap = new HashMap<>();
-        messageMap.put("tool", "readFile");
-        messageMap.put("path", HandlerUtils.getReadablePath(config.getCwd(), partialPath));
-        messageMap.put("content", null);
-        messageMap.put(
-                "operationIsLocatedInWorkspace",
-                String.valueOf(HandlerUtils.isLocatedInWorkspace(partialPath, config)));
-        String message = JsonUtils.toJsonString(messageMap);
-
-        Boolean approve = ui.shouldAutoApproveToolWithPath(block.getName(), partialPath);
-        if (Boolean.TRUE.equals(approve)) {
-            ui.say(ClineSay.TOOL, message, null, null, block.isPartial(), ClineMessageFormat.JSON);
-        } else {
-            ui.ask(ClineAsk.TOOL, message, block.isPartial(), ClineMessageFormat.JSON);
-        }
-    }
-
-    @Override
-    public List<UserContentBlock> execute(TaskConfig config, ToolUse block) {
-        String relPath = getStringParam(block, "path");
-
-        ClineIgnoreController controller = config.getServices().getClineIgnoreController();
-        if (controller != null && !controller.validateAccess(relPath)) {
-            config.getCallbacks().say(ClineSay.CLINEIGNORE_ERROR, relPath, null, null, false, null);
-            return HandlerUtils.createTextBlocks(
-                    formatResponse.toolError(formatResponse.clineIgnoreError(relPath)));
-        }
-
-        config.getTaskState().setConsecutiveMistakeCount(0);
-
-        WorkspaceResolver.WorkspacePathResult pathResult =
-                WorkspaceResolver.resolveWorkspacePath(
-                        createWorkspaceConfig(config), relPath, "ReadFileToolHandler.execute");
-
-        Path absolutePath = Paths.get(pathResult.absolutePath());
-        String displayPath = pathResult.displayPath();
-
-        Path fallbackAbsolutePath = Paths.get(config.getCwd(), relPath).normalize();
-        TelemetryService.WorkspaceContext workspaceContext =
-                new TelemetryService.WorkspaceContext(
-                        true, !absolutePath.equals(fallbackAbsolutePath), "hint");
-
-        Map<String, Object> completeMessageMap = new HashMap<>();
-        completeMessageMap.put("tool", "readFile");
-        completeMessageMap.put("path", HandlerUtils.getReadablePath(config.getCwd(), displayPath));
-        completeMessageMap.put("content", absolutePath.toString());
-        completeMessageMap.put(
-                "operationIsLocatedInWorkspace",
-                String.valueOf(HandlerUtils.isLocatedInWorkspace(relPath, config)));
-        String completeMessage = JsonUtils.toJsonString(completeMessageMap);
-
-        Boolean approve =
-                config.getCallbacks().shouldAutoApproveToolWithPath(block.getName(), relPath);
-        if (Boolean.TRUE.equals(approve)) {
-            config.getCallbacks()
-                    .say(
-                            ClineSay.TOOL,
-                            completeMessage,
-                            null,
-                            null,
-                            false,
-                            ClineMessageFormat.JSON);
-            if (!config.isYoloModeToggled()) {
-                config.getTaskState()
-                        .setConsecutiveAutoApprovedRequestsCount(
-                                config.getTaskState().getConsecutiveAutoApprovedRequestsCount()
-                                        + 1);
-            }
-
-            if (config.getServices() != null
-                    && config.getServices().getTelemetryService() != null) {
-                String modelId =
-                        config.getApi() != null && config.getApi().getModel() != null
-                                ? config.getApi().getModel().getId()
-                                : "unknown";
-                config.getServices()
-                        .getTelemetryService()
-                        .captureToolUsage(
-                                config.getUlid(),
-                                block.getName(),
-                                modelId,
-                                true,
-                                true,
-                                workspaceContext);
-            }
-
-            boolean supportsImages = false;
-            // TODO: 从 config.getApi().getModel().getInfo().supportsImages 获取
-
-            Integer startLine = getIntParam(block, "start_line");
-            Integer endLine = getIntParam(block, "end_line");
-
-            FileContentExtractor.FileContentResult fileContent =
-                    FileContentExtractor.extractFileContent(absolutePath, supportsImages);
-
-            if (fileContent.imageBlock != null) {
-                if (fileContent.imageBlock.source != null) {
-                    ImageContentBlock imageContentBlock =
-                            new ImageContentBlock(
-                                    fileContent.imageBlock.source.data,
-                                    fileContent.imageBlock.source.type,
-                                    fileContent.imageBlock.source.mediaType);
-                    config.getTaskState().getUserMessageContent().add(imageContentBlock);
-                }
-            }
-
-            String content = fileContent.text != null ? fileContent.text : "[Image file]";
-
-            if (startLine != null || endLine != null) {
-                content = extractLineRange(content, startLine, endLine);
-            } else {
-                int lineCount = countLines(content);
-                if (lineCount > MAX_LINES_WITHOUT_RANGE) {
-                    String message =
-                            String.format(
-                                    "File has %d lines, which exceeds the maximum allowed (%d lines) for reading without specifying a line range.\n\n"
-                                            + "Please use the start_line and end_line parameters to read specific sections of the file.\n\n"
-                                            + "Example:\n"
-                                            + "<read_file>\n"
-                                            + "<path>%s</path>\n"
-                                            + "<start_line>1</start_line>\n"
-                                            + "<end_line>250</end_line>\n"
-                                            + "</read_file>",
-                                    lineCount, MAX_LINES_WITHOUT_RANGE, displayPath);
-                    return HandlerUtils.createTextBlocks(message);
-                }
-            }
-
-            if (config.getServices() != null
-                    && config.getServices().getFileContextTracker() != null) {
-                config.getServices()
-                        .getFileContextTracker()
-                        .trackFileContext(relPath, "read_tool")
-                        .join();
-            }
-            return HandlerUtils.createTextBlocks(content);
-        } else {
-            String notificationMessage =
-                    "Cline wants to read "
-                            + WorkspaceResolver.getWorkspaceBasename(
-                                    absolutePath.toString(), "ReadFileToolHandler.notification");
-            TaskUtils.showNotificationForApprovalIfAutoApprovalEnabled(
-                    notificationMessage,
-                    config.getAutoApprovalSettings() != null
-                            && config.getAutoApprovalSettings().isEnabled(),
-                    config.getAutoApprovalSettings() != null
-                            && config.getAutoApprovalSettings().isEnableNotifications(),
-                    (subtitle, message) -> {});
-
-            Boolean didApprove =
-                    ToolResultUtils.askApprovalAndPushFeedback(
-                            ClineAsk.TOOL, completeMessage, config, ClineMessageFormat.JSON);
-            if (!didApprove) {
-                if (config.getServices() != null
-                        && config.getServices().getTelemetryService() != null) {
-                    String modelId =
-                            config.getApi() != null && config.getApi().getModel() != null
-                                    ? config.getApi().getModel().getId()
-                                    : "unknown";
-                    config.getServices()
-                            .getTelemetryService()
-                            .captureToolUsage(
-                                    config.getUlid(),
-                                    block.getName(),
-                                    modelId,
-                                    false,
-                                    false,
-                                    workspaceContext);
-                }
-                return HandlerUtils.createTextBlocks(formatResponse.toolDenied());
-            }
-
-            if (config.getServices() != null
-                    && config.getServices().getTelemetryService() != null) {
-                String modelId =
-                        config.getApi() != null && config.getApi().getModel() != null
-                                ? config.getApi().getModel().getId()
-                                : "unknown";
-                config.getServices()
-                        .getTelemetryService()
-                        .captureToolUsage(
-                                config.getUlid(),
-                                block.getName(),
-                                modelId,
-                                false,
-                                true,
-                                workspaceContext);
-            }
-
-            boolean supportsImages = false;
-            // TODO: 从 config.getApi().getModel().getInfo().supportsImages 获取
-
-            Integer startLine = getIntParam(block, "start_line");
-            Integer endLine = getIntParam(block, "end_line");
-
-            FileContentExtractor.FileContentResult fileContent =
-                    FileContentExtractor.extractFileContent(absolutePath, supportsImages);
-
-            if (fileContent.imageBlock != null) {
-                if (fileContent.imageBlock.source != null) {
-                    ImageContentBlock imageContentBlock =
-                            new ImageContentBlock(
-                                    fileContent.imageBlock.source.data,
-                                    fileContent.imageBlock.source.type,
-                                    fileContent.imageBlock.source.mediaType);
-                    config.getTaskState().getUserMessageContent().add(imageContentBlock);
-                }
-            }
-
-            String content = fileContent.text != null ? fileContent.text : "[Image file]";
-
-            if (startLine != null || endLine != null) {
-                content = extractLineRange(content, startLine, endLine);
-            } else {
-                int lineCount = countLines(content);
-                if (lineCount > MAX_LINES_WITHOUT_RANGE) {
-                    String message =
-                            String.format(
-                                    "File has %d lines, which exceeds the maximum allowed (%d lines) for reading without specifying a line range.\n\n"
-                                            + "Please use the start_line and end_line parameters to read specific sections of the file.\n\n"
-                                            + "Example:\n"
-                                            + "<read_file>\n"
-                                            + "<path>%s</path>\n"
-                                            + "<start_line>1</start_line>\n"
-                                            + "<end_line>250</end_line>\n"
-                                            + "</read_file>",
-                                    lineCount, MAX_LINES_WITHOUT_RANGE, displayPath);
-                    return HandlerUtils.createTextBlocks(message);
-                }
-            }
-
-            if (config.getServices() != null
-                    && config.getServices().getFileContextTracker() != null) {
-                config.getServices()
-                        .getFileContextTracker()
-                        .trackFileContext(relPath, "read_tool")
-                        .join();
-            }
-            return HandlerUtils.createTextBlocks(content);
-        }
-    }
-
-    private static WorkspaceConfig createWorkspaceConfig(TaskConfig config) {
+    private static WorkspaceConfig createWorkspaceConfig(ToolContext config) {
         if (config.getWorkspaceManager() == null) {
             throw new IllegalStateException("workspaceManager 未配置，无法读取文件");
         }
@@ -382,5 +135,231 @@ public class ReadFileToolHandler implements FullyManagedTool {
             return lines.length - 1;
         }
         return lines.length;
+    }
+
+    @Override
+    public String getName() {
+        return ClineDefaultTool.FILE_READ.getValue();
+    }
+
+    @Override
+    public ToolState createToolState() {
+        return new ReadFileToolState();
+    }
+
+    @Override
+    public String getDescription(ToolUse block) {
+        String p = getStringParam(block, "path");
+        return "[" + block.getName() + " for '" + (p == null ? "" : p) + "']";
+    }
+
+    @Override
+    public ClineToolSpec getClineToolSpec() {
+        return ReadFileTool.create(ModelFamily.GENERIC);
+    }
+
+    @Override
+    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
+        String partialPath = getStringParam(block, "path");
+        ToolContext config = ui.getContext();
+
+        Map<String, Object> messageMap = new HashMap<>();
+        messageMap.put("tool", "readFile");
+        messageMap.put("path", HandlerUtils.getReadablePath(config.getCwd(), partialPath));
+        messageMap.put("content", null);
+        messageMap.put(
+                "operationIsLocatedInWorkspace",
+                String.valueOf(HandlerUtils.isLocatedInWorkspace(partialPath, config)));
+        String message = JsonUtils.toJsonString(messageMap);
+
+        Boolean approve = ui.shouldAutoApproveToolWithPath(block.getName(), partialPath);
+        if (Boolean.TRUE.equals(approve)) {
+            ui.say(ClineSay.TOOL, message, null, null, block.isPartial(), ClineMessageFormat.JSON);
+        } else {
+            ui.ask(ClineAsk.TOOL, message, block.isPartial(), ClineMessageFormat.JSON);
+        }
+    }
+
+    @Override
+    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
+        String relPath = getStringParam(block, "path");
+
+        ClineIgnoreController controller = context.getServices().getClineIgnoreController();
+        if (controller != null && !controller.validateAccess(relPath)) {
+            context.getCallbacks()
+                    .say(ClineSay.CLINEIGNORE_ERROR, relPath, null, null, false, null);
+            return HandlerUtils.createToolExecuteResult(
+                    formatResponse.toolError(formatResponse.clineIgnoreError(relPath)));
+        }
+
+        WorkspaceResolver.WorkspacePathResult pathResult =
+                WorkspaceResolver.resolveWorkspacePath(
+                        createWorkspaceConfig(context), relPath, "ReadFileToolHandler.execute");
+
+        Path absolutePath = Paths.get(pathResult.absolutePath());
+        String displayPath = pathResult.displayPath();
+
+        Path fallbackAbsolutePath = Paths.get(context.getCwd(), relPath).normalize();
+        TelemetryService.WorkspaceContext workspaceContext =
+                new TelemetryService.WorkspaceContext(
+                        true, !absolutePath.equals(fallbackAbsolutePath), "hint");
+
+        Map<String, Object> completeMessageMap = new HashMap<>();
+        completeMessageMap.put("tool", "readFile");
+        completeMessageMap.put("path", HandlerUtils.getReadablePath(context.getCwd(), displayPath));
+        completeMessageMap.put("content", absolutePath.toString());
+        completeMessageMap.put(
+                "operationIsLocatedInWorkspace",
+                String.valueOf(HandlerUtils.isLocatedInWorkspace(relPath, context)));
+        String completeMessage = JsonUtils.toJsonString(completeMessageMap);
+
+        Boolean approve =
+                context.getCallbacks().shouldAutoApproveToolWithPath(block.getName(), relPath);
+        if (Boolean.TRUE.equals(approve)) {
+            context.getCallbacks()
+                    .say(
+                            ClineSay.TOOL,
+                            completeMessage,
+                            null,
+                            null,
+                            false,
+                            ClineMessageFormat.JSON);
+
+            captureTelemetry(context, block, true, true, workspaceContext);
+            return executeReadFile(context, block, relPath, absolutePath.toString(), displayPath);
+        }
+
+        // 需要 ask 用户 —— 保存状态并返回 PendingAsk
+        String notificationMessage =
+                "Cline wants to read "
+                        + WorkspaceResolver.getWorkspaceBasename(
+                                absolutePath.toString(), "ReadFileToolHandler.notification");
+        TaskUtils.showNotificationForApprovalIfAutoApprovalEnabled(
+                notificationMessage,
+                context.getAutoApprovalSettings() != null
+                        && context.getAutoApprovalSettings().isEnabled(),
+                context.getAutoApprovalSettings() != null
+                        && context.getAutoApprovalSettings().isEnableNotifications(),
+                (subtitle, message) -> {});
+
+        ReadFileToolState state = (ReadFileToolState) context.getToolState();
+        state.setPhase(1);
+        state.setRelPath(relPath);
+        state.setAbsolutePath(absolutePath.toString());
+        state.setDisplayPath(displayPath);
+        state.setWorkspaceContext(workspaceContext);
+
+        var token =
+                ToolResultUtils.askApprovalAndPushFeedbackForToken(
+                        ClineAsk.TOOL,
+                        completeMessage,
+                        context,
+                        ClineMessageFormat.JSON,
+                        block,
+                        getDescription(block));
+        return new ToolExecuteResult.PendingAsk(token);
+    }
+
+    @Override
+    public ToolExecuteResult resume(
+            ToolContext context, ToolUse block, ToolState toolState, AskResult askResult) {
+        ReadFileToolState state = (ReadFileToolState) toolState;
+
+        boolean approved = ToolResultUtils.processAskResult(askResult, context);
+        if (!approved) {
+            captureTelemetry(context, block, false, false, state.getWorkspaceContext());
+            return HandlerUtils.createToolExecuteResult(formatResponse.toolDenied());
+        }
+
+        captureTelemetry(context, block, false, true, state.getWorkspaceContext());
+        return executeReadFile(
+                context,
+                block,
+                state.getRelPath(),
+                state.getAbsolutePath(),
+                state.getDisplayPath());
+    }
+
+    private ToolExecuteResult executeReadFile(
+            ToolContext context,
+            ToolUse block,
+            String relPath,
+            String absolutePathStr,
+            String displayPath) {
+        Path absolutePath = Paths.get(absolutePathStr);
+        boolean supportsImages = false;
+
+        Integer startLine = getIntParam(block, "start_line");
+        Integer endLine = getIntParam(block, "end_line");
+
+        FileContentExtractor.FileContentResult fileContent =
+                FileContentExtractor.extractFileContent(absolutePath, supportsImages);
+
+        List<UserContentBlock> userContentBlocks = new ArrayList<>();
+
+        if (fileContent.imageBlock != null) {
+            if (fileContent.imageBlock.source != null) {
+                ImageContentBlock imageContentBlock =
+                        new ImageContentBlock(
+                                fileContent.imageBlock.source.data,
+                                fileContent.imageBlock.source.type,
+                                fileContent.imageBlock.source.mediaType);
+                userContentBlocks.add(imageContentBlock);
+            }
+        }
+
+        String content = fileContent.text != null ? fileContent.text : "[Image file]";
+
+        if (startLine != null || endLine != null) {
+            content = extractLineRange(content, startLine, endLine);
+        } else {
+            int lineCount = countLines(content);
+            if (lineCount > MAX_LINES_WITHOUT_RANGE) {
+                String message =
+                        String.format(
+                                "File has %d lines, which exceeds the maximum allowed (%d lines) for reading without specifying a line range.\n\n"
+                                        + "Please use the start_line and end_line parameters to read specific sections of the file.\n\n"
+                                        + "Example:\n"
+                                        + "<read_file>\n"
+                                        + "<path>%s</path>\n"
+                                        + "<start_line>1</start_line>\n"
+                                        + "<end_line>250</end_line>\n"
+                                        + "</read_file>",
+                                lineCount, MAX_LINES_WITHOUT_RANGE, displayPath);
+                content = message;
+            }
+        }
+
+        if (context.getServices() != null
+                && context.getServices().getFileContextTracker() != null) {
+            context.getServices()
+                    .getFileContextTracker()
+                    .trackFileContext(relPath, "read_tool")
+                    .join();
+        }
+        return HandlerUtils.createToolExecuteResult(content);
+    }
+
+    private void captureTelemetry(
+            ToolContext context,
+            ToolUse block,
+            boolean autoApproved,
+            boolean approved,
+            TelemetryService.WorkspaceContext workspaceContext) {
+        if (context.getServices() != null && context.getServices().getTelemetryService() != null) {
+            String modelId =
+                    context.getApi() != null && context.getApi().getModel() != null
+                            ? context.getApi().getModel().getId()
+                            : "unknown";
+            context.getServices()
+                    .getTelemetryService()
+                    .captureToolUsage(
+                            context.getUlid(),
+                            block.getName(),
+                            modelId,
+                            autoApproved,
+                            approved,
+                            workspaceContext);
+        }
     }
 }

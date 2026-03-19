@@ -4,9 +4,9 @@ import static com.hhoa.ai.kline.commons.exception.util.ServiceExceptionUtil.exce
 import static com.hhoa.kline.web.enums.AIErrorCodeConstants.API_KEY_DISABLE;
 import static com.hhoa.kline.web.enums.AIErrorCodeConstants.API_KEY_NOT_EXISTS;
 
+import com.hhoa.ai.kline.commons.utils.object.BeanUtils;
 import com.hhoa.kline.web.common.enums.CommonStatusEnum;
 import com.hhoa.kline.web.common.pojo.PageResult;
-import com.hhoa.kline.web.common.utils.object.BeanUtils;
 import com.hhoa.kline.web.dal.AiApiKeyMapper;
 import com.hhoa.kline.web.dal.dataobject.AiApiKeyDO;
 import com.hhoa.kline.web.dto.AiApiKeyPageReqVO;
@@ -17,10 +17,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
-/**
- * AI API 密钥 Service 实现类
- *
- */
+/** AI API 密钥 Service 实现类 */
 @Service
 @Validated
 public class AiApiKeyServiceImpl implements AiApiKeyService {

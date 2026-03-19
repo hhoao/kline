@@ -307,10 +307,13 @@ export const useExtensionStateStore = defineStore('extensionState', {
 					this.setConversationId(taskId)
 				} else {
 					// 发送消息到任务
+					const msgs = this.extensionState?.clineMessages || []
+					const lastAskMsg = [...msgs].reverse().find(m => m.type === 'ask')
 					await taskService.askResponse({
 						responseType: 'messageResponse',
 						text: content,
 						taskId: targetTaskId,
+						pendingId: lastAskMsg?.pendingId,
 					})
 				}
 				return true

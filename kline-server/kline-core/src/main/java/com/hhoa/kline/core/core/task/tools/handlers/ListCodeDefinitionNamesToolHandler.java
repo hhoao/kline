@@ -4,7 +4,6 @@ import static com.google.common.io.Files.getFileExtension;
 
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ToolUse;
-import com.hhoa.kline.core.core.assistant.UserContentBlock;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
 import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
@@ -12,8 +11,11 @@ import com.hhoa.kline.core.core.prompts.systemprompt.tools.ListCodeDefinitionNam
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
+import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.TaskUtils;
-import com.hhoa.kline.core.core.task.tools.types.TaskConfig;
+import com.hhoa.kline.core.core.task.tools.types.ToolContext;
+import com.hhoa.kline.core.core.task.tools.types.ToolExecuteResult;
+import com.hhoa.kline.core.core.task.tools.types.ToolState;
 import com.hhoa.kline.core.core.task.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.task.tools.utils.ToolResultUtils;
 import com.hhoa.kline.core.core.workspace.WorkspaceConfig;
@@ -30,21 +32,35 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * 列出源码顶层定义名称的工具处理器 使用正则表达式提取代码定义（类、函数、方法等）
  *
  * @author hhoa
  */
-public class ListCodeDefinitionNamesToolHandler implements FullyManagedTool {
+public class ListCodeDefinitionNamesToolHandler implements StateFullToolHandler {
 
     private static final int MAX_FILES = 200;
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
 
+    /** ListCodeDefinitionNamesToolHandler 的阶段状态 */
+    @Getter
+    @Setter
+    public static class ListCodeDefToolState extends ToolState {
+        private String result;
+    }
+
     @Override
     public String getName() {
         return ClineDefaultTool.LIST_CODE_DEF.getValue();
+    }
+
+    @Override
+    public ToolState createToolState() {
+        return new ListCodeDefToolState();
     }
 
     @Override
@@ -60,7 +76,7 @@ public class ListCodeDefinitionNamesToolHandler implements FullyManagedTool {
     @Override
     public void handlePartialBlock(ToolUse block, UIHelpers ui) {
         String relPath = HandlerUtils.getStringParam(block, "path");
-        TaskConfig config = ui.getConfig();
+        ToolContext config = ui.getContext();
 
         Map<String, Object> sharedMessageMap = new HashMap<>();
         sharedMessageMap.put("tool", "listCodeDefinitionNames");
@@ -86,15 +102,13 @@ public class ListCodeDefinitionNamesToolHandler implements FullyManagedTool {
     }
 
     @Override
-    public List<UserContentBlock> execute(TaskConfig config, ToolUse block) {
+    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
         String relPath = HandlerUtils.getStringParam(block, "path");
 
-        config.getTaskState().setConsecutiveMistakeCount(0);
-
-        if (config.getWorkspaceManager() == null) {
+        if (context.getWorkspaceManager() == null) {
             throw new IllegalStateException("workspaceManager 未配置，无法列举代码定义");
         }
-        WorkspaceConfig workspaceConfig = new WorkspaceConfig(config.getWorkspaceManager());
+        WorkspaceConfig workspaceConfig = new WorkspaceConfig(context.getWorkspaceManager());
         Object pathResult =
                 WorkspaceResolver.resolveWorkspacePath(
                         workspaceConfig, relPath, "ListCodeDefinitionNamesToolHandler.execute");
@@ -113,26 +127,26 @@ public class ListCodeDefinitionNamesToolHandler implements FullyManagedTool {
 
         String result;
         try {
-            result = parseCodeDefinitions(Paths.get(absolutePath), config);
+            result = parseCodeDefinitions(Paths.get(absolutePath), context);
         } catch (IOException e) {
             result = "Error parsing code definitions: " + e.getMessage();
         }
 
         Map<String, Object> completeMessageMap = new HashMap<>();
         completeMessageMap.put("tool", "listCodeDefinitionNames");
-        completeMessageMap.put("path", HandlerUtils.getReadablePath(config.getCwd(), displayPath));
+        completeMessageMap.put("path", HandlerUtils.getReadablePath(context.getCwd(), displayPath));
         completeMessageMap.put("content", result);
         completeMessageMap.put(
                 "operationIsLocatedInWorkspace",
-                String.valueOf(HandlerUtils.isLocatedInWorkspace(relPath, config)));
+                String.valueOf(HandlerUtils.isLocatedInWorkspace(relPath, context)));
         String completeMessage = JsonUtils.toJsonString(completeMessageMap);
 
         Boolean approve =
-                config.getCallbacks()
+                context.getCallbacks()
                         .shouldAutoApproveToolWithPath(
                                 ClineDefaultTool.LIST_CODE_DEF.getValue(), relPath);
         if (Boolean.TRUE.equals(approve)) {
-            config.getCallbacks()
+            context.getCallbacks()
                     .say(
                             ClineSay.TOOL,
                             completeMessage,
@@ -140,73 +154,70 @@ public class ListCodeDefinitionNamesToolHandler implements FullyManagedTool {
                             null,
                             false,
                             ClineMessageFormat.JSON);
-            if (!config.isYoloModeToggled()) {
-                config.getTaskState()
-                        .setConsecutiveAutoApprovedRequestsCount(
-                                config.getTaskState().getConsecutiveAutoApprovedRequestsCount()
-                                        + 1);
-            }
 
-            if (config.getServices() != null
-                    && config.getServices().getTelemetryService() != null) {
-                String modelId =
-                        config.getApi() != null && config.getApi().getModel() != null
-                                ? config.getApi().getModel().getId()
-                                : "unknown";
-                config.getServices()
-                        .getTelemetryService()
-                        .captureToolUsage(config.getUlid(), block.getName(), modelId, true, true);
-            }
+            captureTelemetry(context, block, true, true);
 
-            return HandlerUtils.createTextBlocks(result);
-        } else {
-            String notificationMessage =
-                    "Cline wants to analyze code definitions in "
-                            + WorkspaceResolver.getWorkspaceBasename(
-                                    absolutePath,
-                                    "ListCodeDefinitionNamesToolHandler.notification");
-            TaskUtils.showNotificationForApprovalIfAutoApprovalEnabled(
-                    notificationMessage,
-                    config.getAutoApprovalSettings() != null
-                            && config.getAutoApprovalSettings().isEnabled(),
-                    config.getAutoApprovalSettings() != null
-                            && config.getAutoApprovalSettings().isEnableNotifications(),
-                    (subtitle, message) -> {});
+            return HandlerUtils.createToolExecuteResult(result);
+        }
 
-            Boolean didApprove =
-                    ToolResultUtils.askApprovalAndPushFeedback(
-                            ClineAsk.TOOL, completeMessage, config, ClineMessageFormat.JSON);
-            if (!didApprove) {
-                if (config.getServices() != null
-                        && config.getServices().getTelemetryService() != null) {
-                    String modelId =
-                            config.getApi() != null && config.getApi().getModel() != null
-                                    ? config.getApi().getModel().getId()
-                                    : "unknown";
-                    config.getServices()
-                            .getTelemetryService()
-                            .captureToolUsage(
-                                    config.getUlid(), block.getName(), modelId, false, false);
-                }
-                return HandlerUtils.createTextBlocks(formatResponse.toolDenied());
-            }
+        // 需要 ask 用户 —— 保存状态并返回 PendingAsk
+        String notificationMessage =
+                "Cline wants to analyze code definitions in "
+                        + WorkspaceResolver.getWorkspaceBasename(
+                                absolutePath, "ListCodeDefinitionNamesToolHandler.notification");
+        TaskUtils.showNotificationForApprovalIfAutoApprovalEnabled(
+                notificationMessage,
+                context.getAutoApprovalSettings() != null
+                        && context.getAutoApprovalSettings().isEnabled(),
+                context.getAutoApprovalSettings() != null
+                        && context.getAutoApprovalSettings().isEnableNotifications(),
+                (subtitle, message) -> {});
 
-            if (config.getServices() != null
-                    && config.getServices().getTelemetryService() != null) {
-                String modelId =
-                        config.getApi() != null && config.getApi().getModel() != null
-                                ? config.getApi().getModel().getId()
-                                : "unknown";
-                config.getServices()
-                        .getTelemetryService()
-                        .captureToolUsage(config.getUlid(), block.getName(), modelId, false, true);
-            }
+        ListCodeDefToolState state = (ListCodeDefToolState) context.getToolState();
+        state.setPhase(1);
+        state.setResult(result);
 
-            return HandlerUtils.createTextBlocks(result);
+        var token =
+                ToolResultUtils.askApprovalAndPushFeedbackForToken(
+                        ClineAsk.TOOL,
+                        completeMessage,
+                        context,
+                        ClineMessageFormat.JSON,
+                        block,
+                        getDescription(block));
+        return new ToolExecuteResult.PendingAsk(token);
+    }
+
+    @Override
+    public ToolExecuteResult resume(
+            ToolContext context, ToolUse block, ToolState toolState, AskResult askResult) {
+        ListCodeDefToolState state = (ListCodeDefToolState) toolState;
+
+        boolean approved = ToolResultUtils.processAskResult(askResult, context);
+        if (!approved) {
+            captureTelemetry(context, block, false, false);
+            return HandlerUtils.createToolExecuteResult(formatResponse.toolDenied());
+        }
+
+        captureTelemetry(context, block, false, true);
+        return HandlerUtils.createToolExecuteResult(state.getResult());
+    }
+
+    private void captureTelemetry(
+            ToolContext context, ToolUse block, boolean autoApproved, boolean approved) {
+        if (context.getServices() != null && context.getServices().getTelemetryService() != null) {
+            String modelId =
+                    context.getApi() != null && context.getApi().getModel() != null
+                            ? context.getApi().getModel().getId()
+                            : "unknown";
+            context.getServices()
+                    .getTelemetryService()
+                    .captureToolUsage(
+                            context.getUlid(), block.getName(), modelId, autoApproved, approved);
         }
     }
 
-    private String parseCodeDefinitions(Path dirPath, TaskConfig config) throws IOException {
+    private String parseCodeDefinitions(Path dirPath, ToolContext config) throws IOException {
         if (!Files.exists(dirPath)) {
             return "This directory does not exist or you do not have permission to access it.";
         }

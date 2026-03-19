@@ -1,6 +1,7 @@
 package com.hhoa.kline.core.core.task;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hhoa.ai.kline.commons.utils.object.BeanUtils;
 import com.hhoa.kline.core.common.Tuple2;
 import com.hhoa.kline.core.core.assistant.MessageParam;
 import com.hhoa.kline.core.core.controller.HistoryItem;
@@ -77,52 +78,7 @@ public class MessageStateHandler {
         }
         ClineMessage current = clineMessages.get(index);
 
-        if (updates.getText() != null) {
-            current.setText(updates.getText());
-        }
-        if (updates.getTs() != null) {
-            current.setTs(updates.getTs());
-        }
-        if (updates.getType() != null) {
-            current.setType(updates.getType());
-        }
-        if (updates.getAsk() != null) {
-            current.setAsk(updates.getAsk());
-        }
-        if (updates.getSay() != null) {
-            current.setSay(updates.getSay());
-        }
-        if (updates.getReasoning() != null) {
-            current.setReasoning(updates.getReasoning());
-        }
-        if (updates.getImages() != null) {
-            current.setImages(updates.getImages());
-        }
-        if (updates.getFiles() != null) {
-            current.setFiles(updates.getFiles());
-        }
-        if (updates.getPartial() != null) {
-            current.setPartial(updates.getPartial());
-        }
-        if (updates.getCommandCompleted() != null) {
-            current.setCommandCompleted(updates.getCommandCompleted());
-        }
-        if (updates.getLastCheckpointHash() != null) {
-            current.setLastCheckpointHash(updates.getLastCheckpointHash());
-        }
-        if (updates.getIsCheckpointCheckedOut() != null) {
-            current.setIsCheckpointCheckedOut(updates.getIsCheckpointCheckedOut());
-        }
-        if (updates.getIsOperationOutsideWorkspace() != null) {
-            current.setIsOperationOutsideWorkspace(updates.getIsOperationOutsideWorkspace());
-        }
-        if (updates.getConversationHistoryIndex() != null) {
-            current.setConversationHistoryIndex(updates.getConversationHistoryIndex());
-        }
-        if (updates.getConversationHistoryDeletedRange() != null) {
-            current.setConversationHistoryDeletedRange(
-                    updates.getConversationHistoryDeletedRange());
-        }
+        BeanUtils.copyPropertiesIgnoreNull(updates, current);
 
         saveClineMessagesAndUpdateHistory();
     }

@@ -7,7 +7,7 @@ import cn.hutool.core.bean.BeanUtil;
 import com.hhoa.kline.web.common.enums.CommonStatusEnum;
 import com.hhoa.kline.web.common.pojo.CommonResult;
 import com.hhoa.kline.web.common.pojo.PageResult;
-import com.hhoa.kline.web.common.utils.object.BeanUtils;
+import com.hhoa.kline.web.common.utils.PageUtils;
 import com.hhoa.kline.web.dal.dataobject.AiToolDO;
 import com.hhoa.kline.web.dto.model.tool.AiToolPageReqVO;
 import com.hhoa.kline.web.dto.model.tool.AiToolRespVO;
@@ -70,7 +70,7 @@ public class AiToolController {
     @Operation(summary = "获得工具分页")
     public CommonResult<PageResult<AiToolRespVO>> getToolPage(@Valid AiToolPageReqVO pageReqVO) {
         PageResult<AiToolDO> pageResult = toolService.getToolPage(pageReqVO);
-        return success(BeanUtils.toPageResultBean(pageResult, AiToolRespVO.class));
+        return success(PageUtils.toPageResult(pageResult, AiToolRespVO.class));
     }
 
     @GetMapping("/simple-list")

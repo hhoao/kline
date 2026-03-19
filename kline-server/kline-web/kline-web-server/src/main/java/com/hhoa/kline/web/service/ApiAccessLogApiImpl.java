@@ -6,10 +6,7 @@ import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
-/**
- * API 访问日志的 API 实现类
- *
- */
+/** API 访问日志的 API 实现类 */
 @Service
 @Validated
 public class ApiAccessLogApiImpl implements ApiAccessLogCommonApi {

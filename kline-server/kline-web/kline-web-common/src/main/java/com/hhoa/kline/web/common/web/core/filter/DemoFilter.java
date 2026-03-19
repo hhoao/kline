@@ -11,10 +11,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-/**
- * 演示 Filter，禁止用户发起写操作，避免影响测试数据
- *
- */
+/** 演示 Filter，禁止用户发起写操作，避免影响测试数据 */
 public class DemoFilter extends OncePerRequestFilter {
 
     @Override

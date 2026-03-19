@@ -1,7 +1,6 @@
 package com.hhoa.kline.core.core.task.tools.handlers;
 
 import com.hhoa.kline.core.core.assistant.ToolUse;
-import com.hhoa.kline.core.core.assistant.UserContentBlock;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
 import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
@@ -9,9 +8,12 @@ import com.hhoa.kline.core.core.prompts.systemprompt.tools.ExecuteCommandTool;
 import com.hhoa.kline.core.core.services.telemetry.TelemetryService;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineSay;
+import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.TaskUtils;
 import com.hhoa.kline.core.core.task.tools.AutoApproveToolResult;
-import com.hhoa.kline.core.core.task.tools.types.TaskConfig;
+import com.hhoa.kline.core.core.task.tools.types.ToolContext;
+import com.hhoa.kline.core.core.task.tools.types.ToolExecuteResult;
+import com.hhoa.kline.core.core.task.tools.types.ToolState;
 import com.hhoa.kline.core.core.task.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.task.tools.utils.ToolResultUtils;
 import com.hhoa.kline.core.core.utils.StringUtils;
@@ -20,27 +22,44 @@ import com.hhoa.kline.core.core.workspace.WorkspacePathAdapter;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * 执行命令的工具处理器 支持命令执行、自动批准、遥测数据收集
  *
  * @author hhoa
  */
-public class ExecuteCommandToolHandler implements FullyManagedTool {
+public class ExecuteCommandToolHandler implements StateFullToolHandler {
 
     private static final String COMMAND_REQ_APP_STRING = " (requires approval)";
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
 
+    /** ExecuteCommandToolHandler 的阶段状态 */
+    @Getter
+    @Setter
+    public static class ExecuteCommandToolState extends ToolState {
+        private String finalActualCommand;
+        private String finalExecutionDir;
+        private Integer timeoutSeconds;
+        private boolean autoApproveSafe;
+        private TelemetryService.WorkspaceContext workspaceContext;
+    }
+
     @Override
     public String getName() {
         return ClineDefaultTool.BASH.getValue();
+    }
+
+    @Override
+    public ToolState createToolState() {
+        return new ExecuteCommandToolState();
     }
 
     @Override
@@ -64,27 +83,25 @@ public class ExecuteCommandToolHandler implements FullyManagedTool {
     }
 
     @Override
-    public List<UserContentBlock> execute(TaskConfig config, ToolUse block) {
+    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
         String rawCommand = HandlerUtils.getStringParam(block, "command");
         String requiresApprovalRaw = HandlerUtils.getStringParam(block, "requires_approval");
         String timeoutParam = HandlerUtils.getStringParam(block, "timeout");
 
-        config.getTaskState().setConsecutiveMistakeCount(0);
-
         String command = rawCommand;
-        if (config.getApi() != null
-                && config.getApi().getModel() != null
-                && config.getApi().getModel().getId() != null
-                && config.getApi().getModel().getId().toLowerCase().contains("gemini")) {
+        if (context.getApi() != null
+                && context.getApi().getModel() != null
+                && context.getApi().getModel().getId() != null
+                && context.getApi().getModel().getId().toLowerCase().contains("gemini")) {
             command = StringUtils.fixModelHtmlEscaping(command);
         }
 
-        String executionDir = config.getCwd();
+        String executionDir = context.getCwd();
         String actualCommand = command;
         boolean workspaceHintUsed = false;
         String workspaceHint;
 
-        if (config.getWorkspaceManager() != null) {
+        if (context.getWorkspaceManager() != null) {
             Pattern commandMatch = Pattern.compile("^@(\\w+):(.+)$");
             Matcher matcher = commandMatch.matcher(command);
 
@@ -93,7 +110,7 @@ public class ExecuteCommandToolHandler implements FullyManagedTool {
                 workspaceHint = matcher.group(1);
                 actualCommand = matcher.group(2).trim();
 
-                WorkspaceConfig adapterConfig = new WorkspaceConfig(config.getWorkspaceManager());
+                WorkspaceConfig adapterConfig = new WorkspaceConfig(context.getWorkspaceManager());
                 WorkspacePathAdapter adapter = new WorkspacePathAdapter(adapterConfig);
 
                 executionDir = adapter.resolvePath(".", workspaceHint);
@@ -105,13 +122,13 @@ public class ExecuteCommandToolHandler implements FullyManagedTool {
         final String finalExecutionDir = executionDir;
         final String finalActualCommand = actualCommand;
 
-        if (config.getServices().getClineIgnoreController() != null) {
+        if (context.getServices().getClineIgnoreController() != null) {
             String ignoredFileAttemptedToAccess =
-                    config.getServices()
+                    context.getServices()
                             .getClineIgnoreController()
                             .validateCommand(finalActualCommand);
             if (ignoredFileAttemptedToAccess != null) {
-                config.getCallbacks()
+                context.getCallbacks()
                         .say(
                                 ClineSay.CLINEIGNORE_ERROR,
                                 ignoredFileAttemptedToAccess,
@@ -119,7 +136,7 @@ public class ExecuteCommandToolHandler implements FullyManagedTool {
                                 null,
                                 false,
                                 null);
-                return HandlerUtils.createTextBlocks(
+                return HandlerUtils.createToolExecuteResult(
                         formatResponse.toolError(
                                 formatResponse.clineIgnoreError(ignoredFileAttemptedToAccess)));
             }
@@ -127,19 +144,19 @@ public class ExecuteCommandToolHandler implements FullyManagedTool {
 
         boolean requiresApproval = Boolean.parseBoolean(requiresApprovalRaw.toLowerCase());
         final Integer timeoutSeconds =
-                computeTimeoutSeconds(config.isYoloModeToggled(), timeoutParam);
+                computeTimeoutSeconds(context.isYoloModeToggled(), timeoutParam);
 
         boolean autoApproveSafe;
         boolean autoApproveAll;
-        if (config.getAutoApprover() != null) {
+        if (context.getAutoApprover() != null) {
             AutoApproveToolResult result =
-                    config.getAutoApprover().shouldAutoApproveTool(ClineDefaultTool.BASH);
+                    context.getAutoApprover().shouldAutoApproveTool(ClineDefaultTool.BASH);
             autoApproveSafe = result.getFirst();
             autoApproveAll = result.isPair() && result.getSecond();
         } else {
             autoApproveSafe =
-                    config.getAutoApprovalSettings() != null
-                            ? config.getCallbacks().shouldAutoApproveTool(block.getName())
+                    context.getAutoApprovalSettings() != null
+                            ? context.getCallbacks().shouldAutoApproveTool(block.getName())
                             : false;
             autoApproveAll = false;
         }
@@ -147,19 +164,19 @@ public class ExecuteCommandToolHandler implements FullyManagedTool {
                 (!requiresApproval && autoApproveSafe)
                         || (requiresApproval && autoApproveSafe && autoApproveAll);
 
-        boolean resolvedToNonPrimary = !arePathsEqual(finalExecutionDir, config.getCwd());
+        boolean resolvedToNonPrimary = !arePathsEqual(finalExecutionDir, context.getCwd());
         TelemetryService.WorkspaceContext workspaceContext =
                 new TelemetryService.WorkspaceContext(
                         workspaceHintUsed,
                         resolvedToNonPrimary,
                         workspaceHintUsed ? "hint" : "primary_fallback");
 
-        if (config.getWorkspaceManager() != null
-                && config.getServices().getTelemetryService() != null) {
-            config.getServices()
+        if (context.getWorkspaceManager() != null
+                && context.getServices().getTelemetryService() != null) {
+            context.getServices()
                     .getTelemetryService()
                     .captureWorkspacePathResolved(
-                            config.getUlid(),
+                            context.getUlid(),
                             "ExecuteCommandToolHandler",
                             workspaceHintUsed ? "hint_provided" : "fallback_to_primary",
                             workspaceHintUsed ? "workspace_name" : null,
@@ -171,99 +188,99 @@ public class ExecuteCommandToolHandler implements FullyManagedTool {
         AtomicBoolean didAutoApprove = new AtomicBoolean(false);
 
         if (shouldAutoRun) {
-            config.getCallbacks()
+            context.getCallbacks()
                     .say(ClineSay.COMMAND, finalActualCommand, null, null, false, null);
-            if (!config.isYoloModeToggled()) {
-                config.getTaskState()
-                        .setConsecutiveAutoApprovedRequestsCount(
-                                config.getTaskState().getConsecutiveAutoApprovedRequestsCount()
-                                        + 1);
-            }
             didAutoApprove.set(true);
 
-            if (config.getServices().getTelemetryService() != null) {
-                String modelId =
-                        config.getApi() != null && config.getApi().getModel() != null
-                                ? config.getApi().getModel().getId()
-                                : "unknown";
-                config.getServices()
-                        .getTelemetryService()
-                        .captureToolUsage(
-                                config.getUlid(),
-                                block.getName(),
-                                modelId,
-                                true,
-                                true,
-                                workspaceContext);
-            }
+            captureTelemetry(context, block, true, true, workspaceContext);
 
-            TaskConfig.ExecuteResult result =
+            ToolContext.ExecuteResult result =
                     doExecuteWithTimeoutNotification(
-                            config,
+                            context,
                             finalActualCommand,
                             finalExecutionDir,
                             timeoutSeconds,
                             true,
                             didAutoApprove);
-            return HandlerUtils.createTextBlocks(result.result);
+            return HandlerUtils.createToolExecuteResult(result.result);
         } else {
             TaskUtils.showNotificationForApprovalIfAutoApprovalEnabled(
                     "Cline wants to execute a command: " + finalActualCommand,
-                    config.getAutoApprovalSettings() != null
-                            && config.getAutoApprovalSettings().isEnabled(),
-                    config.getAutoApprovalSettings() != null
-                            && config.getAutoApprovalSettings().isEnableNotifications(),
+                    context.getAutoApprovalSettings() != null
+                            && context.getAutoApprovalSettings().isEnabled(),
+                    context.getAutoApprovalSettings() != null
+                            && context.getAutoApprovalSettings().isEnableNotifications(),
                     (subtitle, msg) -> {});
 
             String askMessage =
                     finalActualCommand + (autoApproveSafe ? COMMAND_REQ_APP_STRING : "");
-            Boolean didApprove =
-                    ToolResultUtils.askApprovalAndPushFeedback(
-                            ClineAsk.COMMAND, askMessage, config, null);
-            if (!didApprove) {
-                if (config.getServices().getTelemetryService() != null) {
-                    String modelId =
-                            config.getApi() != null && config.getApi().getModel() != null
-                                    ? config.getApi().getModel().getId()
-                                    : "unknown";
-                    config.getServices()
-                            .getTelemetryService()
-                            .captureToolUsage(
-                                    config.getUlid(),
-                                    block.getName(),
-                                    modelId,
-                                    false,
-                                    false,
-                                    workspaceContext);
-                }
-                return HandlerUtils.createTextBlocks(formatResponse.toolDenied());
-            }
 
-            if (config.getServices().getTelemetryService() != null) {
-                String modelId =
-                        config.getApi() != null && config.getApi().getModel() != null
-                                ? config.getApi().getModel().getId()
-                                : "unknown";
-                config.getServices()
-                        .getTelemetryService()
-                        .captureToolUsage(
-                                config.getUlid(),
-                                block.getName(),
-                                modelId,
-                                false,
-                                true,
-                                workspaceContext);
-            }
+            // 需要 ask 用户 —— 保存状态并返回 PendingAsk
+            ExecuteCommandToolState state = (ExecuteCommandToolState) context.getToolState();
+            state.setPhase(1);
+            state.setFinalActualCommand(finalActualCommand);
+            state.setFinalExecutionDir(finalExecutionDir);
+            state.setTimeoutSeconds(timeoutSeconds);
+            state.setAutoApproveSafe(autoApproveSafe);
+            state.setWorkspaceContext(workspaceContext);
 
-            TaskConfig.ExecuteResult result =
-                    doExecuteWithTimeoutNotification(
-                            config,
-                            finalActualCommand,
-                            finalExecutionDir,
-                            timeoutSeconds,
-                            false,
-                            didAutoApprove);
-            return HandlerUtils.createTextBlocks(result.result);
+            var token =
+                    ToolResultUtils.askApprovalAndPushFeedbackForToken(
+                            ClineAsk.COMMAND,
+                            askMessage,
+                            context,
+                            null,
+                            block,
+                            getDescription(block));
+            return new ToolExecuteResult.PendingAsk(token);
+        }
+    }
+
+    @Override
+    public ToolExecuteResult resume(
+            ToolContext context, ToolUse block, ToolState toolState, AskResult askResult) {
+        ExecuteCommandToolState state = (ExecuteCommandToolState) toolState;
+
+        boolean approved = ToolResultUtils.processAskResult(askResult, context);
+        if (!approved) {
+            captureTelemetry(context, block, false, false, state.getWorkspaceContext());
+            return HandlerUtils.createToolExecuteResult(formatResponse.toolDenied());
+        }
+
+        captureTelemetry(context, block, false, true, state.getWorkspaceContext());
+
+        AtomicBoolean didAutoApprove = new AtomicBoolean(false);
+        ToolContext.ExecuteResult result =
+                doExecuteWithTimeoutNotification(
+                        context,
+                        state.getFinalActualCommand(),
+                        state.getFinalExecutionDir(),
+                        state.getTimeoutSeconds(),
+                        false,
+                        didAutoApprove);
+        return HandlerUtils.createToolExecuteResult(result.result);
+    }
+
+    private void captureTelemetry(
+            ToolContext context,
+            ToolUse block,
+            boolean autoApproved,
+            boolean approved,
+            TelemetryService.WorkspaceContext workspaceContext) {
+        if (context.getServices().getTelemetryService() != null) {
+            String modelId =
+                    context.getApi() != null && context.getApi().getModel() != null
+                            ? context.getApi().getModel().getId()
+                            : "unknown";
+            context.getServices()
+                    .getTelemetryService()
+                    .captureToolUsage(
+                            context.getUlid(),
+                            block.getName(),
+                            modelId,
+                            autoApproved,
+                            approved,
+                            workspaceContext);
         }
     }
 
@@ -278,8 +295,8 @@ public class ExecuteCommandToolHandler implements FullyManagedTool {
         }
     }
 
-    private static TaskConfig.ExecuteResult doExecuteWithTimeoutNotification(
-            TaskConfig config,
+    private static ToolContext.ExecuteResult doExecuteWithTimeoutNotification(
+            ToolContext config,
             String actualCommand,
             String executionDir,
             Integer timeoutSeconds,
@@ -303,11 +320,8 @@ public class ExecuteCommandToolHandler implements FullyManagedTool {
         }
 
         try {
-            TaskConfig.ExecuteResult result =
+            ToolContext.ExecuteResult result =
                     config.getCallbacks().executeCommandTool(finalCommand, timeoutSeconds);
-            if (result.userRejected) {
-                config.getTaskState().setDidRejectTool(true);
-            }
             timer.cancel();
             return result;
         } catch (Exception e) {

@@ -10,10 +10,7 @@ import com.hhoa.kline.web.common.mybatis.core.type.EncryptTypeHandler;
 import com.hhoa.kline.web.enums.AiPlatformEnum;
 import lombok.*;
 
-/**
- * AI API 秘钥 DO
- *
- */
+/** AI API 秘钥 DO */
 @TableName("ai_api_key")
 @KeySequence("ai_chat_conversation_seq") // 用于 Oracle、PostgreSQL、Kingbase、DB2、H2 数据库的主键自增。如果是 MySQL
 // 等数据库，可不写。

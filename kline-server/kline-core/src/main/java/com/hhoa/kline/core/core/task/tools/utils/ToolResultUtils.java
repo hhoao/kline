@@ -6,17 +6,17 @@ import com.hhoa.kline.core.core.assistant.UserContentBlock;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineAskResponse;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
+import com.hhoa.kline.core.core.task.AskPending;
 import com.hhoa.kline.core.core.task.AskResult;
-import com.hhoa.kline.core.core.task.tools.ToolExecutorCoordinator;
 import com.hhoa.kline.core.core.task.tools.handlers.HandlerUtils;
-import com.hhoa.kline.core.core.task.tools.types.TaskConfig;
+import com.hhoa.kline.core.core.task.tools.types.PendingAskToken;
+import com.hhoa.kline.core.core.task.tools.types.ToolContext;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Function;
 import lombok.extern.slf4j.Slf4j;
 
 /** 处理工具结果与用户反馈的辅助方法。 */
@@ -27,25 +27,15 @@ public final class ToolResultUtils {
 
     public static void pushToolResult(
             List<UserContentBlock> toolResult,
-            ToolUse block,
             List<UserContentBlock> userMessageContent,
-            Function<ToolUse, String> toolDescription,
-            Runnable markToolAsUsed,
-            ToolExecutorCoordinator coordinator) {
+            String toolDescription,
+            Runnable markToolAsUsed) {
         toolResult =
                 toolResult.isEmpty()
                         ? HandlerUtils.createTextBlocks("(tool did not return anything)")
                         : toolResult;
-        String description;
-        if (coordinator != null) {
-            ToolExecutorCoordinator.ToolHandler handler = coordinator.getHandler(block.getName());
-            description =
-                    handler != null ? handler.getDescription(block) : toolDescription.apply(block);
-        } else {
-            description = toolDescription.apply(block);
-        }
 
-        TextContentBlock headerBlock = new TextContentBlock(description + " Result:");
+        TextContentBlock headerBlock = new TextContentBlock(toolDescription + " Result:");
         userMessageContent.add(headerBlock);
 
         userMessageContent.addAll(toolResult);
@@ -56,18 +46,14 @@ public final class ToolResultUtils {
 
     public static void pushToolResult(
             String content,
-            ToolUse block,
             List<UserContentBlock> userMessageContent,
-            Function<ToolUse, String> toolDescription,
-            Runnable markToolAsUsed,
-            ToolExecutorCoordinator coordinator) {
+            String toolDescription,
+            Runnable markToolAsUsed) {
         pushToolResult(
                 content.isEmpty() ? new ArrayList<>() : HandlerUtils.createTextBlocks(content),
-                block,
                 userMessageContent,
                 toolDescription,
-                markToolAsUsed,
-                coordinator);
+                markToolAsUsed);
     }
 
     public static void pushAdditionalToolFeedback(
@@ -94,9 +80,28 @@ public final class ToolResultUtils {
         }
     }
 
-    public static Boolean askApprovalAndPushFeedback(
-            ClineAsk type, String completeMessage, TaskConfig config, ClineMessageFormat format) {
-        AskResult result = config.getCallbacks().ask(type, completeMessage, false, format);
+    public static PendingAskToken.ToolUsePendingAskToken askApprovalAndPushFeedbackForToken(
+            ClineAsk type,
+            String completeMessage,
+            ToolContext config,
+            ClineMessageFormat format,
+            ToolUse toolUse,
+            String toolDescription) {
+        AskPending askResult = config.getCallbacks().ask(type, completeMessage, false, format);
+        PendingAskToken.ToolUsePendingAskToken token =
+                new PendingAskToken.ToolUsePendingAskToken(
+                        askResult.getPendingId(),
+                        config.getTaskId(),
+                        toolDescription,
+                        type,
+                        completeMessage,
+                        format,
+                        toolUse);
+        return token;
+    }
+
+    /** 处理 ask 恢复后的用户响应。从 AskResult 中提取反馈并推送，返回用户是否批准。 由 StateFullToolHandler.resume() 调用。 */
+    public static boolean processAskResult(AskResult result, ToolContext config) {
         String text = result != null ? result.getText() : null;
         String[] images =
                 result != null && result.getImages() != null
@@ -113,18 +118,18 @@ public final class ToolResultUtils {
         if (hasText || hasImages || hasFiles) {
             String fileContentString = hasFiles ? processFilesIntoText(files) : "";
             pushAdditionalToolFeedback(
-                    config.getTaskState().getUserMessageContent(), text, images, fileContentString);
+                    config.getTaskState().getNextUserMessageContent(),
+                    text,
+                    images,
+                    fileContentString);
             config.getCallbacks().sayUserFeedback(text, images, files);
         }
 
         if (result == null || !ClineAskResponse.YES_BUTTON_CLICKED.equals(result.getResponse())) {
-            // 用户拒绝或用消息回应，视为拒绝
             config.getTaskState().setDidRejectTool(true);
             return false;
-        } else {
-            // 用户点击了批准按钮，且可能提供了反馈
-            return true;
         }
+        return true;
     }
 
     private static String processFilesIntoText(String[] files) {

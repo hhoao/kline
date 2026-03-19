@@ -16,6 +16,7 @@ import lombok.NoArgsConstructor;
 public class ClineMessage {
     private Long ts;
     private String taskId;
+    private String pendingId;
     private ClineMessageType type;
     private ClineAsk ask;
     private ClineSay say;

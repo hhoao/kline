@@ -3,10 +3,7 @@ package com.hhoa.kline.web.common.enums;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
-/**
- * 文档地址
- *
- */
+/** 文档地址 */
 @Getter
 @AllArgsConstructor
 public enum DocumentEnum {

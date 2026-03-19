@@ -10,10 +10,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.aspectj.lang.JoinPoint;
 
-/**
- * 字符串工具类
- *
- */
+/** 字符串工具类 */
 public class StrUtils {
 
     public static String maxLength(CharSequence str, int maxLength) {

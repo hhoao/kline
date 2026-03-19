@@ -16,7 +16,9 @@ import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.ClineMessage;
 import com.hhoa.kline.core.core.task.MessageUtils;
-import com.hhoa.kline.core.core.task.tools.types.TaskConfig;
+import com.hhoa.kline.core.core.task.tools.types.ToolContext;
+import com.hhoa.kline.core.core.task.tools.types.ToolExecuteResult;
+import com.hhoa.kline.core.core.task.tools.types.ToolState;
 import com.hhoa.kline.core.core.task.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.task.tools.utils.ToolResultUtils;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
@@ -24,21 +26,43 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
- * 尝试完成任务的工具处理器 处理任务完成、用户反馈、命令执行
+ * 尝试完成任务的工具处理器 处理任务完成、用户反馈、命令执行 有两个 ask 阶段：phase 1 = 命令审批，phase 2 = 完成结果反馈
  *
  * @author hhoa
  */
-public class AttemptCompletionHandler implements FullyManagedTool {
+public class AttemptCompletionHandler implements StateFullToolHandler {
 
     private static final String COMPLETION_RESULT_CHANGES_FLAG = "HAS_CHANGES";
 
+    /** phase 1: 等待用户批准命令 */
+    private static final int PHASE_COMMAND_ASK = 1;
+
+    /** phase 2: 等待用户对完成结果的反馈 */
+    private static final int PHASE_COMPLETION_ASK = 2;
+
     private final ResponseFormatter formatResponse = new ResponseFormatter();
+
+    /** AttemptCompletionHandler 的阶段状态 */
+    @Getter
+    @Setter
+    public static class AttemptCompletionToolState extends ToolState {
+        private String command;
+        private String result;
+        private List<UserContentBlock> cmdResult;
+    }
 
     @Override
     public String getName() {
         return ClineDefaultTool.ATTEMPT.getValue();
+    }
+
+    @Override
+    public ToolState createToolState() {
+        return new AttemptCompletionToolState();
     }
 
     @Override
@@ -62,115 +86,169 @@ public class AttemptCompletionHandler implements FullyManagedTool {
     }
 
     @Override
-    public List<UserContentBlock> execute(TaskConfig config, ToolUse block) {
+    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
         String result = HandlerUtils.getStringParam(block, "result");
         String command = HandlerUtils.getStringParam(block, "command");
 
-        config.getTaskState().setConsecutiveMistakeCount(0);
-
-        if (config.getAutoApprovalSettings() != null
-                && config.getAutoApprovalSettings().isEnabled()
-                && config.getAutoApprovalSettings().isEnableNotifications()) {
+        if (context.getAutoApprovalSettings() != null
+                && context.getAutoApprovalSettings().isEnabled()
+                && context.getAutoApprovalSettings().isEnableNotifications()) {
             String notificationMsg = result.replace("\n", " ");
             if (notificationMsg.length() > 100) {
                 notificationMsg = notificationMsg.substring(0, 100) + "...";
             }
-            config.getServices()
+            context.getServices()
                     .getNotificationService()
                     .showNotification("Task Completed", notificationMsg, NotificationType.INFO);
         }
 
-        List<ClineMessage> clineMessages = config.getMessageState().getClineMessages();
+        List<ClineMessage> clineMessages = context.getMessageState().getClineMessages();
         ClineMessage lastMessage =
                 clineMessages.isEmpty() ? null : clineMessages.get(clineMessages.size() - 1);
 
-        List<UserContentBlock> cmdResult;
+        List<UserContentBlock> cmdResult = new ArrayList<>();
         if (command != null && !command.isEmpty()) {
             if (lastMessage == null || !ClineAsk.COMMAND.equals(lastMessage.getAsk())) {
                 long l = System.currentTimeMillis();
-                config.getCallbacks()
+                context.getCallbacks()
                         .say(ClineSay.COMPLETION_RESULT, result, null, null, false, null);
-                config.getCallbacks().saveCheckpoint(true, l);
-                addNewChangesFlagToLastCompletionResultMessage(config);
+                context.getCallbacks().saveCheckpoint(true, l);
+                addNewChangesFlagToLastCompletionResultMessage(context);
             } else {
-                config.getCallbacks().saveCheckpoint(true, null);
+                context.getCallbacks().saveCheckpoint(true, null);
             }
 
             if (!block.isPartial()) {
                 String taskProgress = HandlerUtils.getStringParam(block, "task_progress");
                 if (taskProgress != null) {
-                    config.getCallbacks().updateFCListFromToolResponse(taskProgress);
+                    context.getCallbacks().updateFCListFromToolResponse(taskProgress);
                 }
             }
 
-            Boolean approved =
-                    ToolResultUtils.askApprovalAndPushFeedback(
-                            ClineAsk.COMMAND, command, config, null);
+            // 需要 ask 用户批准命令 —— 保存状态并返回 PendingAsk
+            AttemptCompletionToolState state = (AttemptCompletionToolState) context.getToolState();
+            state.setPhase(PHASE_COMMAND_ASK);
+            state.setCommand(command);
+            state.setResult(result);
 
-            if (config.getServices().getTelemetryService() != null) {
-                String modelId =
-                        config.getApi() != null && config.getApi().getModel() != null
-                                ? config.getApi().getModel().getId()
-                                : "unknown";
-                config.getServices()
-                        .getTelemetryService()
-                        .captureToolUsage(
-                                config.getUlid(), block.getName(), modelId, false, approved);
-            }
-
-            if (!approved) {
-                cmdResult = HandlerUtils.createTextBlocks(formatResponse.toolDenied());
-            } else {
-                TaskConfig.ExecuteResult exec =
-                        config.getCallbacks().executeCommandTool(command, null);
-                if (exec.userRejected) {
-                    config.getTaskState().setDidRejectTool(true);
-                }
-                cmdResult = HandlerUtils.createTextBlocks(exec.result);
-            }
+            var token =
+                    ToolResultUtils.askApprovalAndPushFeedbackForToken(
+                            ClineAsk.COMMAND, command, context, null, block, getDescription(block));
+            return new ToolExecuteResult.PendingAsk(token);
         } else {
             long l = System.currentTimeMillis();
-            config.getCallbacks().say(ClineSay.COMPLETION_RESULT, result, null, null, false, null);
-            config.getCallbacks().saveCheckpoint(true, l);
-            addNewChangesFlagToLastCompletionResultMessage(config);
-            if (config.getServices() != null
-                    && config.getServices().getTelemetryService() != null) {
-                config.getServices().getTelemetryService().captureTaskCompleted(config.getUlid());
+            context.getCallbacks().say(ClineSay.COMPLETION_RESULT, result, null, null, false, null);
+            context.getCallbacks().saveCheckpoint(true, l);
+            addNewChangesFlagToLastCompletionResultMessage(context);
+            if (context.getServices() != null
+                    && context.getServices().getTelemetryService() != null) {
+                context.getServices().getTelemetryService().captureTaskCompleted(context.getUlid());
             }
             cmdResult = null;
         }
 
-        List<ClineMessage> currentMessages = config.getMessageState().getClineMessages();
+        // 无命令，直接进入完成结果 ask
+        return proceedToCompletionAsk(context, block, cmdResult);
+    }
+
+    @Override
+    public ToolExecuteResult resume(
+            ToolContext context, ToolUse block, ToolState toolState, AskResult askResult) {
+        AttemptCompletionToolState state = (AttemptCompletionToolState) toolState;
+
+        if (state.getPhase() == PHASE_COMMAND_ASK) {
+            return resumeFromCommandAsk(context, block, state, askResult);
+        } else if (state.getPhase() == PHASE_COMPLETION_ASK) {
+            return resumeFromCompletionAsk(context, state, askResult);
+        }
+
+        throw new IllegalStateException("Invalid phase: " + state.getPhase());
+    }
+
+    private ToolExecuteResult resumeFromCommandAsk(
+            ToolContext context,
+            ToolUse block,
+            AttemptCompletionToolState state,
+            AskResult askResult) {
+
+        boolean approved = ToolResultUtils.processAskResult(askResult, context);
+
+        if (context.getServices().getTelemetryService() != null) {
+            String modelId =
+                    context.getApi() != null && context.getApi().getModel() != null
+                            ? context.getApi().getModel().getId()
+                            : "unknown";
+            context.getServices()
+                    .getTelemetryService()
+                    .captureToolUsage(context.getUlid(), block.getName(), modelId, false, approved);
+        }
+
+        List<UserContentBlock> cmdResult;
+        if (!approved) {
+            cmdResult = HandlerUtils.createTextBlocks(formatResponse.toolDenied());
+        } else {
+            ToolContext.ExecuteResult exec =
+                    context.getCallbacks().executeCommandTool(state.getCommand(), null);
+            cmdResult = HandlerUtils.createTextBlocks(exec.result);
+        }
+
+        state.setCmdResult(cmdResult);
+        return proceedToCompletionAsk(context, block, cmdResult);
+    }
+
+    /** 进入完成结果 ask 阶段：发送 COMPLETION_RESULT ask 并返回 PendingAsk */
+    private ToolExecuteResult proceedToCompletionAsk(
+            ToolContext context, ToolUse block, List<UserContentBlock> cmdResult) {
+
+        List<ClineMessage> currentMessages = context.getMessageState().getClineMessages();
         if (!currentMessages.isEmpty()) {
             ClineMessage lastMsg = currentMessages.getLast();
             if (ClineAsk.COMMAND_OUTPUT.equals(lastMsg.getAsk())) {
-                config.getCallbacks().say(ClineSay.COMMAND_OUTPUT, "", null, null, false, null);
+                context.getCallbacks().say(ClineSay.COMMAND_OUTPUT, "", null, null, false, null);
             }
         }
 
         if (!block.isPartial()) {
             String taskProgress = HandlerUtils.getStringParam(block, "task_progress");
             if (taskProgress != null) {
-                config.getCallbacks().updateFCListFromToolResponse(taskProgress);
+                context.getCallbacks().updateFCListFromToolResponse(taskProgress);
             }
         }
 
-        AskResult res = config.getCallbacks().ask(ClineAsk.COMPLETION_RESULT, "", false, null);
-        if (res != null && ClineAskResponse.YES_BUTTON_CLICKED.equals(res.getResponse())) {
-            return HandlerUtils.createTextBlocks("");
+        AttemptCompletionToolState state = (AttemptCompletionToolState) context.getToolState();
+        state.setPhase(PHASE_COMPLETION_ASK);
+        state.setCmdResult(cmdResult);
+
+        var token =
+                ToolResultUtils.askApprovalAndPushFeedbackForToken(
+                        ClineAsk.COMPLETION_RESULT,
+                        "",
+                        context,
+                        null,
+                        block,
+                        getDescription(block));
+        return new ToolExecuteResult.PendingAsk(token);
+    }
+
+    private ToolExecuteResult resumeFromCompletionAsk(
+            ToolContext context, AttemptCompletionToolState state, AskResult askResult) {
+
+        if (askResult != null
+                && ClineAskResponse.YES_BUTTON_CLICKED.equals(askResult.getResponse())) {
+            return HandlerUtils.createToolExecuteResult("");
         }
 
-        String text = res != null ? res.getText() : null;
+        String text = askResult != null ? askResult.getText() : null;
         String[] images =
-                res != null && res.getImages() != null
-                        ? res.getImages().toArray(new String[0])
+                askResult != null && askResult.getImages() != null
+                        ? askResult.getImages().toArray(new String[0])
                         : null;
         String[] completionFiles =
-                res != null && res.getFiles() != null
-                        ? res.getFiles().toArray(new String[0])
+                askResult != null && askResult.getFiles() != null
+                        ? askResult.getFiles().toArray(new String[0])
                         : null;
 
-        config.getCallbacks()
+        context.getCallbacks()
                 .say(
                         ClineSay.USER_FEEDBACK,
                         text == null ? "" : text,
@@ -181,8 +259,8 @@ public class AttemptCompletionHandler implements FullyManagedTool {
 
         List<UserContentBlock> toolResults = new ArrayList<>();
 
-        if (cmdResult != null) {
-            toolResults.addAll(cmdResult);
+        if (state.getCmdResult() != null) {
+            toolResults.addAll(state.getCmdResult());
         }
 
         TextContentBlock feedbackBlock =
@@ -216,10 +294,10 @@ public class AttemptCompletionHandler implements FullyManagedTool {
             toolResults.addAll(HandlerUtils.createTextBlocks(fileContentString));
         }
 
-        return toolResults;
+        return new ToolExecuteResult.Immediate(toolResults);
     }
 
-    private void addNewChangesFlagToLastCompletionResultMessage(TaskConfig config) {
+    private void addNewChangesFlagToLastCompletionResultMessage(ToolContext config) {
         Boolean hasNewChanges = config.getCallbacks().doesLatestTaskCompletionHaveNewChanges();
         if (!Boolean.TRUE.equals(hasNewChanges)) {
             return;

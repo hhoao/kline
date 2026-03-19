@@ -5,7 +5,7 @@ import static com.hhoa.kline.web.common.pojo.CommonResult.success;
 import cn.hutool.core.bean.BeanUtil;
 import com.hhoa.kline.web.common.pojo.CommonResult;
 import com.hhoa.kline.web.common.pojo.PageResult;
-import com.hhoa.kline.web.common.utils.object.BeanUtils;
+import com.hhoa.kline.web.common.utils.PageUtils;
 import com.hhoa.kline.web.dal.dataobject.AiKnowledgeDocumentDO;
 import com.hhoa.kline.web.dto.knowledge.document.AiKnowledgeDocumentCreateListReqVO;
 import com.hhoa.kline.web.dto.knowledge.document.AiKnowledgeDocumentPageReqVO;
@@ -43,7 +43,7 @@ public class AiKnowledgeDocumentController {
             @Valid AiKnowledgeDocumentPageReqVO pageReqVO) {
         PageResult<AiKnowledgeDocumentDO> pageResult =
                 documentService.getKnowledgeDocumentPage(pageReqVO);
-        return success(BeanUtils.toPageResultBean(pageResult, AiKnowledgeDocumentRespVO.class));
+        return success(PageUtils.toPageResult(pageResult, AiKnowledgeDocumentRespVO.class));
     }
 
     @GetMapping("/get")

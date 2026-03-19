@@ -3,10 +3,7 @@ package com.hhoa.kline.web.common.biz.system.dict.dto;
 import com.hhoa.kline.web.common.enums.CommonStatusEnum;
 import lombok.Data;
 
-/**
- * 字典数据 Response DTO
- *
- */
+/** 字典数据 Response DTO */
 @Data
 public class DictDataRespDTO {
 

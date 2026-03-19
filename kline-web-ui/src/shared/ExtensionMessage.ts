@@ -88,6 +88,8 @@ export interface ExtensionState {
 
 export interface ClineMessage {
 	ts: number
+	/** PendingAsk 的唯一标识，前端响应时需要回传 */
+	pendingId?: string
 	type: "ask" | "say"
 	ask?: ClineAsk
 	say?: ClineSay

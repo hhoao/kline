@@ -24,6 +24,7 @@ public class PartialMessage implements SubscriptionMessage {
     private Long ts;
     private String taskId;
     private ClineMessageType clineMessageType;
+    private String pendingId;
     private ClineAsk ask;
     private ClineSay say;
     private String incrementContent;

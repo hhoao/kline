@@ -7,9 +7,10 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
 import com.hhoa.ai.kline.commons.utils.collection.CollectionUtils;
+import com.hhoa.ai.kline.commons.utils.object.BeanUtils;
 import com.hhoa.kline.web.common.pojo.CommonResult;
 import com.hhoa.kline.web.common.pojo.PageResult;
-import com.hhoa.kline.web.common.utils.object.BeanUtils;
+import com.hhoa.kline.web.common.utils.PageUtils;
 import com.hhoa.kline.web.dal.dataobject.AiChatConversationDO;
 import com.hhoa.kline.web.dto.chat.conversation.AiChatConversationCreateMyReqVO;
 import com.hhoa.kline.web.dto.chat.conversation.AiChatConversationPageReqVO;
@@ -113,7 +114,7 @@ public class AiChatConversationController {
                         CollectionUtils.convertList(
                                 pageResult.getList(), AiChatConversationDO::getId));
         return success(
-                BeanUtils.toPageResultBean(
+                PageUtils.toPageResult(
                         pageResult,
                         AiChatConversationRespVO.class,
                         conversation ->

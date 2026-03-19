@@ -101,6 +101,7 @@ export function useMessageHandlers(
             await taskService.askResponse({
               responseType: "messageResponse",
               taskId: currentTaskId,
+              pendingId: lastMsg?.pendingId,
               text: messageToSend,
               images: images,
               files: files,
@@ -145,6 +146,7 @@ export function useMessageHandlers(
         await taskService.askResponse({
           responseType: "yesButtonClicked",
           taskId: currentTaskId,
+          pendingId: lastMessage?.pendingId,
         });
         clearInputState();
         break;
@@ -154,6 +156,7 @@ export function useMessageHandlers(
           await taskService.askResponse({
             responseType: "yesButtonClicked",
             taskId: currentTaskId,
+            pendingId: lastMessage?.pendingId,
             text: trimmedInput,
             images: images,
             files: files,
@@ -162,6 +165,7 @@ export function useMessageHandlers(
           await taskService.askResponse({
             responseType: "yesButtonClicked",
             taskId: currentTaskId,
+            pendingId: lastMessage?.pendingId,
           });
         }
         clearInputState();
@@ -172,6 +176,7 @@ export function useMessageHandlers(
           await taskService.askResponse({
             responseType: "noButtonClicked",
             taskId: currentTaskId,
+            pendingId: lastMessage?.pendingId,
             text: trimmedInput,
             images: images,
             files: files,
@@ -180,6 +185,7 @@ export function useMessageHandlers(
           await taskService.askResponse({
             responseType: "noButtonClicked",
             taskId: currentTaskId,
+            pendingId: lastMessage?.pendingId,
           });
         }
         clearInputState();
@@ -190,6 +196,7 @@ export function useMessageHandlers(
           await taskService.askResponse({
             responseType: "yesButtonClicked",
             taskId: currentTaskId,
+            pendingId: lastMessage?.pendingId,
             text: trimmedInput,
             images: images,
             files: files,
@@ -198,6 +205,7 @@ export function useMessageHandlers(
           await taskService.askResponse({
             responseType: "yesButtonClicked",
             taskId: currentTaskId,
+            pendingId: lastMessage?.pendingId,
           });
           clearInputState();
         }
