@@ -572,7 +572,6 @@ public class TaskV2 implements Recoverable<TaskState> {
                         telemetryService,
                         stateManager,
                         cwd,
-                        taskState,
                         taskId,
                         ulid,
                         messageStateHandler,

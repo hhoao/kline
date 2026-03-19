@@ -288,7 +288,7 @@ public class DefaultTaskManager implements TaskManager {
             throw new BizException("取消任务失败，没有这个任务");
         }
 
-        updateBackgroundCommandState(false);
+        cancelBackgroundCommand(taskId);
 
         task.handle(new AbortTaskEvent(taskId));
 
@@ -313,22 +313,14 @@ public class DefaultTaskManager implements TaskManager {
     }
 
     @Override
-    public void updateBackgroundCommandState(boolean running) {
-        TaskManager.super.updateBackgroundCommandState(running);
-    }
-
-    @Override
     public void cancelBackgroundCommand(String taskId) {
         TaskV2 task = this.tasks.get(taskId);
-        if (task != null) {
-            try {
-                // 暂时只更新前端状态，具体的终端取消逻辑由 TaskV2 内部处理
-                updateBackgroundCommandState(false);
-            } catch (Exception e) {
-                log.error("[DefaultTaskManager] 取消背景命令失败", e);
-                updateBackgroundCommandState(false);
-            }
+        if (task == null) {
+            log.warn("[DefaultTaskManager] 取消背景命令失败，任务不存在: {}", taskId);
+            return;
         }
+        task.getCommandHandler().cancelBackgroundCommand();
+
     }
 
     @Override

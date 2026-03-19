@@ -445,11 +445,9 @@ public final class TaskV2MessagePresenterHandler {
                 processTextContent(textContent);
             } else if (block instanceof ToolUse toolUse) {
                 if (!taskState.isDidAlreadyUseTool()) {
-                    // 分配工具使用 ID（仅在完整块时分配，partial 块不执行）
                     String toolUseId = UUID.randomUUID().toString();
                     toolUse.setId(toolUseId);
                     ToolState toolState = toolExecutor.getOrCreateToolState(toolUse.getName());
-                    // 执行前将 ToolState 存入 TaskState，以 toolUseId 为 key
                     taskState.getToolStates().put(toolUseId, toolState);
                     ToolContext cfg = buildToolContext(toolState);
                     ToolExecuteResult execResult = toolExecutor.executeTool(toolUse, cfg);

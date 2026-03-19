@@ -35,10 +35,6 @@ public interface TaskManager {
 
     void updateBackgroundCommandState(boolean running, String taskId);
 
-    default void updateBackgroundCommandState(boolean running) {
-        updateBackgroundCommandState(running, null);
-    }
-
     void cancelBackgroundCommand(String taskId);
 
     void exportTaskWithId(String id);
