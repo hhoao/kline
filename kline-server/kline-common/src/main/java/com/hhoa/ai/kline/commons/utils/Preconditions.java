@@ -21,7 +21,7 @@
 //  which is part of the "Guava" library.
 //
 //  Because of frequent issues with dependency conflicts, this class was
-//  added to the Flink code base to reduce dependency on Guava.
+//  added to the code base to reduce dependency on Guava.
 // ----------------------------------------------------------------------------
 
 package com.hhoa.ai.kline.commons.utils;
@@ -34,7 +34,7 @@ import java.util.concurrent.ExecutionException;
  * A collection of static utility methods to validate input.
  *
  * <p>This class is modelled after Google Guava's Preconditions class, and partly takes code from
- * that class. We add this code to the Flink code base in order to reduce external dependencies.
+ * that class. We add this code to the code base in order to reduce external dependencies.
  */
 public final class Preconditions {
 
