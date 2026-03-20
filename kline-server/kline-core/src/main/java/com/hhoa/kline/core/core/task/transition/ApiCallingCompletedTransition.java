@@ -3,8 +3,8 @@ package com.hhoa.kline.core.core.task.transition;
 import com.hhoa.kline.core.core.task.ClineRequestResult;
 import com.hhoa.kline.core.core.task.TaskV2;
 import com.hhoa.kline.core.core.task.event.AbortTaskEvent;
+import com.hhoa.kline.core.core.task.event.ApiCallFailedEvent;
 import com.hhoa.kline.core.core.task.event.ApiCompletedEvent;
-import com.hhoa.kline.core.core.task.event.ApiFailedEvent;
 import com.hhoa.kline.core.core.task.event.ContinueNextTurnEvent;
 import com.hhoa.kline.core.core.task.event.TaskCompletedEvent;
 import com.hhoa.kline.core.core.task.event.TaskEvent;
@@ -12,7 +12,7 @@ import com.hhoa.kline.core.core.task.statemachine.SingleArcTransition;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class ApiCompletedTransition implements SingleArcTransition<TaskV2, TaskEvent> {
+public class ApiCallingCompletedTransition implements SingleArcTransition<TaskV2, TaskEvent> {
 
     @Override
     public void transition(TaskV2 operand, TaskEvent event) {
@@ -29,7 +29,9 @@ public class ApiCompletedTransition implements SingleArcTransition<TaskV2, TaskE
         if (processResult == ClineRequestResult.ABORT) {
             operand.handle(new AbortTaskEvent(operand.getTaskId()));
         } else if (processResult == ClineRequestResult.FAILED) {
-            operand.handle(new ApiFailedEvent(operand.getTaskId(), null));
+            operand.handle(
+                    new ApiCallFailedEvent(
+                            operand.getTaskId(), new Exception("API failed"), "API failed"));
         } else if (processResult == ClineRequestResult.DID_NOT_TOOL_USE) {
             operand.handle(new TaskCompletedEvent(operand.getTaskId()));
         } else if (processResult == ClineRequestResult.DID_TOOL_USE) {

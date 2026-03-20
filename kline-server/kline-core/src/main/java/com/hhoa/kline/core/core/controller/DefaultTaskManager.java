@@ -320,7 +320,6 @@ public class DefaultTaskManager implements TaskManager {
             return;
         }
         task.getCommandHandler().cancelBackgroundCommand();
-
     }
 
     @Override

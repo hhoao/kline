@@ -33,17 +33,15 @@ import com.hhoa.kline.core.core.task.AskPending;
 import com.hhoa.kline.core.core.task.ClineMessage;
 import com.hhoa.kline.core.core.task.ClineRequestResult;
 import com.hhoa.kline.core.core.task.ContextFactory;
+import com.hhoa.kline.core.core.task.ExistState;
 import com.hhoa.kline.core.core.task.MessageStateHandler;
 import com.hhoa.kline.core.core.task.ProviderInfo;
 import com.hhoa.kline.core.core.task.TaskState;
 import com.hhoa.kline.core.core.task.deps.TaskDispatch;
-import com.hhoa.kline.core.core.task.event.ApiCallingRetryEvent;
-import com.hhoa.kline.core.core.task.event.ApiFailedEvent;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
@@ -138,61 +136,13 @@ public final class TaskV2ApiCallHandler {
         }
     }
 
-    public void doCallApi() {
+    public ApiRequestResult doCallApi() {
         if (taskState.isAbort()) {
-            return;
+            return new ApiRequestResult(new ExistState.Abort());
         }
 
         int previousApiReqIndex = taskState.getCurrentPreviousApiReqIndex();
 
-        try {
-            doCallApiInternal(previousApiReqIndex);
-        } catch (Exception e) {
-            if (autoRetryDispatched) {
-                return;
-            }
-
-            Throwable cause = e.getCause() != null ? e.getCause() : e;
-            String errorMessage = cause.getMessage();
-
-            log.error("Error in doCallApi: {}", errorMessage, e);
-
-            boolean isContextWindowExceeded =
-                    errorMessage != null
-                            && (errorMessage.contains("context window")
-                                    || errorMessage.contains("token limit")
-                                    || errorMessage.contains("maximum context length"));
-
-            if (isContextWindowExceeded && !taskState.isDidAutomaticallyRetryFailedApiRequest()) {
-                try {
-                    contextWindowHandler.handleContextWindowExceededError();
-                    taskState.setDidAutomaticallyRetryFailedApiRequest(true);
-                    taskDispatch.dispatch(new ApiFailedEvent(taskId, e));
-                    return;
-                } catch (Exception retryError) {
-                    log.error(
-                            "Error handling context window exceeded: {}",
-                            retryError.getMessage(),
-                            retryError);
-                }
-            }
-
-            sayAskHandler.say(
-                    ClineSay.ERROR,
-                    "Failed to process request: "
-                            + (errorMessage != null ? errorMessage : "Unknown error"),
-                    null,
-                    null,
-                    null);
-
-            sayAskHandler.ask(
-                    ClineAsk.API_REQ_FAILED, "Error processing request. Would you like to retry?");
-
-            taskDispatch.dispatch(new ApiFailedEvent(taskId, cause));
-        }
-    }
-
-    public void doCallApiInternal(int previousApiReqIndex) {
         taskState.setCurrentStreamingContentIndex(0);
         taskState.setAssistantMessageContent(new ArrayList<>());
         taskState.setDidCompleteReadingStream(false);
@@ -243,20 +193,10 @@ public final class TaskV2ApiCallHandler {
         List<MessageParam> truncatedConversationHistory =
                 contextResult.getTruncatedConversationHistory();
 
-        try {
+        ApiRequestResult result = attemptApiRequest(truncatedConversationHistory, null);
+        taskState.setDidCompleteReadingStream(true);
 
-            CompletableFuture.supplyAsync(
-                    () -> {
-                        try {
-                            return attemptApiRequest(truncatedConversationHistory, null);
-                        } catch (Exception ex) {
-                            taskDispatch.dispatch(new ApiFailedEvent(taskId, ex));
-                            return null;
-                        }
-                    });
-        } catch (Exception e) {
-            taskDispatch.dispatch(new ApiFailedEvent(taskId, e));
-        }
+        return result;
     }
 
     public ClineRequestResult processAssistantResponse(
@@ -374,7 +314,7 @@ public final class TaskV2ApiCallHandler {
         return ClineRequestResult.FAILED;
     }
 
-    private @Nullable AskPending retry(String askMessage) {
+    public @Nullable AskPending tryRetryAsk(String askMessage) {
         if (taskState.getAutoRetryAttempts() < 3) {
             taskState.setAutoRetryAttempts(taskState.getAutoRetryAttempts() + 1);
 
@@ -408,8 +348,7 @@ public final class TaskV2ApiCallHandler {
     }
 
     private ApiRequestResult attemptApiRequest(
-            List<MessageParam> conversationHistory, StringBuilder unCompleteAssistantMessage)
-            throws Exception {
+            List<MessageParam> conversationHistory, StringBuilder unCompleteAssistantMessage) {
         SystemPromptContext context =
                 contextPrepareHandler.buildSystemPromptContext(unCompleteAssistantMessage != null);
         String systemPrompt = systemPromptService.getSystemPrompt(context);
@@ -476,10 +415,7 @@ public final class TaskV2ApiCallHandler {
                     .contextWrite(contextFactory::modifyContext)
                     .blockLast();
         } catch (Exception streamError) {
-            if (autoRetryDispatched) {
-                throw new RuntimeException("Auto-retry scheduled", streamError);
-            }
-            handleApiRequestError(streamError, lastApiReqIndex);
+            return handleApiRequestError(streamError, lastApiReqIndex);
         } finally {
             taskState.setStreaming(false);
         }
@@ -509,10 +445,10 @@ public final class TaskV2ApiCallHandler {
         }
 
         if (taskState.isAbort()) {
-            throw new RuntimeException("Cline instance aborted");
+            return new ApiRequestResult(new ExistState.Abort());
         }
 
-        ApiRequestResult result = new ApiRequestResult();
+        ApiRequestResult result = new ApiRequestResult(new ExistState.Success());
         result.setAssistantMessage(finalAssistantMessage);
         result.setReasoningDetails(new ArrayList<>(reasoningDetailsList));
         result.setAntThinkingContent(new ArrayList<>(antThinkingContentList));
@@ -521,9 +457,6 @@ public final class TaskV2ApiCallHandler {
 
         checkAndProcessTruncatedContent(
                 conversationHistory, finalAssistantMessage, assistantMessageBuilder, result);
-
-        taskState.setDidCompleteReadingStream(true);
-        taskState.setApiRequestResult(result);
         return result;
     }
 
@@ -586,8 +519,7 @@ public final class TaskV2ApiCallHandler {
             List<MessageParam> conversationHistory,
             String finalAssistantMessage,
             StringBuilder assistantMessageBuilder,
-            ApiRequestResult result)
-            throws Exception {
+            ApiRequestResult result) {
         List<AssistantMessageContent> contentBlocks =
                 messageParser.parseAssistantMessage(finalAssistantMessage);
         boolean hasTruncatedToolUse =
@@ -639,14 +571,24 @@ public final class TaskV2ApiCallHandler {
         }
     }
 
-    private boolean autoRetryDispatched;
-
-    private void handleApiRequestError(Exception streamError, int lastApiReqIndex)
-            throws Exception {
-        autoRetryDispatched = false;
-
+    private ApiRequestResult handleApiRequestError(Exception streamError, int lastApiReqIndex) {
         if (taskState.isAbandoned()) {
-            throw streamError;
+            return new ApiRequestResult(new ExistState.Abort());
+        }
+
+        boolean isContextWindowExceededError =
+                ContextErrorHandling.checkContextWindowExceededError(streamError);
+
+        if (isContextWindowExceededError && !taskState.isDidAutomaticallyRetryFailedApiRequest()) {
+            try {
+                contextWindowHandler.handleContextWindowExceededError();
+                return new ApiRequestResult(new ExistState.ContextWindowExceeded());
+            } catch (Exception retryError) {
+                log.error(
+                        "Failed to handle context window exceeded error: {}",
+                        retryError.getMessage(),
+                        retryError);
+            }
         }
 
         ProviderInfo providerInfo = getCurrentProviderInfo.get();
@@ -658,6 +600,22 @@ public final class TaskV2ApiCallHandler {
         }
         if (errorMessage == null) {
             errorMessage = "Streaming failed";
+        }
+
+        String finalErrorMessage = errorMessage;
+        if (isContextWindowExceededError) {
+            List<MessageParam> truncatedConversationHistory =
+                    this.contextManager.getTruncatedMessages(
+                            this.messageStateHandler.getApiConversationHistory(),
+                            this.taskState.getConversationHistoryDeletedRange());
+
+            // If the conversation has more than 3 messages, we can truncate again. If not,
+            // then the conversation is bricked.
+            if (truncatedConversationHistory.size() > 3) {
+                finalErrorMessage =
+                        "Context window exceeded. Click retry to truncate the conversation and try again.";
+                this.taskState.setDidAutomaticallyRetryFailedApiRequest(false);
+            }
         }
 
         log.error(
@@ -689,44 +647,7 @@ public final class TaskV2ApiCallHandler {
             }
         }
 
-        if (taskState.getAutoRetryAttempts() < 3) {
-            taskState.setAutoRetryAttempts(taskState.getAutoRetryAttempts() + 1);
-
-            int delayMs = 2000 * (1 << (taskState.getAutoRetryAttempts() - 1));
-
-            try {
-                Map<String, Object> retryInfoMap = new HashMap<>();
-                retryInfoMap.put("attempt", taskState.getAutoRetryAttempts());
-                retryInfoMap.put("maxAttempts", 3);
-                retryInfoMap.put("delaySeconds", delayMs / 1000);
-                sayAskHandler.say(
-                        ClineSay.ERROR_RETRY,
-                        JsonUtils.toJsonString(retryInfoMap),
-                        null,
-                        null,
-                        null);
-            } catch (Exception sayError) {
-                log.error("Failed to say error retry: {}", sayError.getMessage(), sayError);
-            }
-
-            autoRetryDispatched = true;
-            taskDispatch.dispatch(new ApiCallingRetryEvent(taskId, delayMs, errorMessage));
-            throw new RuntimeException("Auto-retry scheduled", streamError);
-        }
-
-        try {
-            Map<String, Object> retryInfoMap = new HashMap<>();
-            retryInfoMap.put("attempt", 3);
-            retryInfoMap.put("maxAttempts", 3);
-            retryInfoMap.put("delaySeconds", 0);
-            retryInfoMap.put("failed", true);
-            sayAskHandler.say(
-                    ClineSay.ERROR_RETRY, JsonUtils.toJsonString(retryInfoMap), null, null, null);
-        } catch (Exception sayError) {
-            log.error("Failed to say error retry: {}", sayError.getMessage(), sayError);
-        }
-
-        throw new RuntimeException("Streaming failed: " + errorMessage, streamError);
+        return new ApiRequestResult(new ExistState.Failed(finalErrorMessage, streamError));
     }
 
     private Flux<ApiChunk> getApiChunkFlux(
@@ -746,143 +667,8 @@ public final class TaskV2ApiCallHandler {
                                 taskState.setWaitingForFirstChunk(false);
                             }
                         })
-                .onErrorResume(
-                        throwable -> {
-                            taskState.setWaitingForFirstChunk(false);
-                            if (isFirstChunk.get()) {
-                                return handleApiReqException(throwable, systemPrompt);
-                            }
-                            return Flux.empty();
-                        })
                 .doOnComplete(() -> taskState.setWaitingForFirstChunk(false))
                 .doOnCancel(() -> taskState.setWaitingForFirstChunk(false));
-    }
-
-    private Flux<ApiChunk> handleApiReqException(Throwable e, String systemPrompt) {
-        boolean isContextWindowExceededError =
-                ContextErrorHandling.checkContextWindowExceededError(e);
-        ProviderInfo providerInfo = getCurrentProviderInfo.get();
-
-        String errorMessage = e.getMessage();
-        if (errorMessage == null) {
-            Throwable cause = e.getCause() != null ? e.getCause() : e;
-            errorMessage = cause.getMessage();
-        }
-        if (errorMessage == null) {
-            errorMessage = "Unknown error";
-        }
-
-        log.error(
-                "[ApiRequestError] ulid={}, providerId={}, modelId={}, requestId={}, error={}",
-                ulid,
-                providerInfo.getProviderId(),
-                providerInfo.getModel(),
-                apiHandler.getLastRequestId(),
-                errorMessage,
-                e);
-
-        telemetryService.captureProviderApiError(
-                ulid,
-                providerInfo.getModel(),
-                errorMessage.length() > 500 ? errorMessage.substring(0, 500) : errorMessage,
-                providerInfo.getProviderId(),
-                null,
-                apiHandler.getLastRequestId());
-
-        if (isContextWindowExceededError && !taskState.isDidAutomaticallyRetryFailedApiRequest()) {
-            try {
-                contextWindowHandler.handleContextWindowExceededError();
-                taskState.setDidAutomaticallyRetryFailedApiRequest(true);
-
-                List<MessageParam> truncatedMessages =
-                        contextManager.getTruncatedMessages(
-                                messageStateHandler.getApiConversationHistory(),
-                                taskState.getConversationHistoryDeletedRange());
-
-                return getApiChunkFlux(systemPrompt, truncatedMessages);
-            } catch (Exception retryError) {
-                log.error(
-                        "Failed to handle context window exceeded error: {}",
-                        retryError.getMessage(),
-                        retryError);
-            }
-        }
-
-        String finalErrorMessage = errorMessage;
-        if (isContextWindowExceededError) {
-            List<MessageParam> truncatedConversationHistory =
-                    contextManager.getTruncatedMessages(
-                            messageStateHandler.getApiConversationHistory(),
-                            taskState.getConversationHistoryDeletedRange());
-
-            if (truncatedConversationHistory.size() > 3) {
-                finalErrorMessage =
-                        "Context window exceeded. Click retry to truncate the conversation and try again.";
-                taskState.setDidAutomaticallyRetryFailedApiRequest(false);
-            }
-        }
-
-        String streamingFailedMessage = finalErrorMessage;
-
-        messagePresenterHandler.updateApiReqMessage(
-                null,
-                null,
-                null,
-                null,
-                null,
-                ClineApiReqCancelReason.STREAMING_FAILED,
-                streamingFailedMessage);
-
-        if (taskState.getAutoRetryAttempts() < 3) {
-            taskState.setAutoRetryAttempts(taskState.getAutoRetryAttempts() + 1);
-
-            int delayMs = 2000 * (1 << (taskState.getAutoRetryAttempts() - 1));
-
-            try {
-                messageStateHandler.saveClineMessagesAndUpdateHistory();
-            } catch (Exception saveError) {
-                log.error("Failed to save messages: {}", saveError.getMessage(), saveError);
-            }
-            if (postStateToWebview != null) {
-                postStateToWebview.run();
-            }
-
-            try {
-                Map<String, Object> retryInfoMap = new HashMap<>();
-                retryInfoMap.put("attempt", taskState.getAutoRetryAttempts());
-                retryInfoMap.put("maxAttempts", 3);
-                retryInfoMap.put("delaySeconds", delayMs / 1000);
-                sayAskHandler.say(
-                        ClineSay.ERROR_RETRY,
-                        JsonUtils.toJsonString(retryInfoMap),
-                        null,
-                        null,
-                        null);
-            } catch (Exception sayError) {
-                log.error("Failed to say error retry: {}", sayError.getMessage(), sayError);
-            }
-
-            autoRetryDispatched = true;
-            taskDispatch.dispatch(
-                    new ApiCallingRetryEvent(taskId, delayMs, streamingFailedMessage));
-            return Flux.error(new RuntimeException("Auto-retry scheduled"));
-        }
-
-        try {
-            Map<String, Object> retryInfoMap = new HashMap<>();
-            retryInfoMap.put("attempt", 3);
-            retryInfoMap.put("maxAttempts", 3);
-            retryInfoMap.put("delaySeconds", 0);
-            retryInfoMap.put("failed", true);
-            sayAskHandler.say(
-                    ClineSay.ERROR_RETRY, JsonUtils.toJsonString(retryInfoMap), null, null, null);
-        } catch (Exception sayError) {
-            log.error("Failed to say error retry: {}", sayError.getMessage(), sayError);
-        }
-
-        sayAskHandler.ask(ClineAsk.API_REQ_FAILED, streamingFailedMessage);
-        taskDispatch.dispatch(new ApiFailedEvent(taskId, e));
-        return Flux.error(new RuntimeException("API request failed"));
     }
 
     private void processApiChunk(
@@ -921,6 +707,7 @@ public final class TaskV2ApiCallHandler {
                 Object reasoningDetails = chunk.reasoningDetails();
                 if (reasoningDetails != null) {
                     if (reasoningDetails instanceof List) {
+                        @SuppressWarnings("unchecked")
                         List<Object> detailsList = (List<Object>) reasoningDetails;
                         reasoningDetailsList.addAll(detailsList);
                     } else {

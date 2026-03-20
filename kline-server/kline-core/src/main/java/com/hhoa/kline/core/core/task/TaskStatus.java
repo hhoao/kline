@@ -13,10 +13,6 @@ public enum TaskStatus {
 
     ABORT,
 
-    API_CALLING_FAILED,
-
-    API_CALLING_RETRY,
-
     START_TASK,
     WAITING_USER_ASK_RESPONSE
 }

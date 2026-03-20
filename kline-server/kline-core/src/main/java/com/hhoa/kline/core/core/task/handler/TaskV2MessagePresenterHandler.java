@@ -503,8 +503,8 @@ public final class TaskV2MessagePresenterHandler {
     }
 
     /**
-     * 工具 ask 响应后，续延完成，继续处理剩余内容块。 由 ToolAskRespondedTransition 在续延完成后调用。 注意：pushToolResult 已由
-     * ToolExecutor 中的续延包装器处理，此处不需要再 push。
+     * 工具 ask 响应后，续延完成，继续处理剩余内容块。 由 ApiCallingToolAskRespondedTransition 在续延完成后调用。 注意：pushToolResult
+     * 已由 ToolExecutor 中的续延包装器处理，此处不需要再 push。
      *
      * @return 如果所有块处理完毕返回 true；如果又遇到 PendingAsk 返回 false
      */

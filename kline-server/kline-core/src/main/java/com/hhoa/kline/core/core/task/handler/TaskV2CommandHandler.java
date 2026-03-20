@@ -12,11 +12,8 @@ import com.hhoa.kline.core.core.shared.TerminalExecutionMode;
 import com.hhoa.kline.core.core.storage.StateManager;
 import com.hhoa.kline.core.core.task.ClineMessage;
 import com.hhoa.kline.core.core.task.MessageStateHandler;
-import com.hhoa.kline.core.core.task.TaskState;
 import com.hhoa.kline.core.core.task.deps.ActiveBackgroundCommand;
 import com.hhoa.kline.core.core.task.tools.types.ToolContext;
-import lombok.extern.slf4j.Slf4j;
-
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,6 +27,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public final class TaskV2CommandHandler {
@@ -296,8 +294,7 @@ public final class TaskV2CommandHandler {
                                         : "");
                 er.userRejected = true;
             } else if (completed.get()) {
-                er.result =
-                        "Command executed." + (!result.isEmpty() ? "\nOutput:\n" + result : "");
+                er.result = "Command executed." + (!result.isEmpty() ? "\nOutput:\n" + result : "");
             } else {
                 er.result =
                         "Command is still running in the user's terminal."

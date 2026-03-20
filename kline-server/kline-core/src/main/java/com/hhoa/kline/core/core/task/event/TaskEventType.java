@@ -23,8 +23,6 @@ public enum TaskEventType {
 
     TASK_COMPLETE,
 
-    ASK_USER_FOR_RESET_RETRY_TIMES,
-
     RETRY,
 
     NO_RETRY,

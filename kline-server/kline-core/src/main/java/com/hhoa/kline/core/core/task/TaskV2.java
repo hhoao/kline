@@ -39,31 +39,12 @@ import com.hhoa.kline.core.core.task.statemachine.Recoverable;
 import com.hhoa.kline.core.core.task.statemachine.StateMachine;
 import com.hhoa.kline.core.core.task.statemachine.StateMachineFactory;
 import com.hhoa.kline.core.core.task.tools.ToolExecutor;
-import com.hhoa.kline.core.core.task.transition.AbortTransition;
-import com.hhoa.kline.core.core.task.transition.ApiCallingFailedTransition;
-import com.hhoa.kline.core.core.task.transition.ApiCompletedTransition;
-import com.hhoa.kline.core.core.task.transition.ApiRetryTransition;
-import com.hhoa.kline.core.core.task.transition.AskUserForResetRetryTimesTransition;
-import com.hhoa.kline.core.core.task.transition.ContextReadyTransition;
-import com.hhoa.kline.core.core.task.transition.NoRetryTransition;
-import com.hhoa.kline.core.core.task.transition.NoopTransition;
-import com.hhoa.kline.core.core.task.transition.PrepareContextTransition;
-import com.hhoa.kline.core.core.task.transition.PrepareFailedTransition;
-import com.hhoa.kline.core.core.task.transition.ResumeTaskTransition;
-import com.hhoa.kline.core.core.task.transition.RetryTransition;
-import com.hhoa.kline.core.core.task.transition.StartTaskTransition;
-import com.hhoa.kline.core.core.task.transition.TaskCompleteTransition;
-import com.hhoa.kline.core.core.task.transition.ToolAskRespondedTransition;
-import com.hhoa.kline.core.core.task.transition.UserRespondedTransition;
-import com.hhoa.kline.core.core.task.transition.WaitingUserAskResponseTransition;
 import com.hhoa.kline.core.core.workspace.WorkspaceRootManager;
 import com.hhoa.kline.core.subscription.DefaultSubscriptionManager;
 import com.hhoa.kline.core.subscription.message.WindowShowMessageRequestMessage;
 import java.util.ArrayDeque;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Queue;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
@@ -85,165 +66,7 @@ import lombok.extern.slf4j.Slf4j;
 public class TaskV2 implements Recoverable<TaskState> {
 
     private static final StateMachineFactory<TaskV2, TaskStatus, TaskEventType, TaskEvent>
-            STATE_MACHINE_FACTORY =
-                    new StateMachineFactory<TaskV2, TaskStatus, TaskEventType, TaskEvent>(
-                                    TaskStatus.NEW)
-                            .addTransition(
-                                    TaskStatus.WAITING_USER_ASK_RESPONSE,
-                                    Set.of(TaskStatus.PREPARE_CONTEXT),
-                                    TaskEventType.USER_RESPONDED,
-                                    new UserRespondedTransition())
-                            .addTransition(
-                                    TaskStatus.NEW,
-                                    TaskStatus.START_TASK,
-                                    TaskEventType.START_TASK,
-                                    new StartTaskTransition())
-                            .addTransition(
-                                    TaskStatus.START_TASK,
-                                    TaskStatus.PREPARE_CONTEXT,
-                                    TaskEventType.PREPARE_CONTEXT,
-                                    new PrepareContextTransition())
-                            .addTransition(
-                                    TaskStatus.PREPARE_CONTEXT,
-                                    TaskStatus.CALLING_API,
-                                    TaskEventType.CONTEXT_READY,
-                                    new ContextReadyTransition())
-                            .addTransition(
-                                    TaskStatus.PREPARE_CONTEXT,
-                                    TaskStatus.WAITING_USER_ASK_RESPONSE,
-                                    TaskEventType.MAX_MISTAKE_LIMIT_REACHED,
-                                    new WaitingUserAskResponseTransition())
-                            .addTransition(
-                                    TaskStatus.PREPARE_CONTEXT,
-                                    TaskStatus.ABORT,
-                                    TaskEventType.PREPARE_FAILED,
-                                    new PrepareFailedTransition())
-                            .addTransition(
-                                    TaskStatus.PREPARE_CONTEXT,
-                                    TaskStatus.ABORT,
-                                    TaskEventType.ABORT,
-                                    new AbortTransition())
-                            .addTransition(
-                                    TaskStatus.CALLING_API,
-                                    TaskStatus.API_CALLING_FAILED,
-                                    TaskEventType.API_CALLING_FAILED,
-                                    new ApiCallingFailedTransition())
-                            .addTransition(
-                                    TaskStatus.CALLING_API,
-                                    TaskStatus.API_CALLING_RETRY,
-                                    TaskEventType.API_CALLING_RETRY,
-                                    new ApiRetryTransition())
-                            .addTransition(
-                                    TaskStatus.CALLING_API,
-                                    TaskStatus.PREPARE_CONTEXT,
-                                    TaskEventType.RETRY,
-                                    new RetryTransition())
-                            .addTransition(
-                                    TaskStatus.CALLING_API,
-                                    TaskStatus.ABORT,
-                                    TaskEventType.ABORT,
-                                    new AbortTransition())
-                            .addTransition(
-                                    TaskStatus.CALLING_API,
-                                    TaskStatus.API_COMPLETED,
-                                    TaskEventType.API_COMPLETED,
-                                    new ApiCompletedTransition())
-                            .addTransition(
-                                    TaskStatus.CALLING_API,
-                                    TaskStatus.PREPARE_CONTEXT,
-                                    TaskEventType.RESUME_TASK,
-                                    new ResumeTaskTransition())
-                            .addTransition(
-                                    TaskStatus.CALLING_API,
-                                    TaskStatus.CALLING_API,
-                                    TaskEventType.USER_RESPONDED,
-                                    new ToolAskRespondedTransition())
-                            .addTransition(
-                                    TaskStatus.CALLING_API,
-                                    TaskStatus.ABORT,
-                                    TaskEventType.ABORT,
-                                    new AbortTransition())
-                            .addTransition(
-                                    TaskStatus.API_COMPLETED,
-                                    TaskStatus.PREPARE_CONTEXT,
-                                    TaskEventType.CONTINUE_NEXT_TURN,
-                                    new PrepareContextTransition())
-                            .addTransition(
-                                    TaskStatus.API_COMPLETED,
-                                    TaskStatus.TASK_COMPLETE,
-                                    TaskEventType.TASK_COMPLETE,
-                                    new TaskCompleteTransition())
-                            .addTransition(
-                                    TaskStatus.API_COMPLETED,
-                                    TaskStatus.ABORT,
-                                    TaskEventType.ABORT,
-                                    new AbortTransition())
-                            .addTransition(
-                                    TaskStatus.API_CALLING_RETRY,
-                                    TaskStatus.CALLING_API,
-                                    TaskEventType.CONTEXT_READY,
-                                    new ContextReadyTransition())
-                            .addTransition(
-                                    TaskStatus.API_CALLING_RETRY,
-                                    TaskStatus.ABORT,
-                                    TaskEventType.ABORT,
-                                    new AbortTransition())
-                            .addTransition(
-                                    TaskStatus.API_CALLING_FAILED,
-                                    TaskStatus.WAITING_USER_ASK_RESPONSE,
-                                    TaskEventType.ASK_USER_FOR_RESET_RETRY_TIMES,
-                                    new AskUserForResetRetryTimesTransition())
-                            .addTransition(
-                                    TaskStatus.API_CALLING_FAILED,
-                                    TaskStatus.PREPARE_CONTEXT,
-                                    TaskEventType.RETRY,
-                                    new RetryTransition())
-                            .addTransition(
-                                    TaskStatus.API_CALLING_FAILED,
-                                    TaskStatus.ABORT,
-                                    TaskEventType.ABORT,
-                                    new AbortTransition())
-                            .addTransition(
-                                    TaskStatus.WAITING_USER_ASK_RESPONSE,
-                                    EnumSet.of(
-                                            TaskStatus.PREPARE_CONTEXT,
-                                            TaskStatus.CALLING_API,
-                                            TaskStatus.WAITING_USER_ASK_RESPONSE,
-                                            TaskStatus.TASK_COMPLETE,
-                                            TaskStatus.ABORT),
-                                    TaskEventType.USER_RESPONDED,
-                                    new UserRespondedTransition())
-                            .addTransition(
-                                    TaskStatus.WAITING_USER_ASK_RESPONSE,
-                                    TaskStatus.PREPARE_CONTEXT,
-                                    TaskEventType.RETRY,
-                                    new RetryTransition())
-                            .addTransition(
-                                    TaskStatus.WAITING_USER_ASK_RESPONSE,
-                                    TaskStatus.TASK_COMPLETE,
-                                    TaskEventType.NO_RETRY,
-                                    new NoRetryTransition())
-                            .addTransition(
-                                    TaskStatus.WAITING_USER_ASK_RESPONSE,
-                                    TaskStatus.ABORT,
-                                    TaskEventType.ABORT,
-                                    new AbortTransition())
-                            .addTransition(
-                                    TaskStatus.ABORT,
-                                    TaskStatus.PREPARE_CONTEXT,
-                                    TaskEventType.RESTORE_TASK,
-                                    new PrepareContextTransition())
-                            .addTransition(
-                                    TaskStatus.TASK_COMPLETE,
-                                    TaskStatus.TASK_COMPLETE,
-                                    TaskEventType.ABORT,
-                                    new NoopTransition())
-                            .addTransition(
-                                    TaskStatus.ABORT,
-                                    TaskStatus.ABORT,
-                                    TaskEventType.ABORT,
-                                    new NoopTransition())
-                            .installTopology();
+            STATE_MACHINE_FACTORY = TaskV2StateMachineTopology.installedFactory();
 
     private final StateMachine<TaskStatus, TaskEventType, TaskEvent> stateMachine;
     @Getter private final TaskState taskState;
