@@ -7,9 +7,8 @@ import com.hhoa.kline.core.core.task.AskPending;
 import com.hhoa.kline.core.core.task.ExistState;
 import com.hhoa.kline.core.core.task.TaskV2;
 import com.hhoa.kline.core.core.task.event.AbortTaskEvent;
-import com.hhoa.kline.core.core.task.event.ApiCallFailedEvent;
 import com.hhoa.kline.core.core.task.event.ApiCallingRetryEvent;
-import com.hhoa.kline.core.core.task.event.ContextReadyEvent;
+import com.hhoa.kline.core.core.task.event.RetryPrepareContextEvent;
 import com.hhoa.kline.core.core.task.event.TaskEvent;
 import com.hhoa.kline.core.core.task.statemachine.SingleArcTransition;
 import com.hhoa.kline.core.core.task.tools.types.PendingAskToken.DefaultPendingAskToken;
@@ -24,7 +23,7 @@ public class ApiCallingTransition implements SingleArcTransition<TaskV2, TaskEve
                     if (result.getExistState() instanceof ExistState.Abort) {
                         operand.handle(new AbortTaskEvent(operand.getTaskId()));
                     } else if (result.getExistState() instanceof ExistState.ContextWindowExceeded) {
-                        operand.handle(new ContextReadyEvent(operand.getTaskId()));
+                        operand.handle(new RetryPrepareContextEvent(operand.getTaskId()));
                     } else if (result.getExistState()
                             instanceof ExistState.Failed(String message, Throwable throwable)) {
                         AskPending tryRetryAsk = operand.getApiCallHandler().tryRetryAsk(message);
@@ -41,10 +40,6 @@ public class ApiCallingTransition implements SingleArcTransition<TaskV2, TaskEve
                             operand.getTaskState()
                                     .getPendingAskTokens()
                                     .put(tryRetryAsk.getPendingId(), pendingAskToken);
-
-                            operand.handle(
-                                    new ApiCallFailedEvent(
-                                            operand.getTaskId(), throwable, message));
                         }
                     }
                     operand.getTaskState().setApiRequestResult(result);

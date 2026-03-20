@@ -7,11 +7,10 @@ import com.hhoa.kline.core.core.task.transition.AbortTransition;
 import com.hhoa.kline.core.core.task.transition.ApiCallingCompletedTransition;
 import com.hhoa.kline.core.core.task.transition.ApiCallingToolAskRespondedTransition;
 import com.hhoa.kline.core.core.task.transition.ApiCallingTransition;
-import com.hhoa.kline.core.core.task.transition.NoRetryTransition;
 import com.hhoa.kline.core.core.task.transition.NoopTransition;
 import com.hhoa.kline.core.core.task.transition.PrepareContextTransition;
 import com.hhoa.kline.core.core.task.transition.PrepareFailedTransition;
-import com.hhoa.kline.core.core.task.transition.RetryTransition;
+import com.hhoa.kline.core.core.task.transition.ResumeTaskTransition;
 import com.hhoa.kline.core.core.task.transition.StartTaskTransition;
 import com.hhoa.kline.core.core.task.transition.TaskCompleteTransition;
 import com.hhoa.kline.core.core.task.transition.UserRespondedTransition;
@@ -39,10 +38,15 @@ final class TaskV2StateMachineTopology {
     private static StateMachineFactory<TaskV2, TaskStatus, TaskEventType, TaskEvent> fromNew(
             StateMachineFactory<TaskV2, TaskStatus, TaskEventType, TaskEvent> f) {
         return f.addTransition(
-                TaskStatus.NEW,
-                TaskStatus.START_TASK,
-                TaskEventType.START_TASK,
-                new StartTaskTransition());
+                        TaskStatus.NEW,
+                        TaskStatus.START_TASK,
+                        TaskEventType.START_TASK,
+                        new StartTaskTransition())
+                .addTransition(
+                        TaskStatus.NEW,
+                        TaskStatus.WAITING_USER_ASK_RESPONSE,
+                        TaskEventType.RESUME_TASK,
+                        new ResumeTaskTransition());
     }
 
     private static StateMachineFactory<TaskV2, TaskStatus, TaskEventType, TaskEvent> fromStartTask(
@@ -84,8 +88,8 @@ final class TaskV2StateMachineTopology {
         return f.addTransition(
                         TaskStatus.CALLING_API,
                         TaskStatus.PREPARE_CONTEXT,
-                        TaskEventType.RETRY,
-                        new RetryTransition())
+                        TaskEventType.RETRY_PREPARE_CONTEXT,
+                        new PrepareContextTransition())
                 .addTransition(
                         TaskStatus.CALLING_API,
                         TaskStatus.ABORT,
@@ -147,16 +151,6 @@ final class TaskV2StateMachineTopology {
                         new UserRespondedTransition())
                 .addTransition(
                         TaskStatus.WAITING_USER_ASK_RESPONSE,
-                        TaskStatus.PREPARE_CONTEXT,
-                        TaskEventType.RETRY,
-                        new RetryTransition())
-                .addTransition(
-                        TaskStatus.WAITING_USER_ASK_RESPONSE,
-                        TaskStatus.TASK_COMPLETE,
-                        TaskEventType.NO_RETRY,
-                        new NoRetryTransition())
-                .addTransition(
-                        TaskStatus.WAITING_USER_ASK_RESPONSE,
                         TaskStatus.ABORT,
                         TaskEventType.ABORT,
                         new AbortTransition());
@@ -179,9 +173,14 @@ final class TaskV2StateMachineTopology {
     private static StateMachineFactory<TaskV2, TaskStatus, TaskEventType, TaskEvent>
             fromTaskComplete(StateMachineFactory<TaskV2, TaskStatus, TaskEventType, TaskEvent> f) {
         return f.addTransition(
-                TaskStatus.TASK_COMPLETE,
-                TaskStatus.TASK_COMPLETE,
-                TaskEventType.ABORT,
-                new NoopTransition());
+                        TaskStatus.TASK_COMPLETE,
+                        TaskStatus.START_TASK,
+                        TaskEventType.START_TASK,
+                        new StartTaskTransition())
+                .addTransition(
+                        TaskStatus.TASK_COMPLETE,
+                        TaskStatus.TASK_COMPLETE,
+                        TaskEventType.ABORT,
+                        new NoopTransition());
     }
 }

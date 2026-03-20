@@ -11,8 +11,6 @@ public enum TaskEventType {
 
     PREPARE_FAILED,
 
-    WAITING_API_CALL_COMPLETED,
-
     API_COMPLETED,
 
     API_CALLING_FAILED,
@@ -23,9 +21,7 @@ public enum TaskEventType {
 
     TASK_COMPLETE,
 
-    RETRY,
-
-    NO_RETRY,
+    RETRY_PREPARE_CONTEXT,
 
     ABORT,
 

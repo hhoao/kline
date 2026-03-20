@@ -329,15 +329,7 @@ public class TaskV2 implements Recoverable<TaskState> {
                         contextManager, this.messageStateHandler, this.taskState, sayAskHandler);
         this.resumeHandler =
                 new TaskV2ResumeHandler(
-                        responseFormatter,
-                        stateManager,
-                        fileContextTracker,
-                        taskId,
-                        cwd,
-                        taskState,
-                        messageStateHandler,
-                        this::getCheckpointManager,
-                        sayAskHandler);
+                        stateManager, taskId, taskState, messageStateHandler, sayAskHandler);
         this.contextPrepareHandler =
                 new TaskV2ContextPrepareHandler(
                         stateManager,
