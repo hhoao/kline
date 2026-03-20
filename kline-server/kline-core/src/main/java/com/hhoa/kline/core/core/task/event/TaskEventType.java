@@ -30,4 +30,6 @@ public enum TaskEventType {
     API_CALLING_RETRY,
 
     ASK_USER,
+
+    STREAMING_COMPLETE,
 }

@@ -33,6 +33,7 @@ import com.hhoa.kline.core.core.task.ContextFactory;
 import com.hhoa.kline.core.core.task.TaskLockUtils;
 import com.hhoa.kline.core.core.task.TaskParams;
 import com.hhoa.kline.core.core.task.TaskV2;
+import com.hhoa.kline.core.core.task.TaskV2Factory;
 import com.hhoa.kline.core.core.task.event.AbortTaskEvent;
 import com.hhoa.kline.core.core.task.event.ResumeTaskEvent;
 import com.hhoa.kline.core.core.task.event.StartTaskEvent;
@@ -217,7 +218,7 @@ public class DefaultTaskManager implements TaskManager {
                             .taskLockAcquired(taskLockAcquired);
 
             TaskParams taskParams = paramsBuilder.build();
-            TaskV2 task = new TaskV2(taskParams);
+            TaskV2 task = TaskV2Factory.create(taskParams);
             tasks.put(taskId, task);
 
             if (taskParams.getHistoryItem() != null) {

@@ -8,38 +8,45 @@ import com.hhoa.kline.core.core.task.event.PrepareFailedEvent;
 import com.hhoa.kline.core.core.task.event.TaskEvent;
 import com.hhoa.kline.core.core.task.handler.PrepareContextResult;
 import com.hhoa.kline.core.core.task.statemachine.SingleArcTransition;
+import java.util.concurrent.CompletableFuture;
 
 public class PrepareContextTransition implements SingleArcTransition<TaskV2, TaskEvent> {
 
     @Override
     public void transition(TaskV2 operand, TaskEvent event) {
-        try {
-            PrepareContextResult result = operand.getContextPrepareHandler().doPrepareContext();
+        CompletableFuture.runAsync(
+                () -> {
+                    try {
+                        PrepareContextResult result =
+                                operand.getContextPrepareHandler().doPrepareContext();
 
-            switch (result) {
-                case PrepareContextResult.Success ignored ->
-                        operand.handle(new ContextReadyEvent(operand.getTaskId()));
-                case PrepareContextResult.Failed ignored ->
-                        operand.handle(
-                                new PrepareFailedEvent(
-                                        operand.getTaskId(),
-                                        new Exception("Prepare context failed")));
-                case PrepareContextResult.MaxMistakeLimitReached(String message) -> {
-                    operand.handle(
-                            new AskUserEvent(
-                                    operand.getTaskId(), ClineAsk.MISTAKE_LIMIT_REACHED, message));
-                }
-                case PrepareContextResult.AutoApprovalMaxReqReached(String message) -> {
-                    operand.handle(
-                            new AskUserEvent(
-                                    operand.getTaskId(),
-                                    ClineAsk.AUTO_APPROVAL_MAX_REQ_REACHED,
-                                    message));
-                }
-                default -> {}
-            }
-        } catch (Throwable t) {
-            operand.handle(new PrepareFailedEvent(operand.getTaskId(), t));
-        }
+                        switch (result) {
+                            case PrepareContextResult.Success ignored ->
+                                    operand.handle(new ContextReadyEvent(operand.getTaskId()));
+                            case PrepareContextResult.Failed ignored ->
+                                    operand.handle(
+                                            new PrepareFailedEvent(
+                                                    operand.getTaskId(),
+                                                    new Exception("Prepare context failed")));
+                            case PrepareContextResult.MaxMistakeLimitReached(String message) -> {
+                                operand.handle(
+                                        new AskUserEvent(
+                                                operand.getTaskId(),
+                                                ClineAsk.MISTAKE_LIMIT_REACHED,
+                                                message));
+                            }
+                            case PrepareContextResult.AutoApprovalMaxReqReached(String message) -> {
+                                operand.handle(
+                                        new AskUserEvent(
+                                                operand.getTaskId(),
+                                                ClineAsk.AUTO_APPROVAL_MAX_REQ_REACHED,
+                                                message));
+                            }
+                            default -> {}
+                        }
+                    } catch (Throwable t) {
+                        operand.handle(new PrepareFailedEvent(operand.getTaskId(), t));
+                    }
+                });
     }
 }

@@ -42,12 +42,12 @@ import com.hhoa.kline.core.core.task.tools.ToolExecutor;
 import com.hhoa.kline.core.core.workspace.WorkspaceRootManager;
 import com.hhoa.kline.core.subscription.DefaultSubscriptionManager;
 import com.hhoa.kline.core.subscription.message.WindowShowMessageRequestMessage;
-import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -56,71 +56,93 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
-import lombok.Data;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
-/** 基于事件与状态机的任务实现 */
 @Slf4j
-@Data
+@Getter
 public class TaskV2 implements Recoverable<TaskState> {
 
     private static final StateMachineFactory<TaskV2, TaskStatus, TaskEventType, TaskEvent>
             STATE_MACHINE_FACTORY = TaskV2StateMachineTopology.installedFactory();
 
-    private final StateMachine<TaskStatus, TaskEventType, TaskEvent> stateMachine;
-    @Getter private final TaskState taskState;
-    @Getter private final MessageStateHandler messageStateHandler;
-    @Getter private final String taskId;
-    @Getter private final String cwd;
-    @Getter private final String ulid;
-    @Getter private final long taskInitializationStartTime;
-    private final ToolExecutor toolExecutor;
-    private final AtomicLong tsGenerator = new AtomicLong(System.currentTimeMillis());
+    // ---- core identity (immutable) ----
+    private final String taskId;
+    private final String cwd;
+    private final String ulid;
+    private final long taskInitializationStartTime;
+
+    // ---- event loop (immutable) ----
+    private final Queue<TaskEvent> eventQueue = new ConcurrentLinkedQueue<>();
+    private final AtomicBoolean eventLoopScheduled = new AtomicBoolean(false);
+    private final ExecutorService eventLoopExecutor;
+
+    // ---- task state (immutable refs) ----
+    private final TaskState taskState;
+    private final MessageStateHandler messageStateHandler;
+
+    // ---- external dependencies from params (immutable refs) ----
     private final ApiHandler apiHandler;
-    private final SystemPromptService systemPromptService;
-    private final ContextManager contextManager;
-    private final ResponseFormatter responseFormatter;
-    private final BlockingQueue<AssistantMessageUpdate> messageQueue = new LinkedBlockingQueue<>();
+    private final StateManager stateManager;
+    private final WorkspaceRootManager workspaceManager;
     private final IMcpHub mcpHub;
     private final Runnable postStateToWebview;
     private final Runnable cancelTask;
     private final BiConsumer<Boolean, String> updateBackgroundCommandState;
     private final Supplier<Boolean> shouldShowBackgroundTerminalSuggestion;
-    private final StateManager stateManager;
-    private final WorkspaceRootManager workspaceManager;
+    private final ToolExecutor toolExecutor;
+    private final SystemPromptService systemPromptService;
+    private final ContextManager contextManager;
+    private final int askResponseTimeout;
+    private final ContextFactory contextFactory;
+
+    // ---- infrastructure (created during core init, immutable refs) ----
     private final DiffViewProvider diffViewProvider;
     private final ClineIgnoreController clineIgnoreController;
     private final FileContextTracker fileContextTracker;
     private final ModelContextTracker modelContextTracker;
     private final TelemetryService telemetryService;
-    private final ReentrantLock lock = new ReentrantLock();
     private final AssistantMessageParser messageParser;
-    private final int askResponseTimeout;
-    private final FocusChainManager focusChainManager;
-    private final TerminalManager terminalManager;
-    private final Queue<TaskEvent> eventQueue = new ArrayDeque<>();
-    private final AtomicBoolean eventLoopScheduled = new AtomicBoolean(false);
-    private final ExecutorService eventLoopExecutor;
-    private final TaskV2ResumeHandler resumeHandler;
-    private final TaskV2ContextPrepareHandler contextPrepareHandler;
-    private final TaskV2ContextWindowHandler contextWindowHandler;
-    private final TaskV2MessagePresenterHandler messagePresenterHandler;
-    private final TaskV2ApiCallHandler apiCallHandler;
-    private final TaskV2CommandHandler commandHandler;
-    private final TaskV2SayAskHandler sayAskHandler;
-    private final TaskV2AbortHandler abortHandler;
-    private final TaskV2StartTaskHandler startTaskHandler;
-    @Getter private ICheckpointManager checkpointManager;
+    private final ResponseFormatter responseFormatter;
+    private final AtomicLong tsGenerator = new AtomicLong(System.currentTimeMillis());
+    private final BlockingQueue<AssistantMessageUpdate> messageQueue = new LinkedBlockingQueue<>();
+    private final ReentrantLock lock = new ReentrantLock();
+
+    // ---- handlers (set by factory via initHandlers) ----
+    private TaskV2SayAskHandler sayAskHandler;
+    private TaskV2StartTaskHandler startTaskHandler;
+    private TaskV2ResumeHandler resumeHandler;
+    private TaskV2ContextPrepareHandler contextPrepareHandler;
+    private TaskV2ContextWindowHandler contextWindowHandler;
+    private TaskV2MessagePresenterHandler messagePresenterHandler;
+    private TaskV2ApiCallHandler apiCallHandler;
+    private TaskV2CommandHandler commandHandler;
+    private TaskV2AbortHandler abortHandler;
+    private FocusChainManager focusChainManager;
+    private TerminalManager terminalManager;
+
+    // ---- mutable runtime state ----
+    private StateMachine<TaskStatus, TaskEventType, TaskEvent> stateMachine;
+    private ICheckpointManager checkpointManager;
     private boolean taskLockAcquired;
     private ActiveBackgroundCommand activeBackgroundCommand;
     private NotificationService notificationService;
-    private ContextFactory contextFactory;
 
-    public TaskV2(TaskParams params) {
+    /**
+     * 第一阶段：核心字段与基础设施初始化。
+     *
+     * <p>仅由 {@link TaskV2Factory} 调用。
+     */
+    TaskV2(TaskParams params) {
         if (params == null) throw new IllegalArgumentException("params == null");
         if (params.getTaskId() == null) throw new IllegalArgumentException("taskId == null");
         if (params.getCwd() == null) throw new IllegalArgumentException("cwd == null");
+        if (params.getSystemPromptService() == null) {
+            throw new IllegalArgumentException("SystemPromptService is required");
+        }
+        if (params.getContextManager() == null) {
+            throw new IllegalArgumentException("ContextManager is required");
+        }
 
         this.taskInitializationStartTime = System.nanoTime() / 1_000_000;
         this.taskId = params.getTaskId();
@@ -135,53 +157,43 @@ public class TaskV2 implements Recoverable<TaskState> {
                         });
 
         this.stateManager = params.getStateManager();
+        this.workspaceManager = params.getWorkspaceManager();
+        this.contextFactory = params.getContextFactory();
+        this.toolExecutor = params.getToolExecutor();
+        this.apiHandler = params.getApiHandler();
+        this.systemPromptService = params.getSystemPromptService();
+        this.contextManager = params.getContextManager();
+        this.mcpHub = params.getMcpHub();
+        this.postStateToWebview = params.getPostStateToWebview();
+        this.cancelTask = params.getCancelTask();
+        this.updateBackgroundCommandState = params.getUpdateBackgroundCommandState();
+        this.shouldShowBackgroundTerminalSuggestion =
+                params.getShouldShowBackgroundTerminalSuggestion();
+        this.askResponseTimeout = params.getAskResponseTimeout();
 
         this.diffViewProvider = new DefaultDiffViewProvider();
+        this.diffViewProvider.setWorkspaceManager(this.workspaceManager);
         this.clineIgnoreController = new DefaultClineIgnoreController(this.cwd);
         this.fileContextTracker = new FileContextTracker(this.taskId, this.cwd, this.stateManager);
         this.modelContextTracker = new ModelContextTracker(this.taskId, this.stateManager);
         this.telemetryService = new DefaultTelemetryService();
         this.messageParser = new AssistantMessageParser();
-        this.workspaceManager = params.getWorkspaceManager();
-        this.contextFactory = params.getContextFactory();
+        this.responseFormatter = new ResponseFormatter();
 
         this.taskState = new TaskState();
-
         this.messageStateHandler =
                 new MessageStateHandler(
                         this.taskId,
                         this.ulid,
                         this.taskState,
                         this.stateManager,
-                        params.getWorkspaceManager());
-        this.toolExecutor = params.getToolExecutor();
-
-        this.apiHandler = params.getApiHandler();
-
-        this.systemPromptService = params.getSystemPromptService();
-        if (this.systemPromptService == null) {
-            throw new IllegalArgumentException("SystemPromptService is required");
-        }
-
-        this.contextManager = params.getContextManager();
-        if (this.contextManager == null) {
-            throw new IllegalArgumentException("ContextManager is required");
-        }
-
-        this.responseFormatter = new ResponseFormatter();
-
-        this.mcpHub = params.getMcpHub();
-
-        this.postStateToWebview = params.getPostStateToWebview();
-        this.cancelTask = params.getCancelTask();
-        this.updateBackgroundCommandState = params.getUpdateBackgroundCommandState();
-        this.shouldShowBackgroundTerminalSuggestion =
-                params.getShouldShowBackgroundTerminalSuggestion();
-
-        this.diffViewProvider.setWorkspaceManager(this.workspaceManager);
+                        this.workspaceManager);
 
         this.contextManager.initializeContextHistory();
+    }
 
+    /** 第二阶段：任务锁获取。 */
+    void acquireTaskLock(TaskParams params) {
         if (params.isTaskLockAcquired()) {
             this.taskLockAcquired = true;
         } else {
@@ -193,8 +205,9 @@ public class TaskV2 implements Recoverable<TaskState> {
             }
             this.taskLockAcquired = lockRes.acquired();
         }
+    }
 
-        this.askResponseTimeout = params.getAskResponseTimeout();
+    void initHandlers(TaskParams params) {
         this.sayAskHandler =
                 new TaskV2SayAskHandler(
                         this.tsGenerator,
@@ -202,12 +215,14 @@ public class TaskV2 implements Recoverable<TaskState> {
                         this.taskState,
                         this.postStateToWebview,
                         this.taskId);
+
         this.startTaskHandler =
                 new TaskV2StartTaskHandler(
                         this.messageStateHandler,
                         this.postStateToWebview,
                         this.sayAskHandler,
                         this.taskState);
+
         this.focusChainManager =
                 params.getFocusChainManagerFactory()
                         .createFocusChainManager(
@@ -228,108 +243,14 @@ public class TaskV2 implements Recoverable<TaskState> {
             this.terminalManager.setDefaultTerminalProfile(params.getDefaultTerminalProfile());
         }
 
-        boolean isMultiRootWorkspace =
-                this.workspaceManager != null && this.workspaceManager.getRoots().size() > 1;
-
-        if (!isMultiRootWorkspace) {
-            try {
-                TaskCheckpointManager.CheckpointManagerCallbacks callbacks =
-                        new TaskCheckpointManager.CheckpointManagerCallbacks() {
-                            @Override
-                            public CompletableFuture<Long> say(
-                                    ClineSay type,
-                                    String text,
-                                    List<String> images,
-                                    List<String> files,
-                                    Boolean partial) {
-                                sayAskHandler.say(type, text, images, files, partial);
-                                Long ts = taskState.getLastMessageTs();
-                                return CompletableFuture.completedFuture(ts);
-                            }
-
-                            @Override
-                            public Runnable getPostStateToWebview() {
-                                return TaskV2.this.postStateToWebview;
-                            }
-
-                            @Override
-                            public Runnable getCancelTask() {
-                                return TaskV2.this.cancelTask;
-                            }
-                        };
-
-                this.checkpointManager =
-                        CheckpointManagerFactory.buildCheckpointManager(
-                                this.taskId,
-                                this.messageStateHandler,
-                                this.fileContextTracker,
-                                this.diffViewProvider,
-                                this.taskState,
-                                this.workspaceManager,
-                                callbacks,
-                                this.taskState.getConversationHistoryDeletedRange(),
-                                this.taskState.getCheckpointManagerErrorMessage(),
-                                this.stateManager);
-
-                if (CheckpointManagerFactory.shouldUseMultiRoot(
-                        this.workspaceManager,
-                        this.stateManager.getSettings().isEnableCheckpointsSetting(),
-                        this.stateManager)) {
-                    this.checkpointManager
-                            .initialize()
-                            .exceptionally(
-                                    error -> {
-                                        log.error(
-                                                "Failed to initialize multi-root checkpoint manager: {}",
-                                                error.getMessage(),
-                                                error);
-                                        String errorMessage =
-                                                error.getMessage() != null
-                                                        ? error.getMessage()
-                                                        : "Unknown error";
-                                        this.taskState.setCheckpointManagerErrorMessage(
-                                                errorMessage);
-                                        return null;
-                                    });
-                }
-            } catch (Exception error) {
-                log.error("Failed to initialize checkpoint manager: {}", error.getMessage(), error);
-                if (this.stateManager.getSettings().isEnableCheckpointsSetting()) {
-                    String errorMessage =
-                            error.getMessage() != null ? error.getMessage() : "Unknown error";
-                    ShowMessageRequest request =
-                            ShowMessageRequest.builder()
-                                    .type(ShowMessageType.ERROR)
-                                    .message(
-                                            "Failed to initialize checkpoint manager: "
-                                                    + errorMessage)
-                                    .build();
-                    DefaultSubscriptionManager.getInstance()
-                            .send(new WindowShowMessageRequestMessage(request));
-                }
-                this.checkpointManager = null;
-            }
-        } else {
-            this.checkpointManager = null;
-        }
-
-        if (this.mcpHub != null) {
-            this.mcpHub.setNotificationCallback(
-                    (notification) -> {
-                        String serverName = notification.serverName();
-                        String message = notification.message();
-                        sayAskHandler.say(
-                                ClineSay.MCP_NOTIFICATION,
-                                String.format("[%s] %s", serverName, message));
-                    });
-        }
-
         this.contextWindowHandler =
                 new TaskV2ContextWindowHandler(
                         contextManager, this.messageStateHandler, this.taskState, sayAskHandler);
+
         this.resumeHandler =
                 new TaskV2ResumeHandler(
                         stateManager, taskId, taskState, messageStateHandler, sayAskHandler);
+
         this.contextPrepareHandler =
                 new TaskV2ContextPrepareHandler(
                         stateManager,
@@ -355,6 +276,7 @@ public class TaskV2 implements Recoverable<TaskState> {
                         cwd,
                         taskInitializationStartTime,
                         postStateToWebview);
+
         this.messagePresenterHandler =
                 new TaskV2MessagePresenterHandler(
                         messageParser,
@@ -381,6 +303,7 @@ public class TaskV2 implements Recoverable<TaskState> {
                         taskId,
                         ulid,
                         cwd);
+
         this.commandHandler =
                 new TaskV2CommandHandler(
                         terminalManager,
@@ -430,9 +353,111 @@ public class TaskV2 implements Recoverable<TaskState> {
                         messagePresenterHandler,
                         contextPrepareHandler,
                         postStateToWebview);
+    }
 
+    void initCheckpointManager() {
+        boolean isMultiRootWorkspace =
+                this.workspaceManager != null && this.workspaceManager.getRoots().size() > 1;
+
+        if (isMultiRootWorkspace) {
+            this.checkpointManager = null;
+            return;
+        }
+
+        try {
+            TaskCheckpointManager.CheckpointManagerCallbacks callbacks =
+                    new TaskCheckpointManager.CheckpointManagerCallbacks() {
+                        @Override
+                        public CompletableFuture<Long> say(
+                                ClineSay type,
+                                String text,
+                                List<String> images,
+                                List<String> files,
+                                Boolean partial) {
+                            sayAskHandler.say(type, text, images, files, partial);
+                            Long ts = taskState.getLastMessageTs();
+                            return CompletableFuture.completedFuture(ts);
+                        }
+
+                        @Override
+                        public Runnable getPostStateToWebview() {
+                            return TaskV2.this.postStateToWebview;
+                        }
+
+                        @Override
+                        public Runnable getCancelTask() {
+                            return TaskV2.this.cancelTask;
+                        }
+                    };
+
+            this.checkpointManager =
+                    CheckpointManagerFactory.buildCheckpointManager(
+                            this.taskId,
+                            this.messageStateHandler,
+                            this.fileContextTracker,
+                            this.diffViewProvider,
+                            this.taskState,
+                            this.workspaceManager,
+                            callbacks,
+                            this.taskState.getConversationHistoryDeletedRange(),
+                            this.taskState.getCheckpointManagerErrorMessage(),
+                            this.stateManager);
+
+            if (CheckpointManagerFactory.shouldUseMultiRoot(
+                    this.workspaceManager,
+                    this.stateManager.getSettings().isEnableCheckpointsSetting(),
+                    this.stateManager)) {
+                this.checkpointManager
+                        .initialize()
+                        .exceptionally(
+                                error -> {
+                                    log.error(
+                                            "Failed to initialize multi-root checkpoint manager: {}",
+                                            error.getMessage(),
+                                            error);
+                                    String errorMessage =
+                                            error.getMessage() != null
+                                                    ? error.getMessage()
+                                                    : "Unknown error";
+                                    this.taskState.setCheckpointManagerErrorMessage(errorMessage);
+                                    return null;
+                                });
+            }
+        } catch (Exception error) {
+            log.error("Failed to initialize checkpoint manager: {}", error.getMessage(), error);
+            if (this.stateManager.getSettings().isEnableCheckpointsSetting()) {
+                String errorMessage =
+                        error.getMessage() != null ? error.getMessage() : "Unknown error";
+                ShowMessageRequest request =
+                        ShowMessageRequest.builder()
+                                .type(ShowMessageType.ERROR)
+                                .message("Failed to initialize checkpoint manager: " + errorMessage)
+                                .build();
+                DefaultSubscriptionManager.getInstance()
+                        .send(new WindowShowMessageRequestMessage(request));
+            }
+            this.checkpointManager = null;
+        }
+    }
+
+    void initMcpCallbacks() {
+        if (this.mcpHub != null) {
+            this.mcpHub.setNotificationCallback(
+                    notification -> {
+                        String serverName = notification.serverName();
+                        String message = notification.message();
+                        sayAskHandler.say(
+                                ClineSay.MCP_NOTIFICATION,
+                                String.format("[%s] %s", serverName, message));
+                    });
+        }
+    }
+
+    void initStateMachine() {
         this.stateMachine = STATE_MACHINE_FACTORY.make(this, TaskStatus.NEW);
     }
+
+    // ---- runtime methods ----
 
     public TaskStatus getState() {
         return stateMachine.getCurrentState();
@@ -449,6 +474,28 @@ public class TaskV2 implements Recoverable<TaskState> {
         eventQueue.offer(event);
         scheduleEventLoop();
     }
+
+    public void setActiveBackgroundCommand(ActiveBackgroundCommand activeBackgroundCommand) {
+        this.activeBackgroundCommand = activeBackgroundCommand;
+    }
+
+    @Override
+    public void recover(TaskState state) {}
+
+    public ProviderInfo getCurrentProviderInfo() {
+        ProviderInfo info = new ProviderInfo();
+        if (this.apiHandler != null) {
+            info.model = this.apiHandler.getModelId();
+            info.providerId = this.apiHandler.getProviderId();
+        } else {
+            info.model = "claude-3-5-sonnet-20241022";
+            info.providerId = "anthropic";
+        }
+        info.customPrompt = null;
+        return info;
+    }
+
+    // ---- event loop internals ----
 
     private void scheduleEventLoop() {
         if (!eventLoopScheduled.compareAndSet(false, true)) {
@@ -467,15 +514,10 @@ public class TaskV2 implements Recoverable<TaskState> {
                 });
     }
 
-    /**
-     * 事件循环（纯状态机驱动）。处理 eventQueue 中的事件，驱动状态机迁移。 每次状态迁移后调用 onStateEntered() 触发该状态对应的工作阶段。 当
-     * AskSuspendException 被捕获时，派发 ASK_SUSPENDED 事件使状态机 迁移到 WAITING_USER_ASK_RESPONSE，然后退出循环释放线程。
-     */
     private void runLoop() {
         while (!eventQueue.isEmpty()) {
             try {
                 TaskEvent event = eventQueue.poll();
-
                 stateMachine.doTransition(event.getType(), event);
             } catch (Exception e) {
                 log.error("TaskV2EventLoop process error", e);
@@ -483,23 +525,7 @@ public class TaskV2 implements Recoverable<TaskState> {
         }
     }
 
-    @Override
-    public void recover(TaskState state) {}
-
     private String generateUlid() {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 26);
-    }
-
-    public ProviderInfo getCurrentProviderInfo() {
-        ProviderInfo info = new ProviderInfo();
-        if (this.apiHandler != null) {
-            info.model = this.apiHandler.getModelId();
-            info.providerId = this.apiHandler.getProviderId();
-        } else {
-            info.model = "claude-3-5-sonnet-20241022"; // 默认模型
-            info.providerId = "anthropic"; // 默认提供者
-        }
-        info.customPrompt = null;
-        return info;
     }
 }

@@ -13,6 +13,7 @@ import com.hhoa.kline.core.core.task.transition.PrepareContextTransition;
 import com.hhoa.kline.core.core.task.transition.PrepareFailedTransition;
 import com.hhoa.kline.core.core.task.transition.ResumeTaskTransition;
 import com.hhoa.kline.core.core.task.transition.StartTaskTransition;
+import com.hhoa.kline.core.core.task.transition.StreamingCompleteTransition;
 import com.hhoa.kline.core.core.task.transition.TaskCompleteTransition;
 import com.hhoa.kline.core.core.task.transition.UserRespondedTransition;
 
@@ -118,7 +119,12 @@ final class TaskV2StateMachineTopology {
                         TaskStatus.CALLING_API,
                         TaskStatus.TASK_COMPLETE,
                         TaskEventType.API_CALLING_FAILED,
-                        new TaskCompleteTransition());
+                        new TaskCompleteTransition())
+                .addTransition(
+                        TaskStatus.CALLING_API,
+                        TaskStatus.CALLING_API,
+                        TaskEventType.STREAMING_COMPLETE,
+                        new StreamingCompleteTransition());
     }
 
     private static StateMachineFactory<TaskV2, TaskStatus, TaskEventType, TaskEvent>
@@ -135,7 +141,7 @@ final class TaskV2StateMachineTopology {
                         new PrepareContextTransition())
                 .addTransition(
                         TaskStatus.API_COMPLETED,
-                        TaskStatus.CALLING_API,
+                        TaskStatus.WAITING_USER_ASK_RESPONSE,
                         TaskEventType.ASK_USER,
                         new AskUserTransition())
                 .addTransition(
@@ -167,7 +173,7 @@ final class TaskV2StateMachineTopology {
                         TaskStatus.WAITING_USER_ASK_RESPONSE,
                         TaskStatus.PREPARE_CONTEXT,
                         TaskEventType.PREPARE_CONTEXT,
-                        new NoopTransition())
+                        new PrepareContextTransition())
                 .addTransition(
                         TaskStatus.WAITING_USER_ASK_RESPONSE,
                         TaskStatus.ABORT,
