@@ -1,12 +1,14 @@
 package com.hhoa.kline.core.core.task.transition;
 
+import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.task.ClineRequestResult;
 import com.hhoa.kline.core.core.task.TaskV2;
 import com.hhoa.kline.core.core.task.event.AbortTaskEvent;
-import com.hhoa.kline.core.core.task.event.ApiCallFailedEvent;
+import com.hhoa.kline.core.core.task.event.ApiCallingRetryEvent;
 import com.hhoa.kline.core.core.task.event.ApiCompletedEvent;
+import com.hhoa.kline.core.core.task.event.AskUserEvent;
 import com.hhoa.kline.core.core.task.event.ContinueNextTurnEvent;
-import com.hhoa.kline.core.core.task.event.TaskCompletedEvent;
+import com.hhoa.kline.core.core.task.event.TaskCompleteEvent;
 import com.hhoa.kline.core.core.task.event.TaskEvent;
 import com.hhoa.kline.core.core.task.statemachine.SingleArcTransition;
 import lombok.extern.slf4j.Slf4j;
@@ -26,15 +28,23 @@ public class ApiCallingCompletedTransition implements SingleArcTransition<TaskV2
 
         log.debug("Task {} API completed with result: {}", operand.getTaskId(), processResult);
 
-        if (processResult == ClineRequestResult.ABORT) {
+        if (processResult instanceof ClineRequestResult.Abort) {
             operand.handle(new AbortTaskEvent(operand.getTaskId()));
-        } else if (processResult == ClineRequestResult.FAILED) {
-            operand.handle(
-                    new ApiCallFailedEvent(
-                            operand.getTaskId(), new Exception("API failed"), "API failed"));
-        } else if (processResult == ClineRequestResult.DID_NOT_TOOL_USE) {
-            operand.handle(new TaskCompletedEvent(operand.getTaskId()));
-        } else if (processResult == ClineRequestResult.DID_TOOL_USE) {
+        } else if (processResult
+                instanceof ClineRequestResult.Failed(String message, Throwable throwable)) {
+            boolean tryRetry = operand.getApiCallHandler().tryRetryAsk(message);
+            if (!tryRetry) {
+                operand.handle(new ApiCallingRetryEvent(operand.getTaskId()));
+            } else {
+                operand.handle(
+                        new AskUserEvent(
+                                operand.getTaskId(),
+                                ClineAsk.PROCESS_ASSISTANT_RESPONSE_FAILED,
+                                message));
+            }
+        } else if (processResult instanceof ClineRequestResult.DidNotToolUse) {
+            operand.handle(new TaskCompleteEvent(operand.getTaskId()));
+        } else if (processResult instanceof ClineRequestResult.DidToolUse) {
             operand.getTaskState()
                     .setCurrentUserContent(operand.getTaskState().getNextUserMessageContent());
             operand.getTaskState().setCurrentIncludeFileDetails(false);

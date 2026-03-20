@@ -22,14 +22,12 @@ import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptService;
 import com.hhoa.kline.core.core.services.telemetry.TelemetryService;
 import com.hhoa.kline.core.core.shared.ClineApiReqCancelReason;
 import com.hhoa.kline.core.core.shared.ClineApiReqInfo;
-import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageType;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.storage.StateManager;
 import com.hhoa.kline.core.core.task.ApiChunk;
 import com.hhoa.kline.core.core.task.ApiHandler;
 import com.hhoa.kline.core.core.task.ApiRequestResult;
-import com.hhoa.kline.core.core.task.AskPending;
 import com.hhoa.kline.core.core.task.ClineMessage;
 import com.hhoa.kline.core.core.task.ClineRequestResult;
 import com.hhoa.kline.core.core.task.ContextFactory;
@@ -45,7 +43,6 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
-import org.jspecify.annotations.Nullable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -201,6 +198,9 @@ public final class TaskV2ApiCallHandler {
 
     public ClineRequestResult processAssistantResponse(
             ApiRequestResult apiResult, ProviderInfo providerInfo) {
+        if (taskState.isAbort()) {
+            return new ClineRequestResult.Abort();
+        }
         messagePresenterHandler.checkAndPresentAssistantMessage(true);
 
         messagePresenterHandler.updateApiReqMessage(
@@ -274,7 +274,9 @@ public final class TaskV2ApiCallHandler {
 
             taskState.setAutoRetryAttempts(0);
 
-            return didToolUse ? ClineRequestResult.DID_TOOL_USE : ClineRequestResult.FAILED;
+            return didToolUse
+                    ? new ClineRequestResult.DidToolUse()
+                    : new ClineRequestResult.DidNotToolUse();
         }
     }
 
@@ -311,10 +313,10 @@ public final class TaskV2ApiCallHandler {
                 messagePresenterHandler.buildApiAssistantMessage(
                         "Failure: I did not provide a response.", null, null));
 
-        return ClineRequestResult.FAILED;
+        return new ClineRequestResult.Failed(errorText, null);
     }
 
-    public @Nullable AskPending tryRetryAsk(String askMessage) {
+    public boolean tryRetryAsk(String askMessage) {
         if (taskState.getAutoRetryAttempts() < 3) {
             taskState.setAutoRetryAttempts(taskState.getAutoRetryAttempts() + 1);
 
@@ -333,7 +335,7 @@ public final class TaskV2ApiCallHandler {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
-            return null;
+            return false;
         } else {
             Map<String, Object> retryInfoMap = new HashMap<String, Object>();
             retryInfoMap.put("attempt", 3);
@@ -343,7 +345,7 @@ public final class TaskV2ApiCallHandler {
             sayAskHandler.say(
                     ClineSay.ERROR_RETRY, JsonUtils.toJsonString(retryInfoMap), null, null, null);
 
-            return sayAskHandler.ask(ClineAsk.API_REQ_FAILED, askMessage);
+            return true;
         }
     }
 
@@ -402,7 +404,7 @@ public final class TaskV2ApiCallHandler {
                                                                                     .runWithContext(
                                                                                             ctx,
                                                                                             () ->
-                                                                                                    extracted(
+                                                                                                    processChunk(
                                                                                                             chunk,
                                                                                                             streamInterrupted,
                                                                                                             assistantMessageBuilder,
@@ -460,7 +462,7 @@ public final class TaskV2ApiCallHandler {
         return result;
     }
 
-    private void extracted(
+    private void processChunk(
             ApiChunk chunk,
             boolean[] streamInterrupted,
             StringBuilder assistantMessageBuilder,
@@ -470,7 +472,7 @@ public final class TaskV2ApiCallHandler {
             List<Object> reasoningDetailsList,
             List<UserContentBlock> antThinkingContentList) {
         if (!streamInterrupted[0]) {
-            processApiChunk(
+            processApiChunkInternal(
                     chunk,
                     streamInterrupted,
                     assistantMessageBuilder,
@@ -671,7 +673,7 @@ public final class TaskV2ApiCallHandler {
                 .doOnCancel(() -> taskState.setWaitingForFirstChunk(false));
     }
 
-    private void processApiChunk(
+    private void processApiChunkInternal(
             ApiChunk chunk,
             boolean[] streamInterrupted,
             StringBuilder assistantMessageBuilder,

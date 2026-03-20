@@ -14,5 +14,6 @@ public enum TaskStatus {
     ABORT,
 
     START_TASK,
+
     WAITING_USER_ASK_RESPONSE
 }

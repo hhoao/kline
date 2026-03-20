@@ -27,9 +27,7 @@ public enum TaskEventType {
 
     RESTORE_TASK,
 
-    MAX_MISTAKE_LIMIT_REACHED,
-
-    AUTO_APPROVAL_MAX_REQ_REACHED,
-
     API_CALLING_RETRY,
+
+    ASK_USER,
 }

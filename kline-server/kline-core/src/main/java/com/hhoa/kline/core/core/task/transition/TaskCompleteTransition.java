@@ -24,6 +24,5 @@ public class TaskCompleteTransition implements SingleArcTransition<TaskV2, TaskE
                             askResult.getImages(),
                             askResult.getFiles()));
         }
-        operand.getAbortHandler().abort();
     }
 }

@@ -1,9 +1,12 @@
 package com.hhoa.kline.core.core.task;
 
 /** 表示单次请求处理后的后续动作 */
-public enum ClineRequestResult {
-    DID_TOOL_USE,
-    DID_NOT_TOOL_USE,
-    ABORT,
-    FAILED;
+public interface ClineRequestResult {
+    record DidToolUse() implements ClineRequestResult {}
+
+    record DidNotToolUse() implements ClineRequestResult {}
+
+    record Abort() implements ClineRequestResult {}
+
+    record Failed(String message, Throwable throwable) implements ClineRequestResult {}
 }

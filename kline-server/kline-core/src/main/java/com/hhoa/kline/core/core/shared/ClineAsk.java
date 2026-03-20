@@ -17,6 +17,7 @@ public enum ClineAsk {
     COMPLETION_RESULT("completion_result"),
     TOOL("tool"),
     API_REQ_FAILED("api_req_failed"),
+    PROCESS_ASSISTANT_RESPONSE_FAILED("process_assistant_response_failed"),
     RESUME_TASK("resume_task"),
     RESUME_COMPLETED_TASK("resume_completed_task"),
     MISTAKE_LIMIT_REACHED("mistake_limit_reached"),

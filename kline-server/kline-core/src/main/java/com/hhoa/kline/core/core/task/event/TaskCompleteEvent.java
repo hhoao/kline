@@ -3,9 +3,9 @@ package com.hhoa.kline.core.core.task.event;
 import lombok.Getter;
 
 @Getter
-public class TaskCompletedEvent extends TaskEvent {
+public class TaskCompleteEvent extends TaskEvent {
 
-    public TaskCompletedEvent(String taskId) {
+    public TaskCompleteEvent(String taskId) {
         super(TaskEventType.TASK_COMPLETE, taskId);
     }
 }

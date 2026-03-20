@@ -1,8 +1,9 @@
 package com.hhoa.kline.core.core.task.transition;
 
+import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.task.TaskV2;
+import com.hhoa.kline.core.core.task.event.AskUserEvent;
 import com.hhoa.kline.core.core.task.event.ContextReadyEvent;
-import com.hhoa.kline.core.core.task.event.MaxMistakeLimitReachedEvent;
 import com.hhoa.kline.core.core.task.event.PrepareFailedEvent;
 import com.hhoa.kline.core.core.task.event.TaskEvent;
 import com.hhoa.kline.core.core.task.handler.PrepareContextResult;
@@ -14,6 +15,7 @@ public class PrepareContextTransition implements SingleArcTransition<TaskV2, Tas
     public void transition(TaskV2 operand, TaskEvent event) {
         try {
             PrepareContextResult result = operand.getContextPrepareHandler().doPrepareContext();
+
             switch (result) {
                 case PrepareContextResult.Success ignored ->
                         operand.handle(new ContextReadyEvent(operand.getTaskId()));
@@ -22,9 +24,18 @@ public class PrepareContextTransition implements SingleArcTransition<TaskV2, Tas
                                 new PrepareFailedEvent(
                                         operand.getTaskId(),
                                         new Exception("Prepare context failed")));
-                case PrepareContextResult.MaxMistakeLimitReached(String message) ->
-                        operand.handle(
-                                new MaxMistakeLimitReachedEvent(operand.getTaskId(), message));
+                case PrepareContextResult.MaxMistakeLimitReached(String message) -> {
+                    operand.handle(
+                            new AskUserEvent(
+                                    operand.getTaskId(), ClineAsk.MISTAKE_LIMIT_REACHED, message));
+                }
+                case PrepareContextResult.AutoApprovalMaxReqReached(String message) -> {
+                    operand.handle(
+                            new AskUserEvent(
+                                    operand.getTaskId(),
+                                    ClineAsk.AUTO_APPROVAL_MAX_REQ_REACHED,
+                                    message));
+                }
                 default -> {}
             }
         } catch (Throwable t) {

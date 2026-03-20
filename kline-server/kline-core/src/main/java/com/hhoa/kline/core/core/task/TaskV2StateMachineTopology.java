@@ -7,6 +7,7 @@ import com.hhoa.kline.core.core.task.transition.AbortTransition;
 import com.hhoa.kline.core.core.task.transition.ApiCallingCompletedTransition;
 import com.hhoa.kline.core.core.task.transition.ApiCallingToolAskRespondedTransition;
 import com.hhoa.kline.core.core.task.transition.ApiCallingTransition;
+import com.hhoa.kline.core.core.task.transition.AskUserTransition;
 import com.hhoa.kline.core.core.task.transition.NoopTransition;
 import com.hhoa.kline.core.core.task.transition.PrepareContextTransition;
 import com.hhoa.kline.core.core.task.transition.PrepareFailedTransition;
@@ -14,8 +15,6 @@ import com.hhoa.kline.core.core.task.transition.ResumeTaskTransition;
 import com.hhoa.kline.core.core.task.transition.StartTaskTransition;
 import com.hhoa.kline.core.core.task.transition.TaskCompleteTransition;
 import com.hhoa.kline.core.core.task.transition.UserRespondedTransition;
-import com.hhoa.kline.core.core.task.transition.WaitingUserAskResponseTransition;
-import java.util.EnumSet;
 
 final class TaskV2StateMachineTopology {
 
@@ -69,8 +68,8 @@ final class TaskV2StateMachineTopology {
                 .addTransition(
                         TaskStatus.PREPARE_CONTEXT,
                         TaskStatus.WAITING_USER_ASK_RESPONSE,
-                        TaskEventType.MAX_MISTAKE_LIMIT_REACHED,
-                        new WaitingUserAskResponseTransition())
+                        TaskEventType.ASK_USER,
+                        new AskUserTransition())
                 .addTransition(
                         TaskStatus.PREPARE_CONTEXT,
                         TaskStatus.ABORT,
@@ -108,6 +107,11 @@ final class TaskV2StateMachineTopology {
                 .addTransition(
                         TaskStatus.CALLING_API,
                         TaskStatus.CALLING_API,
+                        TaskEventType.ASK_USER,
+                        new AskUserTransition())
+                .addTransition(
+                        TaskStatus.CALLING_API,
+                        TaskStatus.CALLING_API,
                         TaskEventType.API_CALLING_RETRY,
                         new ApiCallingTransition())
                 .addTransition(
@@ -126,6 +130,16 @@ final class TaskV2StateMachineTopology {
                         new PrepareContextTransition())
                 .addTransition(
                         TaskStatus.API_COMPLETED,
+                        TaskStatus.PREPARE_CONTEXT,
+                        TaskEventType.API_CALLING_RETRY,
+                        new PrepareContextTransition())
+                .addTransition(
+                        TaskStatus.API_COMPLETED,
+                        TaskStatus.CALLING_API,
+                        TaskEventType.ASK_USER,
+                        new AskUserTransition())
+                .addTransition(
+                        TaskStatus.API_COMPLETED,
                         TaskStatus.TASK_COMPLETE,
                         TaskEventType.TASK_COMPLETE,
                         new TaskCompleteTransition())
@@ -141,14 +155,19 @@ final class TaskV2StateMachineTopology {
                     StateMachineFactory<TaskV2, TaskStatus, TaskEventType, TaskEvent> f) {
         return f.addTransition(
                         TaskStatus.WAITING_USER_ASK_RESPONSE,
-                        EnumSet.of(
-                                TaskStatus.PREPARE_CONTEXT,
-                                TaskStatus.CALLING_API,
-                                TaskStatus.WAITING_USER_ASK_RESPONSE,
-                                TaskStatus.TASK_COMPLETE,
-                                TaskStatus.ABORT),
+                        TaskStatus.WAITING_USER_ASK_RESPONSE,
                         TaskEventType.USER_RESPONDED,
                         new UserRespondedTransition())
+                .addTransition(
+                        TaskStatus.WAITING_USER_ASK_RESPONSE,
+                        TaskStatus.TASK_COMPLETE,
+                        TaskEventType.TASK_COMPLETE,
+                        new TaskCompleteTransition())
+                .addTransition(
+                        TaskStatus.WAITING_USER_ASK_RESPONSE,
+                        TaskStatus.PREPARE_CONTEXT,
+                        TaskEventType.PREPARE_CONTEXT,
+                        new NoopTransition())
                 .addTransition(
                         TaskStatus.WAITING_USER_ASK_RESPONSE,
                         TaskStatus.ABORT,

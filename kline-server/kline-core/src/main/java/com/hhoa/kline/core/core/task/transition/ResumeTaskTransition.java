@@ -12,7 +12,7 @@ public class ResumeTaskTransition implements SingleArcTransition<TaskV2, TaskEve
     @Override
     public void transition(TaskV2 operand, TaskEvent event) {
         AskPending askPending = operand.getResumeHandler().resumeTaskFromHistory();
-        if (askPending != null && askPending.getPendingId() != null) {
+        if (askPending.getPendingId() != null) {
             DefaultPendingAskToken token =
                     new DefaultPendingAskToken(
                             askPending.getPendingId(),
