@@ -94,21 +94,21 @@
         :style="{ height: textAreaBaseHeight }"
       >
         <div class="flex flex-row items-center">
-          <!-- Cancel button when AI is generating -->
+          <!-- Send button: highest priority when has content -->
           <div
-            v-if="sendingDisabled && !isVoiceRecording"
-            class="text-sm input-icon-button i-codicon:stop-circle"
-            @click="handleCancelClick"
-          >取消</div>
-          <!-- Send button when input has content -->
-          <div
-            v-else-if="hasInputContent && !isVoiceRecording"
+            v-if="hasInputContent && !isVoiceRecording"
             class="text-sm input-icon-button i-codicon:send"
             @click="handleActionButtonClick"
           >Send</div>
-          <!-- Voice input button when input is empty -->
+          <!-- Cancel button: when AI is generating and no input -->
           <div
-            v-else-if="!hasInputContent && !isVoiceRecording"
+            v-else-if="sendingDisabled && !isVoiceRecording"
+            class="text-sm input-icon-button i-codicon:stop-circle"
+            @click="handleCancelClick"
+          >取消</div>
+          <!-- Voice button: idle with no input -->
+          <div
+            v-else-if="!isVoiceRecording"
             class="text-sm input-icon-button i-codicon:mic"
             @click="handleVoiceInputClick"
           >语音</div>
@@ -1002,7 +1002,7 @@ const handleModelButtonClick = () => {
 }
 
 const handleActionButtonClick = () => {
-  if (!sendingDisabled.value && hasInputContent.value) {
+  if (hasInputContent.value) {
     isTextAreaFocused.value = false
     props.onSendMessage()
   }
