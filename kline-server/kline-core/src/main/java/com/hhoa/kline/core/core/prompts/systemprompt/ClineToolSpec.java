@@ -2,6 +2,8 @@ package com.hhoa.kline.core.core.prompts.systemprompt;
 
 import java.util.List;
 import java.util.function.Function;
+
+import com.hhoa.ai.kline.commons.config.ConfigOption;
 import lombok.Builder;
 import lombok.Data;
 

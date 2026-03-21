@@ -1,6 +1,7 @@
 package com.hhoa.kline.core.core.task.tools;
 
 import com.hhoa.kline.core.core.assistant.ToolUse;
+import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.task.tools.handlers.ToolHandler;
 import com.hhoa.kline.core.core.task.tools.types.ToolContext;
 import com.hhoa.kline.core.core.task.tools.types.ToolExecuteResult;
@@ -35,5 +36,10 @@ public class SharedToolHandler implements ToolHandler {
     @Override
     public ToolExecuteResult execute(ToolContext context, ToolUse block) {
         return baseHandler.execute(context, block);
+    }
+
+    @Override
+    public ClineToolSpec getClineToolSpec() {
+        return null;
     }
 }

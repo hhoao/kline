@@ -72,6 +72,9 @@ public class ConfigOption<T> {
 
     private final boolean isList;
 
+    /** Whether this option is required (must be explicitly set). */
+    private final boolean required;
+
     // ------------------------------------------------------------------------
 
     Class<?> getClazz() {
@@ -101,6 +104,18 @@ public class ConfigOption<T> {
             boolean isList,
             List<KlineVersion> versions,
             FallbackKey... fallbackKeys) {
+        this(key, clazz, description, defaultValue, isList, false, versions, fallbackKeys);
+    }
+
+    ConfigOption(
+            String key,
+            Class<?> clazz,
+            Description description,
+            T defaultValue,
+            boolean isList,
+            boolean required,
+            List<KlineVersion> versions,
+            FallbackKey... fallbackKeys) {
         this.key = checkNotNull(key);
         this.description = description;
         this.defaultValue = defaultValue;
@@ -108,6 +123,7 @@ public class ConfigOption<T> {
         this.fallbackKeys = fallbackKeys == null || fallbackKeys.length == 0 ? EMPTY : fallbackKeys;
         this.clazz = checkNotNull(clazz);
         this.isList = isList;
+        this.required = required;
     }
 
     // ------------------------------------------------------------------------
@@ -133,7 +149,7 @@ public class ConfigOption<T> {
         final FallbackKey[] mergedAlternativeKeys =
                 Stream.concat(newFallbackKeys, currentAlternativeKeys).toArray(FallbackKey[]::new);
         return new ConfigOption<>(
-                key, clazz, description, defaultValue, isList, versions, mergedAlternativeKeys);
+                key, clazz, description, defaultValue, isList, required, versions, mergedAlternativeKeys);
     }
 
     /**
@@ -158,7 +174,7 @@ public class ConfigOption<T> {
                 Stream.concat(currentAlternativeKeys, newDeprecatedKeys)
                         .toArray(FallbackKey[]::new);
         return new ConfigOption<>(
-                key, clazz, description, defaultValue, isList, versions, mergedAlternativeKeys);
+                key, clazz, description, defaultValue, isList, required, versions, mergedAlternativeKeys);
     }
 
     /**
@@ -181,7 +197,7 @@ public class ConfigOption<T> {
      */
     public ConfigOption<T> withDescription(final Description description) {
         return new ConfigOption<>(
-                key, clazz, description, defaultValue, isList, versions, fallbackKeys);
+                key, clazz, description, defaultValue, isList, required, versions, fallbackKeys);
     }
 
     // ------------------------------------------------------------------------
@@ -268,6 +284,15 @@ public class ConfigOption<T> {
         return description;
     }
 
+    /**
+     * Checks whether this option is required.
+     *
+     * @return True if this option must be explicitly set, false otherwise.
+     */
+    public boolean isRequired() {
+        return required;
+    }
+
     // ------------------------------------------------------------------------
 
     @Override
@@ -277,6 +302,7 @@ public class ConfigOption<T> {
         } else if (o != null && o.getClass() == ConfigOption.class) {
             ConfigOption<?> that = (ConfigOption<?>) o;
             return this.key.equals(that.key)
+                    && this.required == that.required
                     && Arrays.equals(this.fallbackKeys, that.fallbackKeys)
                     && (this.defaultValue == null
                             ? that.defaultValue == null
@@ -291,18 +317,30 @@ public class ConfigOption<T> {
     public int hashCode() {
         return 31 * key.hashCode()
                 + 17 * Arrays.hashCode(fallbackKeys)
-                + (defaultValue != null ? defaultValue.hashCode() : 0);
+                + (defaultValue != null ? defaultValue.hashCode() : 0)
+                + (required ? 1 : 0);
     }
 
     @Override
     public String toString() {
         return String.format(
-                "Key: '%s' , default: %s (fallback keys: %s)",
-                key, defaultValue, Arrays.toString(fallbackKeys));
+                "Key: '%s' , default: %s, required: %s (fallback keys: %s)",
+                key, defaultValue, required, Arrays.toString(fallbackKeys));
+    }
+
+    /**
+     * Marks this config option as required. A required option must be explicitly set in the
+     * configuration; retrieving it without a value will throw an exception.
+     *
+     * @return A new config option marked as required.
+     */
+    public ConfigOption<T> required() {
+        return new ConfigOption<>(
+                key, clazz, description, defaultValue, isList, true, versions, fallbackKeys);
     }
 
     public ConfigOption<T> version(KlineVersion... versions) {
         return new ConfigOption<T>(
-                key, clazz, description, defaultValue, isList, Arrays.asList(versions));
+                key, clazz, description, defaultValue, isList, required, Arrays.asList(versions));
     }
 }

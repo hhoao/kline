@@ -321,7 +321,17 @@ public class Configuration extends GlobalJobParameters
      */
     @Override
     public <T> T get(ConfigOption<T> option) {
-        return getOptional(option).orElseGet(option::defaultValue);
+        Optional<T> value = getOptional(option);
+        if (value.isPresent()) {
+            return value.get();
+        }
+        if (option.isRequired() && !option.hasDefaultValue()) {
+            throw new IllegalArgumentException(
+                    String.format(
+                            "Required configuration option '%s' is not set and has no default value.",
+                            option.key()));
+        }
+        return option.defaultValue();
     }
 
     /**

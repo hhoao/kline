@@ -659,7 +659,11 @@ export const useExtensionStateStore = defineStore('extensionState', {
 			this.showWelcome = !newState.welcomeViewCompleted
 			this.setDidHydrateState(true)
 
-			this.setConversationId(newState.currentTaskItem?.id || null)
+			// Only auto-switch conversationId when no task is currently selected,
+			// to avoid interrupting the user when they're viewing another task.
+			if (!this.conversationId) {
+				this.setConversationId(newState.currentTaskItem?.id || null)
+			}
 			this.extensionState = newState
 		},
 
