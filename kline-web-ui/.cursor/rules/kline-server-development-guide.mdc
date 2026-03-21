@@ -1,4 +1,4 @@
 ---
-description: kline-web-ui 开发指南，包含开发流程、模块新增步骤、代码规范、构建验证和常见问题解决
+description: kline-web-ui 开发指南，包含开发流程、架构、步骤、质量标准和最佳实践
 globs: src/**
 ---

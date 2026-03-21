@@ -5,7 +5,21 @@ alwaysApply: false
 
 # Language Guide
 
-This document outlines the definitive best practices for language development within our team. Adherence to these rules ensures consistent, high-quality, and maintainable code, leveraging modern language features and enterprise standards.
+## Common Code Style and Optimization Guidelines
+
+- Refactor repeated logic into reusable functions.
+- Don’t be backward compatible, Write reusable code logic as much as possible.
+- Prefer object destructuring when accessing and using properties.
+- Use consistent, descriptive naming; avoid obscure abbreviations.
+- Use semantically meaningful variable, function, and class names.
+- **Replace magic numbers or strings with well-named constants.**
+- Keep meaningful code comments; do not remove them when applying edits. Update comments when behavior changes.
+- Ensure Language comments accurately reflect the implementation.
+- Look for opportunities to simplify or modernize code with the latest Language features where it improves clarity.
+- Defer formatting to tooling; ignore purely formatting-only issues and autofixable lint problems.
+
+## Project Specific Code Style and Optimization Guidelines
 
 - Read kline server code style: @kline-server/.cursor/rules/java.mdc
 - Read kline web ui code style: @kline-web-ui/.cursor/rules/language.mdc
+- When writing tests, avoid writing simple test examples, such as not checking an object's properties immediately after it is created.

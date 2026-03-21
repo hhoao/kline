@@ -1,5 +1,5 @@
 ---
-description: kline-server 项目架构说明，包含项目背景、核心使命、模块架构、技术栈和通信协议
+description: kline-server 项目架构说明，包含开发流程、架构、步骤、质量标准和最佳实践
 alwaysApply: true
 ---
 

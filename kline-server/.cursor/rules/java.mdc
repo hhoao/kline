@@ -7,9 +7,28 @@ alwaysApply: false
 
 1. 不要向下和向后兼容
 2. 不要使用全限定类名
-3. 不要编写一些无用的注释，无用的注释是通过显然可以通过下面代码解释的注释，例如可以通过字段名明显知道这个字段是干嘛的、无意义的注释、噪音注释、一个if else明显知道这个判断是判断什么、等等，而有用的注释需要保留，有用的注释一般是指可以让代码更可读，例如注释可以解释下面一大段复杂的逻辑、解释一个难以理解的魔法字符或正则或者无法直观理解的数据、解释为什么一段难以理解的代码、应该是注释why而不是how、一段未完成和TODO的代码、解释人类无法直观看出来的一段或者长段代码和算法等等
-4. 最好不要去主动编写文档，必要的文档可以询问我是否要编写文档
-5. braces 不要使用 K&R style，使用 Allman style
-6. 最好使用显示类型声明，而不是隐式类型声明
-7. 编写的代码最好可扩展，而不是防御性代码
-8. 最好不要编写内部类，而是拆分文件写
+3. braces 不要使用 K&R style，使用 Allman style
+4. 最好使用显示类型声明，而不是隐式类型声明
+5. 最好不要编写内部类，而是拆分文件写
+6. 字符串拼接不要使用 + 号，最好使用 Template 或者 文本块 方式拼接，例如:
+
+```java
+String toolName = "read_file";
+// ❌ 错误示例:
+String result = "Hello, " + name + "!";
+String xml = "<"
+                        + toolName
+                        + ">\n"
+                        + "<path>doc.txt</path>\n"
+                        + "</"
+                        + toolName
+                        + ">";
+// ✅ 正确示例1:
+String xml = """
+<%s>
+<path>doc.txt</path>
+</%s>
+""".formatted(toolName);
+// ✅ 正确示例2:
+String msg = MessageFormat.format("<{0}> <path>doc.txt</path> </{0}>", toolName);
+```
