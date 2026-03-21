@@ -1,0 +1,17 @@
+---
+description: Kline development guide, including development process, module addition steps, code style, build verification and common problem solving
+globs: kline-server/**,kline-web-ui/**
+---
+
+
+# Kline Development Guide
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Kline Server
+
+- Read development guide: @kline-server/.cursor/rules/kline-server-development-guide.mdc
+
+## Kline Web UI
+
+- Read development guide: @kline-web-ui/.cursor/rules/kline-web-ui-development-guide.mdc

@@ -1,0 +1,21 @@
+---
+alwaysApply: true
+---
+
+# Kline Project Architecture
+
+## Monorepo 模块架构
+
+```plaintext
+kline/
+├── kline-server/         # 后端（Java）
+└── kline-web-ui/          # 前端（Vue3 + TypeScript + Vite + Uno CSS）
+```
+
+## Kline Server
+
+- Read project architecture: @kline-server/.cursor/rules/kline-server-project-architecture.mdc
+
+## Kline Web UI
+
+- Read project architecture: @kline-web-ui/.cursor/rules/kline-web-ui-project-architecture.mdc

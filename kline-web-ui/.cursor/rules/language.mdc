@@ -1,0 +1,5 @@
+---
+description: Project language code style and optimization guidelines
+globs: *.ts *.vue *.js *.tsx *.jsx
+alwaysApply: false
+---
