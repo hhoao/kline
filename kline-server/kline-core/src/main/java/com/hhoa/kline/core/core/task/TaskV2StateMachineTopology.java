@@ -1,7 +1,13 @@
 package com.hhoa.kline.core.core.task;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 import com.hhoa.kline.core.core.task.event.TaskEvent;
 import com.hhoa.kline.core.core.task.event.TaskEventType;
+import com.hhoa.kline.core.core.task.statemachine.Graph;
 import com.hhoa.kline.core.core.task.statemachine.StateMachineFactory;
 import com.hhoa.kline.core.core.task.transition.AbortTransition;
 import com.hhoa.kline.core.core.task.transition.ApiCallingCompletedTransition;
@@ -17,9 +23,31 @@ import com.hhoa.kline.core.core.task.transition.StreamingCompleteTransition;
 import com.hhoa.kline.core.core.task.transition.TaskCompleteTransition;
 import com.hhoa.kline.core.core.task.transition.UserRespondedTransition;
 
-final class TaskV2StateMachineTopology {
+public final class TaskV2StateMachineTopology {
 
     private TaskV2StateMachineTopology() {}
+
+    /**
+     * 生成状态机拓扑图（Mermaid）到指定目录。
+     * <p>
+     * 工作目录须为 {@code kline-core} 模块根目录（与 {@code TestTaskV2StateMachineTopology} 一致），否则请传入绝对输出目录。
+     * </p>
+     *
+     * @param args 可选：输出目录；缺省为 {@code src/main/resources/statemachine}
+     */
+    public static void main(String[] args) throws IOException {
+        Path outDir =
+                args.length > 0
+                        ? Path.of(args[0])
+                        : Path.of("src", "main", "resources", "statemachine");
+        Files.createDirectories(outDir);
+        StateMachineFactory<TaskV2, TaskStatus, TaskEventType, TaskEvent> factory = installedFactory();
+        Graph stateGraph = factory.generateStateGraph("TaskV2StateMachineTopology");
+        Files.writeString(
+                outDir.resolve("TaskV2StateMachineTopology.mmd"),
+                stateGraph.generateMermaid(),
+                StandardCharsets.UTF_8);
+    }
 
     static StateMachineFactory<TaskV2, TaskStatus, TaskEventType, TaskEvent> installedFactory() {
         StateMachineFactory<TaskV2, TaskStatus, TaskEventType, TaskEvent> f =

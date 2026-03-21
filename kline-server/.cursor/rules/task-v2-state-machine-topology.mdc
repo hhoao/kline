@@ -1,0 +1,20 @@
+---
+description: 对话流程状态机拓扑图
+globs: kline-core/**/task/**,kline-core/**/statemachine/**
+---
+
+# TaskV2 状态机拓扑（AI 上下文）
+
+**用途**：本文件是**背景知识**，帮助理解 `TaskV2` 状态机拓扑。
+
+## 拓扑图文件（与代码同步的导出结果）
+
+当前由 `TaskV2StateMachineTopology` 导出的 Mermaid 拓扑如下（阅读时以该文件为准；若与 Java 定义不一致，以代码为准并应提醒更新该资源）：
+
+@kline-server/kline-core/src/main/resources/statemachine/TaskV2StateMachineTopology.mmd
+
+## 代码与资源的关系
+
+- 拓扑定义在 `com.hhoa.kline.core.core.task.TaskV2StateMachineTopology`（`installedFactory()` 及各类 `from*` 迁移）。
+- 可用该类上的 `main` 重新生成上述 `.mmd`；**默认输出路径**为 `kline-core/src/main/resources/statemachine/`（相对模块根）。
+- 若你**改动了迁移/状态边**，应重新生成 `.mmd` 以保持与代码一致。
