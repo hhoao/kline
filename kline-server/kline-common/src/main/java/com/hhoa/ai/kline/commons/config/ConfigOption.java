@@ -149,7 +149,14 @@ public class ConfigOption<T> {
         final FallbackKey[] mergedAlternativeKeys =
                 Stream.concat(newFallbackKeys, currentAlternativeKeys).toArray(FallbackKey[]::new);
         return new ConfigOption<>(
-                key, clazz, description, defaultValue, isList, required, versions, mergedAlternativeKeys);
+                key,
+                clazz,
+                description,
+                defaultValue,
+                isList,
+                required,
+                versions,
+                mergedAlternativeKeys);
     }
 
     /**
@@ -174,7 +181,14 @@ public class ConfigOption<T> {
                 Stream.concat(currentAlternativeKeys, newDeprecatedKeys)
                         .toArray(FallbackKey[]::new);
         return new ConfigOption<>(
-                key, clazz, description, defaultValue, isList, required, versions, mergedAlternativeKeys);
+                key,
+                clazz,
+                description,
+                defaultValue,
+                isList,
+                required,
+                versions,
+                mergedAlternativeKeys);
     }
 
     /**

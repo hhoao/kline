@@ -1,5 +1,8 @@
-package com.hhoa.kline.core.core.assistant;
+package com.hhoa.kline.core.core.assistant.parser;
 
+import com.hhoa.kline.core.core.assistant.AssistantMessageContent;
+import com.hhoa.kline.core.core.assistant.TextContent;
+import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import com.hhoa.kline.core.enums.ToolParamName;
 import java.util.ArrayList;

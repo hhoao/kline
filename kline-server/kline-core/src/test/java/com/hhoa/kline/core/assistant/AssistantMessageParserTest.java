@@ -3,9 +3,9 @@ package com.hhoa.kline.core.assistant;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.hhoa.kline.core.core.assistant.AssistantMessageContent;
-import com.hhoa.kline.core.core.assistant.AssistantMessageParser;
 import com.hhoa.kline.core.core.assistant.TextContent;
 import com.hhoa.kline.core.core.assistant.ToolUse;
+import com.hhoa.kline.core.core.assistant.parser.AssistantMessageParser;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
