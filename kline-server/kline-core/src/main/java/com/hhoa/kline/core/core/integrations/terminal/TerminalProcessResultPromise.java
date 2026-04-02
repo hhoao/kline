@@ -2,10 +2,6 @@ package com.hhoa.kline.core.core.integrations.terminal;
 
 import java.util.concurrent.CompletableFuture;
 
-/**
- * TerminalProcess 和 CompletableFuture 的混合类型 类似于 TypeScript 中的 TerminalProcessResultPromise =
- * TerminalProcess & Promise<void>
- */
 public class TerminalProcessResultPromise {
     private final TerminalProcess process;
     private final CompletableFuture<Void> promise;

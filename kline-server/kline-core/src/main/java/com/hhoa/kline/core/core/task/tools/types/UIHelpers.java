@@ -23,7 +23,8 @@ public interface UIHelpers {
 
     Boolean shouldAutoApproveToolWithPath(String toolName, String path);
 
-    void captureTelemetry(String toolName, boolean autoApproved, boolean approved);
+    void captureTelemetry(
+            String toolName, boolean autoApproved, boolean approved, boolean isNativeToolCall);
 
     void showNotificationIfEnabled(String message);
 
@@ -60,16 +61,18 @@ public interface UIHelpers {
             }
 
             @Override
-            public void captureTelemetry(String toolName, boolean autoApproved, boolean approved) {
+            public void captureTelemetry(
+                    String toolName,
+                    boolean autoApproved,
+                    boolean approved,
+                    boolean isNativeToolCall) {
                 // 若需要可在此对接实际遥测服务；当前不做操作以保持最小实现
             }
 
             @Override
             public void showNotificationIfEnabled(String message) {
-                TaskUtils.showNotificationForApprovalIfAutoApprovalEnabled(
+                TaskUtils.showNotificationForApproval(
                         message,
-                        context.getAutoApprovalSettings() != null
-                                && context.getAutoApprovalSettings().isEnabled(),
                         context.getAutoApprovalSettings() != null
                                 && context.getAutoApprovalSettings().isEnableNotifications(),
                         (subtitle, msg) -> {});

@@ -4,14 +4,15 @@ import com.hhoa.ai.kline.commons.utils.ExceptionUtils;
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.AssistantMessage;
 import com.hhoa.kline.core.core.assistant.AssistantMessageContent;
-import com.hhoa.kline.core.core.assistant.AssistantMessageParser;
 import com.hhoa.kline.core.core.assistant.MessageParam;
 import com.hhoa.kline.core.core.assistant.RedactedThinkingContentBlock;
+import com.hhoa.kline.core.core.assistant.TextContent;
 import com.hhoa.kline.core.core.assistant.TextContentBlock;
 import com.hhoa.kline.core.core.assistant.ThinkingContentBlock;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.assistant.UserContentBlock;
 import com.hhoa.kline.core.core.assistant.UserMessage;
+import com.hhoa.kline.core.core.assistant.parser.StreamingAssistantMessageParser;
 import com.hhoa.kline.core.core.context.management.ContextErrorHandling;
 import com.hhoa.kline.core.core.context.management.ContextManager;
 import com.hhoa.kline.core.core.context.management.ContextWindowUtils;
@@ -33,7 +34,10 @@ import com.hhoa.kline.core.core.task.ClineRequestResult;
 import com.hhoa.kline.core.core.task.ContextFactory;
 import com.hhoa.kline.core.core.task.ExistState;
 import com.hhoa.kline.core.core.task.MessageStateHandler;
+import com.hhoa.kline.core.core.task.PresentationPriority;
 import com.hhoa.kline.core.core.task.ProviderInfo;
+import com.hhoa.kline.core.core.task.StreamChunkCoordinator;
+import com.hhoa.kline.core.core.task.StreamResponseHandler;
 import com.hhoa.kline.core.core.task.TaskState;
 import com.hhoa.kline.core.core.task.deps.TaskDispatch;
 import java.util.ArrayList;
@@ -44,7 +48,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 
 @Slf4j
 public final class TaskV2ApiCallHandler {
@@ -54,7 +57,7 @@ public final class TaskV2ApiCallHandler {
     private final ContextManager contextManager;
     private final TelemetryService telemetryService;
     private final DiffViewProvider diffViewProvider;
-    private final AssistantMessageParser messageParser;
+    private final Supplier<StreamingAssistantMessageParser> messageParserFactory;
     private final SystemPromptService systemPromptService;
     private final ContextFactory contextFactory;
     private final ApiHandler apiHandler;
@@ -70,13 +73,20 @@ public final class TaskV2ApiCallHandler {
     private final TaskV2ContextPrepareHandler contextPrepareHandler;
     private final Runnable postStateToWebview;
 
+    /** Handler for native tool use streaming (accumulates TOOL_USE chunks). */
+    private StreamResponseHandler streamResponseHandler;
+
+    /** Optional presentation scheduler callback for coalescing UI updates during streaming. */
+    private java.util.function.Consumer<PresentationPriority> schedulePresentation;
+
+
     public TaskV2ApiCallHandler(
             ResponseFormatter responseFormatter,
             StateManager stateManager,
             ContextManager contextManager,
             TelemetryService telemetryService,
             DiffViewProvider diffViewProvider,
-            AssistantMessageParser messageParser,
+            Supplier<StreamingAssistantMessageParser> messageParserFactory,
             SystemPromptService systemPromptService,
             ContextFactory contextFactory,
             ApiHandler apiHandler,
@@ -96,7 +106,7 @@ public final class TaskV2ApiCallHandler {
         this.contextManager = contextManager;
         this.telemetryService = telemetryService;
         this.diffViewProvider = diffViewProvider;
-        this.messageParser = messageParser;
+        this.messageParserFactory = messageParserFactory;
         this.systemPromptService = systemPromptService;
         this.contextFactory = contextFactory;
         this.apiHandler = apiHandler;
@@ -137,6 +147,8 @@ public final class TaskV2ApiCallHandler {
         if (taskState.isAbort()) {
             return new ApiRequestResult(new ExistState.Abort());
         }
+
+        messagePresenterHandler.startAssistantResponseStream();
 
         int previousApiReqIndex = taskState.getCurrentPreviousApiReqIndex();
 
@@ -226,7 +238,7 @@ public final class TaskV2ApiCallHandler {
                             assistantMessage, antThinkingContent, reasoningDetails));
 
             List<AssistantMessageContent> contentBlocks =
-                    messageParser.parseAssistantMessage(assistantMessage);
+                    parseAssistantMessageSnapshot(assistantMessage);
 
             for (AssistantMessageContent item : contentBlocks) {
                 if (item.isPartial()) {
@@ -369,6 +381,11 @@ public final class TaskV2ApiCallHandler {
 
         final boolean[] streamInterrupted = {false};
 
+        // Reset stream response handler for this request
+        if (streamResponseHandler != null) {
+            streamResponseHandler.reset();
+        }
+
         int lastApiReqIndex = -1;
         List<ClineMessage> messagesForIndex = messageStateHandler.getClineMessages();
         for (int i = messagesForIndex.size() - 1; i >= 0; i--) {
@@ -383,39 +400,30 @@ public final class TaskV2ApiCallHandler {
         try {
             Flux<ApiChunk> chunkFlux = getApiChunkFlux(systemPrompt, conversationHistory);
 
-            chunkFlux
-                    .takeWhile(
-                            chunk -> {
-                                if (taskState.isAbort() || taskState.isDidRejectTool()) {
-                                    return false;
-                                }
-                                if (taskState.isDidAlreadyUseTool()) {
-                                    return !didReceiveUsageChunk[0];
-                                }
-                                return true;
-                            })
-                    .flatMap(
-                            chunk ->
-                                    Mono.deferContextual(
-                                            ctx ->
-                                                    Mono.fromRunnable(
-                                                                    () ->
-                                                                            contextFactory
-                                                                                    .runWithContext(
-                                                                                            ctx,
-                                                                                            () ->
-                                                                                                    processChunk(
-                                                                                                            chunk,
-                                                                                                            streamInterrupted,
-                                                                                                            assistantMessageBuilder,
-                                                                                                            didReceiveUsageChunk,
-                                                                                                            apiReqInfo,
-                                                                                                            reasoningMessageBuilder,
-                                                                                                            reasoningDetailsList,
-                                                                                                            antThinkingContentList)))
-                                                            .then(Mono.just(chunk))))
-                    .contextWrite(contextFactory::modifyContext)
-                    .blockLast();
+            StreamChunkCoordinator coordinator =
+                    new StreamChunkCoordinator(
+                            chunkFlux, usageChunk -> getUsage(usageChunk, didReceiveUsageChunk, apiReqInfo));
+            try {
+                ApiChunk chunk;
+                while ((chunk = coordinator.nextChunk()) != null) {
+                    if (taskState.isAbort() || taskState.isDidRejectTool()) {
+                        break;
+                    }
+                    if (taskState.isDidAlreadyUseTool() && didReceiveUsageChunk[0]) {
+                        break;
+                    }
+                    processContentChunk(
+                            chunk,
+                            streamInterrupted,
+                            assistantMessageBuilder,
+                            apiReqInfo,
+                            reasoningMessageBuilder,
+                            reasoningDetailsList,
+                            antThinkingContentList);
+                }
+            } finally {
+                coordinator.stop();
+            }
         } catch (Exception streamError) {
             return handleApiRequestError(streamError, lastApiReqIndex);
         } finally {
@@ -450,6 +458,19 @@ public final class TaskV2ApiCallHandler {
             return new ApiRequestResult(new ExistState.Abort());
         }
 
+        // Process native tool calls if any were accumulated during streaming
+        if (streamResponseHandler != null
+                && !streamResponseHandler.getToolUseHandler().getAllFinalizedToolUses().isEmpty()) {
+            processNativeToolCalls(
+                    finalAssistantMessage,
+                    streamResponseHandler
+                            .getToolUseHandler()
+                            .getAllFinalizedToolUses(
+                                    streamResponseHandler
+                                            .getReasoningHandler()
+                                            .getCurrentReasoning()));
+        }
+
         ApiRequestResult result = new ApiRequestResult(new ExistState.Success());
         result.setAssistantMessage(finalAssistantMessage);
         result.setReasoningDetails(new ArrayList<>(reasoningDetailsList));
@@ -462,57 +483,55 @@ public final class TaskV2ApiCallHandler {
         return result;
     }
 
-    private void processChunk(
+    /**
+     * Processes a non-USAGE chunk from the stream coordinator. USAGE chunks are handled separately
+     * by the coordinator's onUsageChunk callback.
+     */
+    private void processContentChunk(
             ApiChunk chunk,
             boolean[] streamInterrupted,
             StringBuilder assistantMessageBuilder,
-            boolean[] didReceiveUsageChunk,
             ClineApiReqInfo apiReqInfo,
             StringBuilder reasoningMessageBuilder,
             List<Object> reasoningDetailsList,
             List<UserContentBlock> antThinkingContentList) {
-        if (!streamInterrupted[0]) {
-            processApiChunkInternal(
-                    chunk,
-                    streamInterrupted,
-                    assistantMessageBuilder,
-                    didReceiveUsageChunk,
+        if (streamInterrupted[0]) {
+            return;
+        }
+
+        processApiChunkContent(
+                chunk,
+                assistantMessageBuilder,
+                reasoningMessageBuilder,
+                reasoningDetailsList,
+                antThinkingContentList);
+
+        if (taskState.isAbort()) {
+            streamInterrupted[0] = true;
+            apiReqInfo.setCancelReason(ClineApiReqCancelReason.USER_CANCELLED);
+            messagePresenterHandler.abortStream(
+                    assistantMessageBuilder.toString(),
                     apiReqInfo,
-                    reasoningMessageBuilder,
-                    reasoningDetailsList,
-                    antThinkingContentList);
+                    ClineApiReqCancelReason.USER_CANCELLED,
+                    null);
+            return;
+        }
 
-            if (taskState.isAbort()) {
+        if (taskState.isDidRejectTool()) {
+            if (!streamInterrupted[0]
+                    || !ClineApiReqCancelReason.USER_FEEDBACK.equals(
+                            apiReqInfo.getCancelReason())) {
                 streamInterrupted[0] = true;
-                apiReqInfo.setCancelReason(ClineApiReqCancelReason.USER_CANCELLED);
-                messagePresenterHandler.abortStream(
-                        assistantMessageBuilder.toString(),
-                        apiReqInfo,
-                        ClineApiReqCancelReason.USER_CANCELLED,
-                        null);
-                return;
+                apiReqInfo.setCancelReason(ClineApiReqCancelReason.USER_FEEDBACK);
+                assistantMessageBuilder.append("\n\n[Response interrupted by user feedback]");
             }
-
-            if (taskState.isDidRejectTool()) {
-                if (!streamInterrupted[0]
-                        || !ClineApiReqCancelReason.USER_FEEDBACK.equals(
-                                apiReqInfo.getCancelReason())) {
-                    streamInterrupted[0] = true;
-                    apiReqInfo.setCancelReason(ClineApiReqCancelReason.USER_FEEDBACK);
-                    assistantMessageBuilder.append("\n\n[Response interrupted by user feedback]");
-                }
-                return;
-            }
-            if (taskState.isDidAlreadyUseTool()) {
-                if (!streamInterrupted[0]) {
-                    streamInterrupted[0] = true;
-                    assistantMessageBuilder.append(
-                            "\n\n[Response interrupted by a tool use result. Only one tool may be used at a time and should be placed at the end of the message.]");
-                }
-            }
-        } else {
-            if (chunk.type().equals(ApiChunk.ChunkType.USAGE)) {
-                getUsage(chunk, didReceiveUsageChunk, apiReqInfo);
+            return;
+        }
+        if (taskState.isDidAlreadyUseTool()) {
+            if (!streamInterrupted[0]) {
+                streamInterrupted[0] = true;
+                assistantMessageBuilder.append(
+                        "\n\n[Response interrupted by a tool use result. Only one tool may be used at a time and should be placed at the end of the message.]");
             }
         }
     }
@@ -523,7 +542,7 @@ public final class TaskV2ApiCallHandler {
             StringBuilder assistantMessageBuilder,
             ApiRequestResult result) {
         List<AssistantMessageContent> contentBlocks =
-                messageParser.parseAssistantMessage(finalAssistantMessage);
+                parseAssistantMessageSnapshot(finalAssistantMessage);
         boolean hasTruncatedToolUse =
                 contentBlocks.stream()
                         .anyMatch(block -> block.isPartial() && block instanceof ToolUse);
@@ -571,6 +590,16 @@ public final class TaskV2ApiCallHandler {
                         completionApiReqInfo.getCost() + result.getApiReqInfo().getCost());
             }
         }
+    }
+
+    private List<AssistantMessageContent> parseAssistantMessageSnapshot(String message) {
+        if (message == null || message.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        StreamingAssistantMessageParser messageParser = messageParserFactory.get();
+        messageParser.feed(message);
+        return messageParser.getCurrentBlocks();
     }
 
     private ApiRequestResult handleApiRequestError(Exception streamError, int lastApiReqIndex) {
@@ -673,12 +702,13 @@ public final class TaskV2ApiCallHandler {
                 .doOnCancel(() -> taskState.setWaitingForFirstChunk(false));
     }
 
-    private void processApiChunkInternal(
+    /**
+     * Processes a non-USAGE content chunk. USAGE chunks are handled by the StreamChunkCoordinator's
+     * onUsageChunk callback.
+     */
+    private void processApiChunkContent(
             ApiChunk chunk,
-            boolean[] streamInterrupted,
             StringBuilder assistantMessageBuilder,
-            boolean[] didReceiveUsageChunk,
-            ClineApiReqInfo apiReqInfo,
             StringBuilder reasoningMessageBuilder,
             List<Object> reasoningDetailsList,
             List<UserContentBlock> antThinkingContentList) {
@@ -689,7 +719,7 @@ public final class TaskV2ApiCallHandler {
 
         switch (type) {
             case USAGE:
-                getUsage(chunk, didReceiveUsageChunk, apiReqInfo);
+                // Handled by StreamChunkCoordinator — should not reach here
                 break;
             case REASONING:
                 String reasoning = chunk.reasoning();
@@ -734,6 +764,24 @@ public final class TaskV2ApiCallHandler {
                     antThinkingContentList.add(redactedBlock);
                 }
                 break;
+            case TOOL_USE:
+                // Native tool use streaming — accumulate via StreamResponseHandler
+                if (streamResponseHandler != null) {
+                    streamResponseHandler.getToolUseHandler().processToolUseDelta(chunk);
+
+                    // Map call_id → function_id for proper ToolResultBlockParam
+                    if (chunk.callId() != null && chunk.toolId() != null) {
+                        taskState
+                                .getToolUseIdMap()
+                                .put(chunk.callId(), chunk.toolId());
+                    }
+
+                    // Flush presentation immediately on tool transitions
+                    if (schedulePresentation != null) {
+                        schedulePresentation.accept(PresentationPriority.IMMEDIATE);
+                    }
+                }
+                break;
             case TEXT:
                 if (!reasoningMessageBuilder.isEmpty() && assistantMessageBuilder.isEmpty()) {
                     sayAskHandler.say(
@@ -749,14 +797,61 @@ public final class TaskV2ApiCallHandler {
                 if (text != null && !text.isEmpty()) {
                     String oldAssistantMessage = assistantMessageBuilder.toString();
                     assistantMessageBuilder.append(text);
-                    String newAssistantMessage = assistantMessageBuilder.toString();
+                    messagePresenterHandler.updateAssistantMessageContent(text);
 
-                    messagePresenterHandler.updateAssistantMessageContent(
-                            newAssistantMessage, oldAssistantMessage);
+                    // Schedule presentation flush — IMMEDIATE for first visible token, NORMAL
+                    // for subsequent text to coalesce rapid updates
+                    if (schedulePresentation != null) {
+                        boolean isFirstToken = oldAssistantMessage.isEmpty();
+                        schedulePresentation.accept(
+                                isFirstToken
+                                        ? PresentationPriority.IMMEDIATE
+                                        : PresentationPriority.NORMAL);
+                    }
                 }
                 break;
             default:
                 break;
         }
+    }
+
+    /**
+     * Processes native tool calls after streaming completes. Builds assistantMessageContent from
+     * text blocks + tool blocks, and sets the streaming index to the first tool block.
+     */
+    private void processNativeToolCalls(String assistantText, List<ToolUse> toolBlocks) {
+        List<AssistantMessageContent> content = new ArrayList<>();
+
+        // Add text block if there's any assistant text
+        if (assistantText != null && !assistantText.trim().isEmpty()) {
+            content.add(new TextContent(assistantText, false));
+        }
+
+        // Add tool use blocks
+        content.addAll(toolBlocks);
+
+        taskState.setAssistantMessageContent(content);
+
+        // Set streaming index to first tool block (skip text blocks)
+        int firstToolIndex = 0;
+        for (int i = 0; i < content.size(); i++) {
+            if (content.get(i) instanceof ToolUse) {
+                firstToolIndex = i;
+                break;
+            }
+        }
+        taskState.setCurrentStreamingContentIndex(firstToolIndex);
+        taskState.setUserMessageContentReady(false);
+    }
+
+    /** Sets the StreamResponseHandler for native tool call support. */
+    public void setStreamResponseHandler(StreamResponseHandler handler) {
+        this.streamResponseHandler = handler;
+    }
+
+    /** Sets the presentation scheduler callback for coalescing UI updates during streaming. */
+    public void setSchedulePresentation(
+            java.util.function.Consumer<PresentationPriority> schedulePresentation) {
+        this.schedulePresentation = schedulePresentation;
     }
 }

@@ -111,6 +111,8 @@ public class SpringAIApiHandler implements ApiHandler {
                                             null,
                                             null,
                                             null,
+                                            null,
+                                            null,
                                             null);
                             chunks.add(textChunk);
                         }
@@ -138,6 +140,8 @@ public class SpringAIApiHandler implements ApiHandler {
                                                 null,
                                                 toolCall.name(),
                                                 toolParams,
+                                                null,
+                                                null,
                                                 null,
                                                 null,
                                                 null,
@@ -180,6 +184,8 @@ public class SpringAIApiHandler implements ApiHandler {
                                             cacheWriteTokens,
                                             cacheReadTokens,
                                             totalCost.doubleValue(),
+                                            null,
+                                            null,
                                             null,
                                             null,
                                             null,
@@ -392,6 +398,8 @@ public class SpringAIApiHandler implements ApiHandler {
             Object reasoningDetails,
             String thinking,
             String signature,
-            String data)
+            String data,
+            String toolId,
+            String callId)
             implements ApiChunk {}
 }

@@ -1,24 +1,33 @@
 package com.hhoa.kline.core.core.context.management;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** 上下文错误处理工具类 用于检测和处理上下文窗口超出错误 */
+/** 上下文错误处理工具类，用于检测和处理上下文窗口超出错误。 */
 public class ContextErrorHandling {
 
     private static final Pattern[] CONTEXT_ERROR_PATTERNS = {
-        Pattern.compile("\\bcontext\\s*(?:length|window)\\b", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("\\bcontext\\s*(?:length|window)\\b.*exceed", Pattern.CASE_INSENSITIVE),
         Pattern.compile("\\bmaximum\\s*context\\b", Pattern.CASE_INSENSITIVE),
         Pattern.compile("\\b(?:input\\s*)?tokens?\\s*exceed", Pattern.CASE_INSENSITIVE),
-        Pattern.compile("\\btoo\\s*many\\s*tokens?\\b", Pattern.CASE_INSENSITIVE)
+        Pattern.compile("\\btoo\\s*many\\s*tokens?\\b", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("input is too long", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("requested input length.*exceeds.*maximum input length", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("prompt is too long.*tokens?\\s*>\\s*\\d+\\s*maximum", Pattern.CASE_INSENSITIVE),
     };
 
-    /**
-     * 检查错误是否为上下文窗口超出错误
-     *
-     * @param error 错误对象
-     * @return 如果是上下文窗口错误则返回 true
-     */
+    private static final Pattern[] BEDROCK_CONTEXT_PATTERNS = {
+        Pattern.compile("maximum tokens.*exceeds.*model limit", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("input length and max_tokens exceed context limit", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("context length.*exceeds", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("total number of tokens.*exceeds.*limit", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("requested.*tokens.*exceeds.*limit", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("reduce.*length.*messages.*completion", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("input is too long", Pattern.CASE_INSENSITIVE),
+    };
+
     public static boolean checkContextWindowExceededError(Throwable error) {
         if (error == null) {
             return false;
@@ -27,89 +36,62 @@ public class ContextErrorHandling {
         return checkIsOpenAIContextWindowError(error)
                 || checkIsOpenRouterContextWindowError(error)
                 || checkIsAnthropicContextWindowError(error)
-                || checkIsCerebrasContextWindowError(error);
+                || checkIsCerebrasContextWindowError(error)
+                || checkIsBedrockContextWindowError(error)
+                || checkIsVercelContextWindowError(error);
     }
 
-    /**
-     * 检查是否为 OpenRouter 上下文窗口错误
-     *
-     * @param error 错误对象
-     * @return 如果是 OpenRouter 上下文窗口错误则返回 true
-     */
     private static boolean checkIsOpenRouterContextWindowError(Throwable error) {
         try {
-            String message = error.getMessage();
+            String message = safeMessage(error);
             if (message == null) {
                 return false;
             }
 
             String status = extractStatusCode(message);
-
-            // 已知的 OpenAI/OpenRouter 风格信号（代码 400 且消息包含 "context length"）
-            if ("400".equals(status)) {
-                for (Pattern pattern : CONTEXT_ERROR_PATTERNS) {
-                    if (pattern.matcher(message).find()) {
-                        return true;
-                    }
-                }
+            if (!"400".equals(status)) {
+                return false;
             }
 
-            return false;
+            return matchesAny(message, CONTEXT_ERROR_PATTERNS);
         } catch (Exception e) {
             return false;
         }
     }
 
-    /**
-     * 检查是否为 OpenAI 上下文窗口错误 文档：https://platform.openai.com/docs/guides/error-codes/api-errors
-     *
-     * @param error 错误对象
-     * @return 如果是 OpenAI 上下文窗口错误则返回 true
-     */
     private static boolean checkIsOpenAIContextWindowError(Throwable error) {
         try {
-            String message = error.getMessage();
+            String message = safeMessage(error);
             if (message == null) {
                 return false;
             }
 
             String lowerMessage = message.toLowerCase();
             return (lowerMessage.contains("token") || lowerMessage.contains("context length"))
-                    && lowerMessage.contains("400");
+                    && (lowerMessage.contains("400")
+                            || lowerMessage.contains("context_length_exceeded"));
         } catch (Exception e) {
             return false;
         }
     }
 
-    /**
-     * 检查是否为 Anthropic 上下文窗口错误
-     *
-     * @param error 错误对象
-     * @return 如果是 Anthropic 上下文窗口错误则返回 true
-     */
     private static boolean checkIsAnthropicContextWindowError(Throwable error) {
         try {
-            String message = error.getMessage();
+            String message = safeMessage(error);
             if (message == null) {
                 return false;
             }
-
-            // Anthropic 错误通常包含 "invalid_request_error"
-            return message.contains("invalid_request_error");
+            return message.contains("invalid_request_error")
+                    && (message.toLowerCase().contains("token")
+                            || message.toLowerCase().contains("context"));
         } catch (Exception e) {
             return false;
         }
     }
 
-    /**
-     * 检查是否为 Cerebras 上下文窗口错误
-     *
-     * @param error 错误对象
-     * @return 如果是 Cerebras 上下文窗口错误则返回 true
-     */
     private static boolean checkIsCerebrasContextWindowError(Throwable error) {
         try {
-            String message = error.getMessage();
+            String message = safeMessage(error);
             if (message == null) {
                 return false;
             }
@@ -122,19 +104,86 @@ public class ContextErrorHandling {
         }
     }
 
-    /**
-     * 从错误消息中提取状态码
-     *
-     * @param message 错误消息
-     * @return 状态码字符串，如果未找到则返回 null
-     */
+    private static boolean checkIsBedrockContextWindowError(Throwable error) {
+        try {
+            String message = safeMessage(error);
+            if (message == null) {
+                return false;
+            }
+
+            String lower = message.toLowerCase();
+            boolean isValidationException =
+                    lower.contains("validationexception")
+                            || lower.contains("ai_apicallerror")
+                            || "400".equals(extractStatusCode(message))
+                            || lower.contains("stream_initialization_failed");
+            return isValidationException && matchesAny(message, BEDROCK_CONTEXT_PATTERNS);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public static boolean checkIsVercelContextWindowError(Throwable error) {
+        try {
+            String message = safeMessage(error);
+            if (message == null) {
+                return false;
+            }
+
+            if (message.contains("context_length_exceeded")) {
+                return true;
+            }
+
+            List<String> messages = new ArrayList<>();
+            messages.add(message);
+            String status = extractStatusCode(message);
+            boolean hasValidStatus = "400".equals(status);
+            boolean has400InMessage = message.contains("\"code\":400") || message.contains("\"code\": 400");
+            if (!hasValidStatus && !has400InMessage) {
+                return false;
+            }
+
+            for (String candidate : messages) {
+                if (matchesAny(candidate, CONTEXT_ERROR_PATTERNS)) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static boolean matchesAny(String message, Pattern[] patterns) {
+        for (Pattern pattern : patterns) {
+            if (pattern.matcher(message).find()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String safeMessage(Throwable error) {
+        String message = error.getMessage();
+        if (message != null) {
+            return message;
+        }
+        return error.toString();
+    }
+
     private static String extractStatusCode(String message) {
         if (message == null) {
             return null;
         }
 
-        Pattern codePattern = Pattern.compile("\"code\":\\s*(\\d+)");
+        Pattern codePattern = Pattern.compile("\\\"code\\\":\\s*(\\d+)");
         Matcher matcher = codePattern.matcher(message);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+
+        Pattern statusPattern = Pattern.compile("\\\"status\\\":\\s*(\\d+)");
+        matcher = statusPattern.matcher(message);
         if (matcher.find()) {
             return matcher.group(1);
         }

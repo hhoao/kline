@@ -11,11 +11,17 @@ public class StartTaskTransition implements SingleArcTransition<TaskV2, TaskEven
     @Override
     public void transition(TaskV2 operand, TaskEvent event) {
         StartTaskEvent startTaskEvent = (StartTaskEvent) event;
-        operand.getStartTaskHandler()
-                .startTask(
-                        startTaskEvent.getTaskText(),
-                        startTaskEvent.getImages(),
-                        startTaskEvent.getFiles());
-        operand.handle(new PrepareContextEvent(operand.getTaskId()));
+        boolean shouldContinue =
+                operand.getStartTaskHandler()
+                        .startTask(
+                                startTaskEvent.getTaskText(),
+                                startTaskEvent.getImages(),
+                                startTaskEvent.getFiles());
+        if (shouldContinue) {
+            operand.handle(new PrepareContextEvent(operand.getTaskId()));
+        } else {
+            // Hook cancelled the task — let cancelTask handle cleanup
+            operand.getCancelTask().run();
+        }
     }
 }

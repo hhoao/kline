@@ -17,9 +17,10 @@ alwaysApply: false
 - Ensure Language comments accurately reflect the implementation.
 - Look for opportunities to simplify or modernize code with the latest Language features where it improves clarity.
 - Defer formatting to tooling; ignore purely formatting-only issues and autofixable lint problems.
+- When writing tests, avoid writing simple test examples, such as not checking an object's properties immediately after it is created.
+- When developing a new feature or modifying a feature, write test cases before starting development.
 
 ## Project Specific Code Style and Optimization Guidelines
 
 - Read kline server code style: @kline-server/.cursor/rules/java.mdc
 - Read kline web ui code style: @kline-web-ui/.cursor/rules/language.mdc
-- When writing tests, avoid writing simple test examples, such as not checking an object's properties immediately after it is created.

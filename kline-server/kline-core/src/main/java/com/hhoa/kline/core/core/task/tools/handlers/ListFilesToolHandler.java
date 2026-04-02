@@ -111,16 +111,61 @@ public class ListFilesToolHandler implements StateFullToolHandler {
         String recursiveRaw = HandlerUtils.getStringParam(block, "recursive");
         boolean recursive = recursiveRaw != null && recursiveRaw.equalsIgnoreCase("true");
 
-        if (context.getWorkspaceManager() == null) {
-            throw new IllegalStateException("workspaceManager 未配置，无法列出工作区文件");
+        // Check clineignore access before performing any IO.
+        // Increment the counter so repeated attempts at blocked paths
+        // accumulate toward the yolo-mode mistake limit.
+        if (context.getServices().getClineIgnoreController() != null
+                && !context.getServices().getClineIgnoreController().validateAccess(relDirPath)) {
+            context.getTaskState()
+                    .setConsecutiveMistakeCount(
+                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+            context.getCallbacks()
+                    .say(ClineSay.CLINEIGNORE_ERROR, relDirPath, null, null, false, null);
+            return HandlerUtils.createToolExecuteResult(
+                    formatResponse.toolError(formatResponse.clineIgnoreError(relDirPath)));
         }
-        WorkspaceConfig workspaceConfig = new WorkspaceConfig(context.getWorkspaceManager());
-        WorkspaceResolver.WorkspacePathResult pathResult =
-                WorkspaceResolver.resolveWorkspacePath(
-                        workspaceConfig, relDirPath, "ListFilesToolHandler.execute");
 
-        String absolutePath = pathResult.absolutePath();
-        String displayPath = pathResult.displayPath();
+        // Resolve the path and execute the list operation inside a single
+        // try/catch so that failures (e.g. bad workspace hint, non-existent
+        // directory) return a graceful tool error instead of crashing the task.
+        String absolutePath;
+        String displayPath;
+        boolean usedWorkspaceHint;
+        List<String> files;
+        boolean didHitLimit;
+        try {
+            if (context.getWorkspaceManager() == null) {
+                throw new IllegalStateException("workspaceManager 未配置，无法列出工作区文件");
+            }
+            WorkspaceConfig workspaceConfig = new WorkspaceConfig(context.getWorkspaceManager());
+            WorkspaceResolver.WorkspacePathResult pathResult =
+                    WorkspaceResolver.resolveWorkspacePath(
+                            workspaceConfig, relDirPath, "ListFilesToolHandler.execute");
+
+            absolutePath = pathResult.absolutePath();
+            displayPath = pathResult.displayPath();
+            usedWorkspaceHint = true;
+
+            List<String> filesList = listFiles(absolutePath, recursive, MAX_FILES, context);
+            if (filesList.size() >= MAX_FILES) {
+                files = filesList.subList(0, MAX_FILES);
+                didHitLimit = true;
+            } else {
+                files = filesList;
+                didHitLimit = false;
+            }
+        } catch (Exception e) {
+            context.getTaskState()
+                    .setConsecutiveMistakeCount(
+                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+            String errorMessage = e.getMessage() != null ? e.getMessage() : String.valueOf(e);
+            return HandlerUtils.createToolExecuteResult(
+                    formatResponse.toolError("Error listing files: " + errorMessage));
+        }
+
+        // Only reset after all validations and the core operation succeed so
+        // repeated failures accumulate toward the yolo-mode mistake limit.
+        context.getTaskState().setConsecutiveMistakeCount(0);
 
         String fallbackAbsolutePath =
                 Paths.get(context.getCwd())
@@ -129,20 +174,9 @@ public class ListFilesToolHandler implements StateFullToolHandler {
         boolean resolvedToNonPrimary = !arePathsEqual(absolutePath, fallbackAbsolutePath);
         TelemetryService.WorkspaceContext workspaceContext =
                 new TelemetryService.WorkspaceContext(
-                        true, // 多根路径结果表示使用了提示
+                        usedWorkspaceHint,
                         resolvedToNonPrimary,
-                        "hint");
-
-        List<String> files;
-        boolean didHitLimit;
-        List<String> filesList = listFiles(absolutePath, recursive, MAX_FILES, context);
-        if (filesList.size() >= MAX_FILES) {
-            files = filesList.subList(0, MAX_FILES);
-            didHitLimit = true;
-        } else {
-            files = filesList;
-            didHitLimit = false;
-        }
+                        usedWorkspaceHint ? "hint" : "primary_fallback");
 
         String result =
                 formatResponse.formatFilesList(

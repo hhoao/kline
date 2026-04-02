@@ -13,6 +13,7 @@ import com.hhoa.kline.core.core.workspace.WorkspaceRootManager;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
@@ -35,6 +36,12 @@ public class MessageStateHandler {
     private final WorkspaceRootManager workspaceRootManager;
     private ObjectMapper objectMapper = new ObjectMapper();
 
+    /** Mutex to prevent concurrent state modifications (RC-4). */
+    private final Object stateLock = new Object();
+
+    /** Listeners notified on clineMessages changes. */
+    private final List<Consumer<ClineMessageChange>> changeListeners = new CopyOnWriteArrayList<>();
+
     public MessageStateHandler(
             String taskId,
             String ulid,
@@ -48,10 +55,39 @@ public class MessageStateHandler {
         this.workspaceRootManager = workspaceRootManager;
     }
 
+    /** Register a listener for clineMessages changes. */
+    public void addChangeListener(Consumer<ClineMessageChange> listener) {
+        changeListeners.add(listener);
+    }
+
+    /** Remove a previously registered change listener. */
+    public void removeChangeListener(Consumer<ClineMessageChange> listener) {
+        changeListeners.remove(listener);
+    }
+
+    private void emitChange(ClineMessageChange change) {
+        for (Consumer<ClineMessageChange> listener : changeListeners) {
+            try {
+                listener.accept(change);
+            } catch (Exception e) {
+                log.warn("Change listener threw exception", e);
+            }
+        }
+    }
+
     public void setClineMessages(List<ClineMessage> newMessages) {
-        clineMessages.clear();
-        if (newMessages != null) {
-            clineMessages.addAll(newMessages);
+        synchronized (stateLock) {
+            List<ClineMessage> previousMessages = new ArrayList<>(clineMessages);
+            clineMessages.clear();
+            if (newMessages != null) {
+                clineMessages.addAll(newMessages);
+            }
+            emitChange(
+                    ClineMessageChange.builder()
+                            .type(ClineMessageChange.ChangeType.SET)
+                            .messages(new ArrayList<>(clineMessages))
+                            .previousMessages(previousMessages)
+                            .build());
         }
     }
 
@@ -60,35 +96,105 @@ public class MessageStateHandler {
             return;
         }
 
-        if (taskState != null) {
-            message.setConversationHistoryIndex(
-                    apiConversationHistory.isEmpty() ? -1 : apiConversationHistory.size() - 1);
-            message.setConversationHistoryDeletedRange(
-                    taskState.getConversationHistoryDeletedRange());
-        }
+        synchronized (stateLock) {
+            if (taskState != null) {
+                message.setConversationHistoryIndex(
+                        apiConversationHistory.isEmpty() ? -1 : apiConversationHistory.size() - 1);
+                message.setConversationHistoryDeletedRange(
+                        taskState.getConversationHistoryDeletedRange());
+            }
 
-        clineMessages.add(message);
-        saveClineMessagesAndUpdateHistory();
+            clineMessages.add(message);
+            int addedIndex = clineMessages.size() - 1;
+            emitChange(
+                    ClineMessageChange.builder()
+                            .type(ClineMessageChange.ChangeType.ADD)
+                            .messages(new ArrayList<>(clineMessages))
+                            .index(addedIndex)
+                            .message(message)
+                            .build());
+            saveClineMessagesAndUpdateHistoryInternal();
+        }
     }
 
     public void updateClineMessage(int index, ClineMessage updates) {
-        if (index < 0 || index >= clineMessages.size()) {
-            log.error("Invalid message index: {}", index);
-            return;
+        synchronized (stateLock) {
+            if (index < 0 || index >= clineMessages.size()) {
+                log.error("Invalid message index: {}", index);
+                return;
+            }
+            ClineMessage current = clineMessages.get(index);
+            ClineMessage previous = new ClineMessage();
+            BeanUtils.copyPropertiesIgnoreNull(current, previous);
+
+            BeanUtils.copyPropertiesIgnoreNull(updates, current);
+
+            emitChange(
+                    ClineMessageChange.builder()
+                            .type(ClineMessageChange.ChangeType.UPDATE)
+                            .messages(new ArrayList<>(clineMessages))
+                            .index(index)
+                            .message(current)
+                            .previousMessage(previous)
+                            .build());
+            saveClineMessagesAndUpdateHistoryInternal();
         }
-        ClineMessage current = clineMessages.get(index);
+    }
 
-        BeanUtils.copyPropertiesIgnoreNull(updates, current);
-
-        saveClineMessagesAndUpdateHistory();
+    /**
+     * Delete a cline message at the given index with atomic protection.
+     *
+     * @param index the index of the message to delete
+     * @throws IllegalArgumentException if the index is out of bounds
+     */
+    public void deleteClineMessage(int index) {
+        synchronized (stateLock) {
+            if (index < 0 || index >= clineMessages.size()) {
+                throw new IllegalArgumentException("Invalid message index: " + index);
+            }
+            ClineMessage previousMessage = clineMessages.get(index);
+            clineMessages.remove(index);
+            emitChange(
+                    ClineMessageChange.builder()
+                            .type(ClineMessageChange.ChangeType.DELETE)
+                            .messages(new ArrayList<>(clineMessages))
+                            .index(index)
+                            .previousMessage(previousMessage)
+                            .build());
+            saveClineMessagesAndUpdateHistoryInternal();
+        }
     }
 
     public void overwriteClineMessages(List<ClineMessage> newMessages) {
-        setClineMessages(newMessages);
-        saveClineMessagesAndUpdateHistory();
+        synchronized (stateLock) {
+            List<ClineMessage> previousMessages = new ArrayList<>(clineMessages);
+            clineMessages.clear();
+            if (newMessages != null) {
+                clineMessages.addAll(newMessages);
+            }
+            emitChange(
+                    ClineMessageChange.builder()
+                            .type(ClineMessageChange.ChangeType.SET)
+                            .messages(new ArrayList<>(clineMessages))
+                            .previousMessages(previousMessages)
+                            .build());
+            saveClineMessagesAndUpdateHistoryInternal();
+        }
     }
 
+    /** Public API with mutex protection for external callers. */
     public void saveClineMessagesAndUpdateHistory() {
+        synchronized (stateLock) {
+            saveClineMessagesAndUpdateHistoryInternal();
+        }
+    }
+
+    /**
+     * Internal method to save messages and update history (without mutex protection). Used by
+     * methods that already hold the stateLock. Should NOT be called directly — use {@link
+     * #saveClineMessagesAndUpdateHistory()} instead.
+     */
+    private void saveClineMessagesAndUpdateHistoryInternal() {
         if (taskId == null) {
             log.error("No taskId available to save messages");
             return;
@@ -220,22 +326,31 @@ public class MessageStateHandler {
     }
 
     public void addToApiConversationHistory(MessageParam message) {
-        if (message != null) {
-            apiConversationHistory.add(message);
-            saveApiConversationHistoryToDisk();
+        synchronized (stateLock) {
+            if (message != null) {
+                apiConversationHistory.add(message);
+                saveApiConversationHistoryToDisk();
+            }
         }
     }
 
     public void setApiConversationHistory(List<MessageParam> newHistory) {
-        apiConversationHistory.clear();
-        if (newHistory != null) {
-            apiConversationHistory.addAll(newHistory);
+        synchronized (stateLock) {
+            apiConversationHistory.clear();
+            if (newHistory != null) {
+                apiConversationHistory.addAll(newHistory);
+            }
         }
     }
 
     public void overwriteApiConversationHistory(List<MessageParam> newHistory) {
-        setApiConversationHistory(newHistory);
-        saveApiConversationHistoryToDisk();
+        synchronized (stateLock) {
+            apiConversationHistory.clear();
+            if (newHistory != null) {
+                apiConversationHistory.addAll(newHistory);
+            }
+            saveApiConversationHistoryToDisk();
+        }
     }
 
     private void saveApiConversationHistoryToDisk() {

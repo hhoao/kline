@@ -1,5 +1,6 @@
 package com.hhoa.kline.core.core.context.instructions.userinstructions;
 
+import com.hhoa.kline.core.core.shared.remoteconfig.GlobalInstructionsFile;
 import com.hhoa.kline.core.core.storage.GlobalFileNames;
 import java.io.File;
 import java.io.IOException;
@@ -7,26 +8,67 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class RuleHelpers {
-    /**
-     * 递归遍历目录并查找所有文件，包括检查可选的白名单文件扩展名
-     *
-     * @param directoryPath 目录路径
-     * @param allowedFileExtension 允许的文件扩展名（空字符串表示所有文件）
-     * @param excludedPaths 排除的路径列表
-     * @return 文件路径列表
-     */
+
+    @Getter
+    @AllArgsConstructor
+    public static class ActivatedConditionalRule {
+        private final String name;
+        private final Map<String, List<String>> matchedConditions;
+    }
+
+    @Getter
+    @AllArgsConstructor
+    public static class RuleLoadResult {
+        private final String content;
+        private final List<ActivatedConditionalRule> activatedConditionalRules;
+    }
+
+    @Getter
+    @AllArgsConstructor
+    public static class RuleLoadResultWithInstructions {
+        private final String instructions;
+        private final List<ActivatedConditionalRule> activatedConditionalRules;
+    }
+
+    @Getter
+    @AllArgsConstructor
+    public static class RuleLoadOptions {
+        private final RuleConditionals.RuleEvaluationContext evaluationContext;
+        private final RuleSourcePrefix ruleNamePrefix;
+    }
+
+    public enum RuleSourcePrefix {
+        WORKSPACE("workspace"),
+        GLOBAL("global"),
+        REMOTE("remote");
+
+        private final String value;
+
+        RuleSourcePrefix(String value) {
+            this.value = value;
+        }
+
+        public String getValue() {
+            return value;
+        }
+    }
+
     public static List<String> readDirectoryRecursive(
             String directoryPath, String allowedFileExtension, List<List<String>> excludedPaths) {
         try {
@@ -44,20 +86,13 @@ public class RuleHelpers {
             }
             return results;
         } catch (Exception e) {
-            log.error("Error reading directory " + directoryPath + ": " + e.getMessage());
+            log.error("Error reading directory {}: {}", directoryPath, e.getMessage());
             return new ArrayList<>();
         }
     }
 
-    /**
-     * 读取目录中的所有文件（递归）
-     *
-     * @param directoryPath 目录路径
-     * @param excludedPaths 排除的路径列表
-     * @return 文件路径列表（相对于目录路径）
-     */
-    private static List<String> readDirectory(
-            String directoryPath, List<List<String>> excludedPaths) throws IOException {
+    private static List<String> readDirectory(String directoryPath, List<List<String>> excludedPaths)
+            throws IOException {
         Path dir = Paths.get(directoryPath);
         if (!Files.exists(dir) || !Files.isDirectory(dir)) {
             return new ArrayList<>();
@@ -95,15 +130,6 @@ public class RuleHelpers {
         return "";
     }
 
-    /**
-     * 获取最新的切换状态
-     *
-     * @param rulesDirectoryPath 规则目录路径
-     * @param currentToggles 当前切换状态
-     * @param allowedFileExtension 允许的文件扩展名
-     * @param excludedPaths 排除的路径列表
-     * @return 更新后的切换状态
-     */
     public static Map<String, Boolean> synchronizeRuleToggles(
             String rulesDirectoryPath,
             Map<String, Boolean> currentToggles,
@@ -132,13 +158,11 @@ public class RuleHelpers {
                         String ruleFilePath = Paths.get(rulesDirectoryPath, filePath).toString();
                         existingRulePaths.add(ruleFilePath);
 
-                        boolean pathHasToggle = updatedToggles.containsKey(ruleFilePath);
-                        if (!pathHasToggle) {
+                        if (!updatedToggles.containsKey(ruleFilePath)) {
                             updatedToggles.put(ruleFilePath, true);
                         }
                     }
 
-                    // 清理不存在文件的切换状态
                     List<String> keysToRemove = new ArrayList<>();
                     for (String togglePath : updatedToggles.keySet()) {
                         if (!existingRulePaths.contains(togglePath)) {
@@ -147,8 +171,7 @@ public class RuleHelpers {
                     }
                     keysToRemove.forEach(updatedToggles::remove);
                 } else {
-                    boolean pathHasToggle = updatedToggles.containsKey(rulesDirectoryPath);
-                    if (!pathHasToggle) {
+                    if (!updatedToggles.containsKey(rulesDirectoryPath)) {
                         updatedToggles.put(rulesDirectoryPath, true);
                     }
 
@@ -161,12 +184,10 @@ public class RuleHelpers {
                     keysToRemove.forEach(updatedToggles::remove);
                 }
             } else {
-                // 清除所有切换状态，因为路径不存在
                 updatedToggles.clear();
             }
         } catch (Exception e) {
-            log.error("Failed to synchronize rule toggles for path: " + rulesDirectoryPath);
-            e.printStackTrace();
+            log.error("Failed to synchronize rule toggles for path: {}", rulesDirectoryPath, e);
         }
 
         return updatedToggles;
@@ -177,32 +198,58 @@ public class RuleHelpers {
         return synchronizeRuleToggles(rulesDirectoryPath, currentToggles, "", null);
     }
 
-    /**
-     * 某些项目规则有多个允许存储规则的位置
-     *
-     * @param toggles1 第一个切换映射
-     * @param toggles2 第二个切换映射
-     * @return 合并后的切换映射
-     */
+    public static Map<String, Boolean> synchronizeRemoteRuleToggles(
+            List<GlobalInstructionsFile> remoteRules, Map<String, Boolean> currentToggles) {
+        Map<String, Boolean> updatedToggles =
+                new HashMap<>(currentToggles != null ? currentToggles : new HashMap<>());
+        Set<String> existingRuleNames =
+                remoteRules == null
+                        ? Collections.emptySet()
+                        : remoteRules.stream()
+                                .map(GlobalInstructionsFile::getName)
+                                .collect(Collectors.toSet());
+
+        updatedToggles.entrySet().removeIf(entry -> !existingRuleNames.contains(entry.getKey()));
+
+        if (remoteRules != null) {
+            for (GlobalInstructionsFile rule : remoteRules) {
+                updatedToggles.putIfAbsent(rule.getName(), true);
+            }
+        }
+
+        return updatedToggles;
+    }
+
     public static Map<String, Boolean> combineRuleToggles(
             Map<String, Boolean> toggles1, Map<String, Boolean> toggles2) {
-        Map<String, Boolean> combined = new HashMap<>(toggles1);
-        combined.putAll(toggles2);
+        Map<String, Boolean> combined = new HashMap<>(toggles1 != null ? toggles1 : Map.of());
+        if (toggles2 != null) {
+            combined.putAll(toggles2);
+        }
         return combined;
     }
 
-    /**
-     * 读取规则文件的内容
-     *
-     * @param rulesFilePaths 规则文件路径列表
-     * @param basePath 基础路径
-     * @param toggles 切换状态
-     * @return 规则文件的总内容
-     */
     public static String getRuleFilesTotalContent(
             List<String> rulesFilePaths, String basePath, Map<String, Boolean> toggles) {
+        return getRuleFilesTotalContentWithMetadata(rulesFilePaths, basePath, toggles, null)
+                .getContent();
+    }
 
+    public static RuleLoadResult getRuleFilesTotalContentWithMetadata(
+            List<String> rulesFilePaths,
+            String basePath,
+            Map<String, Boolean> toggles,
+            RuleLoadOptions options) {
         List<String> contents = new ArrayList<>();
+        List<ActivatedConditionalRule> activatedConditionalRules = new ArrayList<>();
+        RuleConditionals.RuleEvaluationContext evaluationContext =
+                options != null && options.getEvaluationContext() != null
+                        ? options.getEvaluationContext()
+                        : new RuleConditionals.RuleEvaluationContext(Collections.emptyList());
+        RuleSourcePrefix prefix =
+                options != null && options.getRuleNamePrefix() != null
+                        ? options.getRuleNamePrefix()
+                        : RuleSourcePrefix.GLOBAL;
 
         for (String filePath : rulesFilePaths) {
             try {
@@ -210,22 +257,122 @@ public class RuleHelpers {
                 String ruleFilePathStr = ruleFilePath.toString();
                 Path ruleFilePathRelative = Paths.get(basePath).relativize(ruleFilePath);
 
-                if (toggles.containsKey(ruleFilePathStr)
+                if (toggles != null
+                        && toggles.containsKey(ruleFilePathStr)
                         && Boolean.FALSE.equals(toggles.get(ruleFilePathStr))) {
                     continue;
                 }
 
-                String content = Files.readString(ruleFilePath).trim();
-                if (!content.isEmpty()) {
-                    contents.add(ruleFilePathRelative + "\n" + content);
+                String raw = Files.readString(ruleFilePath).trim();
+                if (raw.isEmpty()) {
+                    continue;
+                }
+
+                FrontmatterParser.FrontmatterParseResult parsed =
+                        FrontmatterParser.parseYamlFrontmatter(raw);
+                if (parsed.isHadFrontmatter() && parsed.getParseError() != null) {
+                    contents.add(ruleFilePathRelative + "\n" + raw);
+                    continue;
+                }
+
+                RuleConditionals.ConditionalResult conditionalResult =
+                        RuleConditionals.evaluateRuleConditionals(
+                                parsed.getData(), evaluationContext);
+                if (!conditionalResult.isPassed()) {
+                    continue;
+                }
+
+                if (parsed.isHadFrontmatter()
+                        && conditionalResult.getMatchedConditions() != null
+                        && !conditionalResult.getMatchedConditions().isEmpty()) {
+                    activatedConditionalRules.add(
+                            new ActivatedConditionalRule(
+                                    prefix.getValue()
+                                            + ":"
+                                            + ruleFilePathRelative.toString().replace('\\', '/'),
+                                    new LinkedHashMap<>(conditionalResult.getMatchedConditions())));
+                }
+
+                String body = parsed.getBody() != null ? parsed.getBody().trim() : "";
+                if (!body.isEmpty()) {
+                    contents.add(ruleFilePathRelative + "\n" + body);
                 }
             } catch (IOException e) {
-                log.error("Failed to read rule file: " + filePath);
-                e.printStackTrace();
+                log.error("Failed to read rule file: {}", filePath, e);
             }
         }
 
-        return String.join("\n\n", contents);
+        return new RuleLoadResult(String.join("\n\n", contents), activatedConditionalRules);
+    }
+
+    public static RuleLoadResult getRemoteRulesTotalContentWithMetadata(
+            List<GlobalInstructionsFile> remoteRules,
+            Map<String, Boolean> remoteToggles,
+            RuleConditionals.RuleEvaluationContext evaluationContext) {
+        List<ActivatedConditionalRule> activatedConditionalRules = new ArrayList<>();
+        StringBuilder combinedContent = new StringBuilder();
+        RuleConditionals.RuleEvaluationContext effectiveContext =
+                evaluationContext != null
+                        ? evaluationContext
+                        : new RuleConditionals.RuleEvaluationContext(Collections.emptyList());
+
+        if (remoteRules == null) {
+            return new RuleLoadResult("", activatedConditionalRules);
+        }
+
+        for (GlobalInstructionsFile rule : remoteRules) {
+            if (rule == null || rule.getName() == null) {
+                continue;
+            }
+            boolean isEnabled =
+                    rule.isAlwaysEnabled()
+                            || remoteToggles == null
+                            || !Boolean.FALSE.equals(remoteToggles.get(rule.getName()));
+            if (!isEnabled) {
+                continue;
+            }
+
+            String raw = rule.getContents() != null ? rule.getContents().trim() : "";
+            if (raw.isEmpty()) {
+                continue;
+            }
+
+            FrontmatterParser.FrontmatterParseResult parsed =
+                    FrontmatterParser.parseYamlFrontmatter(raw);
+            if (parsed.isHadFrontmatter() && parsed.getParseError() != null) {
+                appendContent(combinedContent, rule.getName(), raw);
+                continue;
+            }
+
+            RuleConditionals.ConditionalResult conditionalResult =
+                    RuleConditionals.evaluateRuleConditionals(parsed.getData(), effectiveContext);
+            if (!conditionalResult.isPassed()) {
+                continue;
+            }
+
+            if (parsed.isHadFrontmatter()
+                    && conditionalResult.getMatchedConditions() != null
+                    && !conditionalResult.getMatchedConditions().isEmpty()) {
+                activatedConditionalRules.add(
+                        new ActivatedConditionalRule(
+                                RuleSourcePrefix.REMOTE.getValue() + ":" + rule.getName(),
+                                new LinkedHashMap<>(conditionalResult.getMatchedConditions())));
+            }
+
+            appendContent(combinedContent, rule.getName(), parsed.getBody().trim());
+        }
+
+        return new RuleLoadResult(combinedContent.toString(), activatedConditionalRules);
+    }
+
+    private static void appendContent(StringBuilder builder, String name, String body) {
+        if (body == null || body.isBlank()) {
+            return;
+        }
+        if (builder.length() > 0) {
+            builder.append("\n\n");
+        }
+        builder.append(name).append("\n").append(body);
     }
 
     public static class CreateRuleFileResult {
@@ -246,14 +393,6 @@ public class RuleHelpers {
         }
     }
 
-    /**
-     * 处理将任何目录转换为文件（专门用于 .clinerules 和 .clinerules/workflows） 旧的 .clinerules 文件或
-     * .clinerules/workflows 文件将被重命名为默认文件名 如果目录已存在或不存在，则不执行任何操作
-     *
-     * @param clinerulePath Cline 规则路径
-     * @param defaultRuleFilename 默认规则文件名
-     * @return 是否有任何未捕获的错误
-     */
     public static boolean ensureLocalClineDirExists(
             String clinerulePath, String defaultRuleFilename) {
         try {
@@ -261,7 +400,6 @@ public class RuleHelpers {
             boolean exists = Files.exists(path);
 
             if (exists && !Files.isDirectory(path)) {
-                // 将 .clinerules 文件转换为目录，并将规则文件重命名为 {defaultRuleFilename}
                 String content = Files.readString(path);
                 Path tempPath = Paths.get(clinerulePath + ".bak");
                 Files.move(path, tempPath);
@@ -270,22 +408,19 @@ public class RuleHelpers {
                     Files.createDirectories(path);
                     Files.writeString(path.resolve(defaultRuleFilename), content);
                     Files.deleteIfExists(tempPath);
-
                     return false;
                 } catch (Exception conversionError) {
-                    // 转换失败时尝试恢复备份
                     try {
                         if (Files.exists(path)) {
                             deleteDirectory(path);
                         }
                         Files.move(tempPath, path);
                     } catch (Exception restoreError) {
-                        // 忽略恢复错误
+                        log.debug("Failed to restore backup for {}", clinerulePath, restoreError);
                     }
                     return true;
                 }
             }
-            // 存在且是目录或不存在，这两种情况我们都不需要在这里处理
             return false;
         } catch (Exception e) {
             return true;
@@ -300,22 +435,13 @@ public class RuleHelpers {
                                 path -> {
                                     try {
                                         Files.delete(path);
-                                    } catch (IOException e) {
+                                    } catch (IOException ignored) {
                                     }
                                 });
             }
         }
     }
 
-    /**
-     * 创建规则文件或工作流文件
-     *
-     * @param isGlobal 是否为全局规则
-     * @param filename 文件名
-     * @param cwd 当前工作目录
-     * @param type 类型（"workflow" 或其他）
-     * @return 创建结果
-     */
     public static CreateRuleFileResult createRuleFile(
             boolean isGlobal,
             String filename,
@@ -371,7 +497,7 @@ public class RuleHelpers {
             Files.writeString(filePathObj, "");
             return new CreateRuleFileResult(filePath, false);
         } catch (Exception e) {
-            log.error("Failed to create rule file: " + e.getMessage());
+            log.error("Failed to create rule file: {}", e.getMessage(), e);
             return new CreateRuleFileResult(null, false);
         }
     }
@@ -394,14 +520,6 @@ public class RuleHelpers {
         }
     }
 
-    /**
-     * 删除规则文件或工作流文件 注意：此方法需要 TaskManager 来更新切换状态，实际使用时需要传入 StateManager
-     *
-     * @param rulePath 规则路径
-     * @param isGlobal 是否为全局规则
-     * @param type 类型
-     * @return 删除结果
-     */
     public static DeleteRuleFileResult deleteRuleFile(
             String rulePath, boolean isGlobal, String type) {
         try {
@@ -411,17 +529,11 @@ public class RuleHelpers {
             }
 
             Files.delete(path);
-
             String fileName = path.getFileName().toString();
-
-            // 注意：更新切换状态需要 StateManager 集成
-            // 实际使用时需要调用 StateManager 的方法来更新切换状态
-            // 这里仅返回成功消息
-
             return new DeleteRuleFileResult(true, "File \"" + fileName + "\" deleted successfully");
         } catch (Exception e) {
             String errorMessage = e.getMessage();
-            log.error("Error deleting file: " + errorMessage);
+            log.error("Error deleting file: {}", errorMessage, e);
             return new DeleteRuleFileResult(false, "Failed to delete file.");
         }
     }

@@ -8,6 +8,7 @@ import com.hhoa.kline.core.core.context.instructions.userinstructions.RuleHelper
 import com.hhoa.kline.core.core.context.tracking.TaskMetadata;
 import com.hhoa.kline.core.core.controller.HistoryItem;
 import com.hhoa.kline.core.core.shared.storage.GlobalState;
+import com.hhoa.kline.core.core.shared.storage.LocalState;
 import com.hhoa.kline.core.core.shared.storage.Secrets;
 import com.hhoa.kline.core.core.shared.storage.Settings;
 import com.hhoa.kline.core.core.task.ClineMessage;
@@ -55,6 +56,10 @@ public class LocalStateManager implements StateManager {
 
     private final AtomicBoolean settingsDirty = new AtomicBoolean(false);
 
+    private final AtomicBoolean localStateCacheLoaded = new AtomicBoolean(false);
+
+    private final AtomicBoolean localStateDirty = new AtomicBoolean(false);
+
     private final ScheduledExecutorService persistenceExecutor =
             Executors.newSingleThreadScheduledExecutor(
                     r -> {
@@ -66,6 +71,7 @@ public class LocalStateManager implements StateManager {
     private volatile GlobalState globalState;
     private volatile Secrets secrets;
     private volatile Settings settings;
+    private volatile LocalState localState;
 
     private ScheduledFuture<?> persistenceTask;
 
@@ -74,6 +80,7 @@ public class LocalStateManager implements StateManager {
     private File globalStateFile;
     private File secretsFile;
     private File settingsFile;
+    private File localStateFile;
 
     private final Path clineWorkflowsDirectory;
     private final Path clineRulesDirectory;
@@ -155,6 +162,9 @@ public class LocalStateManager implements StateManager {
         settingsFile =
                 createFileIfNotExists(
                         Paths.get(settingsDirectory, "settings.json").toString(), "{}");
+        localStateFile =
+                createFileIfNotExists(
+                        Paths.get(stateDirectory, "localState.json").toString(), "{}");
     }
 
     private File createFileIfNotExists(String filePath, String defaultContent) {
@@ -194,6 +204,9 @@ public class LocalStateManager implements StateManager {
             if (settingsDirty.getAndSet(false)) {
                 persistSettings();
             }
+            if (localStateDirty.getAndSet(false)) {
+                persistLocalState();
+            }
         } catch (Exception e) {
             log.error("定时持久化数据失败: {}", e.getMessage(), e);
         }
@@ -203,6 +216,7 @@ public class LocalStateManager implements StateManager {
         loadGlobalStateFromDisk();
         loadSecretsFromDisk();
         loadSettingsFromDisk();
+        loadLocalStateFromDisk();
     }
 
     private synchronized void loadGlobalStateFromDisk() {
@@ -263,6 +277,27 @@ public class LocalStateManager implements StateManager {
         }
     }
 
+
+    private synchronized void loadLocalStateFromDisk() {
+        if (localStateCacheLoaded.get()) {
+            return;
+        }
+        LocalState loadedLocalState =
+                readJsonFromFile(localStateFile, LocalState.class, LocalState.builder().build());
+        localState = DirtyTrackingProxy.createProxy(loadedLocalState, this::markLocalStateDirty);
+        localStateCacheLoaded.set(true);
+    }
+
+    private synchronized void persistLocalState() {
+        if (localState == null) {
+            return;
+        }
+        boolean success = writeJsonToFile(localStateFile, localState);
+        if (!success) {
+            localStateDirty.set(true);
+        }
+    }
+
     public synchronized GlobalState getGlobalState() {
         if (!globalStateCacheLoaded.get()) {
             loadGlobalStateFromDisk();
@@ -284,6 +319,13 @@ public class LocalStateManager implements StateManager {
         return settings;
     }
 
+    public synchronized LocalState getLocalState() {
+        if (!localStateCacheLoaded.get()) {
+            loadLocalStateFromDisk();
+        }
+        return localState;
+    }
+
     public synchronized void updateGlobalState(GlobalState globalState) {
         this.globalState = globalState;
         markGlobalStateDirty();
@@ -297,6 +339,11 @@ public class LocalStateManager implements StateManager {
     public synchronized void updateSettings(Settings settings) {
         this.settings = settings;
         markSettingsDirty();
+    }
+
+    public synchronized void updateLocalState(LocalState localState) {
+        this.localState = localState;
+        markLocalStateDirty();
     }
 
     private synchronized void schedulePersistence(Runnable persistenceTask) {
@@ -334,6 +381,16 @@ public class LocalStateManager implements StateManager {
                 () -> {
                     if (settingsDirty.get()) {
                         persistSettings();
+                    }
+                });
+    }
+
+    private void markLocalStateDirty() {
+        localStateDirty.set(true);
+        schedulePersistence(
+                () -> {
+                    if (localStateDirty.get()) {
+                        persistLocalState();
                     }
                 });
     }

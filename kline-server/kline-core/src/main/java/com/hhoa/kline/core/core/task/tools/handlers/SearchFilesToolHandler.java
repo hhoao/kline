@@ -249,12 +249,37 @@ public class SearchFilesToolHandler implements StateFullToolHandler {
         String regex = HandlerUtils.getStringParam(block, "regex");
         String filePattern = HandlerUtils.getStringParam(block, "file_pattern");
 
-        ParsedWorkspacePath parsed = WorkspacePathParser.parseWorkspaceInlinePath(relDirPath);
-        String workspaceHint = parsed.getWorkspaceHint();
-        String parsedPath = parsed.getRelPath();
+        if (relDirPath == null || relDirPath.trim().isEmpty()) {
+            context.getTaskState()
+                    .setConsecutiveMistakeCount(
+                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+            return HandlerUtils.createToolExecuteResult(
+                    formatResponse.missingToolParameterError("path"));
+        }
+        if (regex == null || regex.trim().isEmpty()) {
+            context.getTaskState()
+                    .setConsecutiveMistakeCount(
+                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+            return HandlerUtils.createToolExecuteResult(
+                    formatResponse.missingToolParameterError("regex"));
+        }
 
-        List<SearchPathInfo> searchPaths =
-                determineSearchPaths(context, parsedPath, workspaceHint, relDirPath);
+        ParsedWorkspacePath parsed;
+        String workspaceHint;
+        String parsedPath;
+        List<SearchPathInfo> searchPaths;
+        try {
+            parsed = WorkspacePathParser.parseWorkspaceInlinePath(relDirPath);
+            workspaceHint = parsed.getWorkspaceHint();
+            parsedPath = parsed.getRelPath();
+            searchPaths = determineSearchPaths(context, parsedPath, workspaceHint, relDirPath);
+        } catch (Exception e) {
+            context.getTaskState()
+                    .setConsecutiveMistakeCount(
+                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+            return HandlerUtils.createToolExecuteResult(
+                    formatResponse.toolError("Error resolving search path: " + e.getMessage()));
+        }
 
         String primaryWorkspaceRoot =
                 searchPaths.isEmpty() ? null : searchPaths.get(0).workspaceRoot;
@@ -309,6 +334,16 @@ public class SearchFilesToolHandler implements StateFullToolHandler {
         long searchDurationMs = (System.nanoTime() / 1_000_000) - searchStartTime;
 
         String results = formatSearchResults(context, searchResults, searchPaths);
+
+        // Reset or increment consecutiveMistakeCount based on search success
+        boolean anySucceeded = searchResults.stream().anyMatch(r -> r.success);
+        if (anySucceeded) {
+            context.getTaskState().setConsecutiveMistakeCount(0);
+        } else {
+            context.getTaskState()
+                    .setConsecutiveMistakeCount(
+                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+        }
 
         if (context.getWorkspaceManager() != null
                 && context.getServices() != null

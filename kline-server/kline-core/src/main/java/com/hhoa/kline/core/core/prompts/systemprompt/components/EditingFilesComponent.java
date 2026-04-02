@@ -30,12 +30,36 @@ public class EditingFilesComponent implements SystemPromptComponent {
             }
         }
 
-        return templateEngine.resolve(template, context, Map.of());
+        // Skip auto-formatting section for CLI since there's no IDE to auto-format files
+        String autoFormattingSection =
+                Boolean.TRUE.equals(context.getIsCliEnvironment())
+                        ? ""
+                        : getAutoFormattingSection();
+
+        return templateEngine.resolve(
+                template, context, Map.of("AUTO_FORMATTING_SECTION", autoFormattingSection));
     }
 
     @Override
     public SystemPromptSection getSystemPromptSection() {
         return SystemPromptSection.EDITING_FILES;
+    }
+
+    private String getAutoFormattingSection() {
+        return """
+            # Auto-formatting Considerations
+
+            - After using either write_to_file or replace_in_file, the user's editor may automatically format the file
+            - This auto-formatting may modify the file contents, for example:
+              - Breaking single lines into multiple lines
+              - Adjusting indentation to match project style (e.g. 2 spaces vs 4 spaces vs tabs)
+              - Converting single quotes to double quotes (or vice versa based on project preferences)
+              - Organizing imports (e.g. sorting, grouping by type)
+              - Adding/removing trailing commas in objects and arrays
+              - Enforcing consistent brace style (e.g. same-line vs new-line)
+              - Standardizing semicolon usage (adding or removing based on style)
+            - The write_to_file and replace_in_file tool responses will include the final state of the file after any auto-formatting
+            - Use this final state as your reference point for any subsequent edits. This is ESPECIALLY important when crafting SEARCH blocks for replace_in_file which require the content to match what's in the file exactly.""";
     }
 
     private String getTemplateText() {
@@ -90,19 +114,7 @@ public class EditingFilesComponent implements SystemPromptComponent {
               - The file is relatively small and the changes affect most of its content
               - You're generating boilerplate or template files
 
-            # Auto-formatting Considerations
-
-            - After using either write_to_file or replace_in_file, the user's editor may automatically format the file
-            - This auto-formatting may modify the file contents, for example:
-              - Breaking single lines into multiple lines
-              - Adjusting indentation to match project style (e.g. 2 spaces vs 4 spaces vs tabs)
-              - Converting single quotes to double quotes (or vice versa based on project preferences)
-              - Organizing imports (e.g. sorting, grouping by type)
-              - Adding/removing trailing commas in objects and arrays
-              - Enforcing consistent brace style (e.g. same-line vs new-line)
-              - Standardizing semicolon usage (adding or removing based on style)
-            - The write_to_file and replace_in_file tool responses will include the final state of the file after any auto-formatting
-            - Use this final state as your reference point for any subsequent edits. This is ESPECIALLY important when crafting SEARCH blocks for replace_in_file which require the content to match what's in the file exactly.
+            {{AUTO_FORMATTING_SECTION}}
 
             # Workflow Tips
 

@@ -178,6 +178,16 @@ public class PromptRegistry {
         return Optional.ofNullable(variants.get(id));
     }
 
+    /**
+     * 根据上下文获取匹配的变体。
+     * 对应 TS PromptRegistry.getVariant(context)
+     */
+    public PromptVariant getVariant(SystemPromptContext context) {
+        load();
+        ModelFamily modelFamily = detectModelFamily(context);
+        return findVariant(modelFamily);
+    }
+
     public Map<String, PromptVariant> getAllVariants() {
         return new HashMap<>(variants);
     }
@@ -196,23 +206,27 @@ public class PromptRegistry {
         return variants.get(modelId);
     }
 
+    /**
+     * 通过遍历所有已注册变体的 matcher 函数来检测模型家族。
+     * 对应 TS PromptRegistry.getModelFamily() 的 matcher-based 方法。
+     */
     private ModelFamily detectModelFamily(SystemPromptContext context) {
-        if (context.getProviderInfo() == null || context.getProviderInfo().getModel() == null) {
-            return ModelFamily.GENERIC;
+        // 遍历所有变体，找到第一个匹配的（排除 GENERIC，它作为兜底）
+        for (Map.Entry<String, PromptVariant> entry : variants.entrySet()) {
+            PromptVariant variant = entry.getValue();
+            if (variant.getFamily() == ModelFamily.GENERIC) {
+                continue;
+            }
+            if (variant.getMatcher() != null) {
+                try {
+                    if (Boolean.TRUE.equals(variant.getMatcher().apply(context))) {
+                        return variant.getFamily();
+                    }
+                } catch (Exception e) {
+                    log.warn("Matcher failed for variant {}: {}", variant.getId(), e.getMessage());
+                }
+            }
         }
-
-        String modelId = context.getProviderInfo().getModel().getId().toLowerCase();
-
-        if (modelId.contains("gpt-5")) {
-            return ModelFamily.GPT_5;
-        } else if (modelId.contains("claude-4") || modelId.contains("claude-3.5")) {
-            return ModelFamily.NEXT_GEN;
-        } else if (modelId.contains("glm")) {
-            return ModelFamily.GLM;
-        } else if ("compact".equals(context.getProviderInfo().getCustomPrompt())) {
-            return ModelFamily.XS;
-        }
-
         return ModelFamily.GENERIC;
     }
 

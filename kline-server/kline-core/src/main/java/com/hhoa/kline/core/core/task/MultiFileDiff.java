@@ -3,8 +3,7 @@ package com.hhoa.kline.core.core.task;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.shared.proto.host.ShowMessageRequest;
 import com.hhoa.kline.core.core.shared.proto.host.ShowMessageType;
-import com.hhoa.kline.core.subscription.DefaultSubscriptionManager;
-import com.hhoa.kline.core.subscription.SubscriptionManager;
+import com.hhoa.kline.core.subscription.MessageSender;
 import com.hhoa.kline.core.subscription.message.WindowShowMessageRequestMessage;
 import java.util.Comparator;
 import java.util.List;
@@ -16,9 +15,6 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public final class MultiFileDiff {
-
-    private static final SubscriptionManager subscriptionManager =
-            DefaultSubscriptionManager.getInstance();
 
     private MultiFileDiff() {}
 
@@ -34,7 +30,8 @@ public final class MultiFileDiff {
             MessageStateHandler messageStateHandler,
             CheckpointTracker checkpointTracker,
             long messageTs,
-            boolean seeNewChangesSinceLastTaskCompletion) {
+            boolean seeNewChangesSinceLastTaskCompletion,
+            MessageSender messageSender) {
         List<ClineMessage> clineMessages = messageStateHandler.getClineMessages();
         int messageIndex = -1;
         for (int i = 0; i < clineMessages.size(); i++) {
@@ -45,13 +42,13 @@ public final class MultiFileDiff {
             }
         }
         if (messageIndex < 0) {
-            sendErrorMessage("Message not found");
+            sendErrorMessage(messageSender, "Message not found");
             return;
         }
         ClineMessage message = clineMessages.get(messageIndex);
         String lastCheckpointHash = message.getLastCheckpointHash();
         if (lastCheckpointHash == null || lastCheckpointHash.isEmpty()) {
-            sendErrorMessage("No checkpoint hash found");
+            sendErrorMessage(messageSender, "No checkpoint hash found");
             return;
         }
 
@@ -61,7 +58,8 @@ public final class MultiFileDiff {
                         checkpointTracker,
                         seeNewChangesSinceLastTaskCompletion,
                         messageIndex,
-                        lastCheckpointHash);
+                        lastCheckpointHash,
+                        messageSender);
         if (changedFiles.isEmpty()) return;
 
         String title =
@@ -85,7 +83,8 @@ public final class MultiFileDiff {
             CheckpointTracker checkpointTracker,
             boolean changesSinceLastTaskCompletion,
             int messageIndex,
-            String lastCheckpointHash) {
+            String lastCheckpointHash,
+            MessageSender messageSender) {
         try {
             List<ChangedFile> changedFiles;
             if (changesSinceLastTaskCompletion) {
@@ -94,16 +93,17 @@ public final class MultiFileDiff {
                                 messageStateHandler,
                                 checkpointTracker,
                                 messageIndex,
-                                lastCheckpointHash);
+                                lastCheckpointHash,
+                                messageSender);
             } else {
                 changedFiles = checkpointTracker.getDiffSet(lastCheckpointHash);
             }
             if (changedFiles == null || changedFiles.isEmpty()) {
-                sendInfoMessage("No changes found");
+                sendInfoMessage(messageSender, "No changes found");
             }
             return changedFiles == null ? List.of() : changedFiles;
         } catch (Exception e) {
-            sendErrorMessage("Failed to retrieve diff set: " + e.getMessage());
+            sendErrorMessage(messageSender, "Failed to retrieve diff set: " + e.getMessage());
             return List.of();
         }
     }
@@ -112,7 +112,8 @@ public final class MultiFileDiff {
             MessageStateHandler messageStateHandler,
             CheckpointTracker checkpointTracker,
             int messageIndex,
-            String lastCheckpointHash) {
+            String lastCheckpointHash,
+            MessageSender messageSender) {
         List<ClineMessage> msgs = messageStateHandler.getClineMessages();
 
         Optional<String> lastTaskCompletedHash =
@@ -130,7 +131,7 @@ public final class MultiFileDiff {
         String previousCheckpointHash =
                 lastTaskCompletedHash.orElse(firstCheckpointHash.orElse(null));
         if (previousCheckpointHash == null) {
-            sendErrorMessage("Unexpected error: No checkpoint hash found");
+            sendErrorMessage(messageSender, "Unexpected error: No checkpoint hash found");
             return List.of();
         }
         return checkpointTracker.getDiffSet(previousCheckpointHash, lastCheckpointHash);
@@ -158,21 +159,21 @@ public final class MultiFileDiff {
         List<ChangedFile> getDiffSet(String fromHash, String toHash);
     }
 
-    private static void sendInfoMessage(String message) {
+    private static void sendInfoMessage(MessageSender messageSender, String message) {
         log.info("[INFO] " + message);
         ShowMessageRequest request =
                 ShowMessageRequest.builder()
                         .type(ShowMessageType.INFORMATION)
                         .message(message)
                         .build();
-        subscriptionManager.send(new WindowShowMessageRequestMessage(request));
+        messageSender.send(new WindowShowMessageRequestMessage(request));
     }
 
-    private static void sendErrorMessage(String message) {
+    private static void sendErrorMessage(MessageSender messageSender, String message) {
         log.error("[ERROR] " + message);
         ShowMessageRequest request =
                 ShowMessageRequest.builder().type(ShowMessageType.ERROR).message(message).build();
-        subscriptionManager.send(new WindowShowMessageRequestMessage(request));
+        messageSender.send(new WindowShowMessageRequestMessage(request));
     }
 
     private static void sendOpenMultiFileDiff(String title, List<DiffEntry> diffs) {
@@ -190,8 +191,6 @@ public final class MultiFileDiff {
                                 log.info("- " + d.filePath);
                             });
         }
-        // TODO: 通过订阅消息发送打开多文件 Diff 请求
-        // 需要创建相应的请求消息类型
     }
 
     @Data

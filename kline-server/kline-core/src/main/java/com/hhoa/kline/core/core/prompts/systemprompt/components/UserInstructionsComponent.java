@@ -24,9 +24,14 @@ public class UserInstructionsComponent implements SystemPromptComponent {
     public String apply(PromptVariant variant, SystemPromptContext context) {
         String customInstructions =
                 buildUserInstructions(
+                        context.getGlobalClineRulesFileInstructions(),
+                        context.getLocalClineRulesFileInstructions(),
+                        context.getLocalCursorRulesFileInstructions(),
+                        context.getLocalCursorRulesDirInstructions(),
+                        context.getLocalWindsurfRulesFileInstructions(),
+                        context.getLocalAgentsRulesFileInstructions(),
                         context.getClineIgnoreInstructions(),
-                        context.getPreferredLanguageInstructions(),
-                        context.getGlobalClineRulesFileInstructions());
+                        context.getPreferredLanguageInstructions());
 
         if (customInstructions == null || customInstructions.trim().isEmpty()) {
             return null;
@@ -64,29 +69,35 @@ public class UserInstructionsComponent implements SystemPromptComponent {
     }
 
     private String buildUserInstructions(
+            String globalClineRulesFileInstructions,
+            String localClineRulesFileInstructions,
+            String localCursorRulesFileInstructions,
+            String localCursorRulesDirInstructions,
+            String localWindsurfRulesFileInstructions,
+            String localAgentsRulesFileInstructions,
             String clineIgnoreInstructions,
-            String preferredLanguageInstructions,
-            String globalClineRulesFileInstructions) {
+            String preferredLanguageInstructions) {
         List<String> customInstructions = new ArrayList<>();
 
-        if (preferredLanguageInstructions != null
-                && !preferredLanguageInstructions.trim().isEmpty()) {
-            customInstructions.add(preferredLanguageInstructions);
-        }
-
-        if (globalClineRulesFileInstructions != null
-                && !globalClineRulesFileInstructions.trim().isEmpty()) {
-            customInstructions.add(globalClineRulesFileInstructions);
-        }
-
-        if (clineIgnoreInstructions != null && !clineIgnoreInstructions.trim().isEmpty()) {
-            customInstructions.add(clineIgnoreInstructions);
-        }
+        addIfPresent(customInstructions, preferredLanguageInstructions);
+        addIfPresent(customInstructions, globalClineRulesFileInstructions);
+        addIfPresent(customInstructions, localClineRulesFileInstructions);
+        addIfPresent(customInstructions, localCursorRulesFileInstructions);
+        addIfPresent(customInstructions, localCursorRulesDirInstructions);
+        addIfPresent(customInstructions, localWindsurfRulesFileInstructions);
+        addIfPresent(customInstructions, localAgentsRulesFileInstructions);
+        addIfPresent(customInstructions, clineIgnoreInstructions);
 
         if (customInstructions.isEmpty()) {
             return null;
         }
 
         return String.join("\n\n", customInstructions);
+    }
+
+    private void addIfPresent(List<String> list, String value) {
+        if (value != null && !value.trim().isEmpty()) {
+            list.add(value);
+        }
     }
 }

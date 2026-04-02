@@ -51,4 +51,17 @@
             <artifactId>commons-text</artifactId>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <configuration>
+                    <mainClass>com.hhoa.kline.core.core.task.TaskV2StateMachineTopology</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

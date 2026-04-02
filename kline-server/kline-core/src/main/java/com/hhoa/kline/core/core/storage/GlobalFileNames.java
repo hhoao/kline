@@ -20,9 +20,12 @@ public class GlobalFileNames {
     public static final String CLINE_RULES = ".clinerules";
     public static final String WORKFLOWS = ".clinerules/workflows";
     public static final String HOOKS_DIR = ".clinerules/hooks";
+    public static final String SKILLS_DIR = ".clinerules/skills";
     public static final String CURSOR_RULES_DIR = ".cursor/rules";
     public static final String CURSOR_RULES_FILE = ".cursorrules";
     public static final String WINDSURF_RULES = ".windsurfrules";
+    public static final String AGENTS_RULES_FILE = "AGENTS.md";
+    public static final String GLOBAL_SKILLS_DIR = BASE_DIR + File.separator + "skills";
     public static final String TASK_METADATA = "task_metadata.json";
     public static final String MCP_MARKETPLACE_CATALOG = "mcp_marketplace_catalog.json";
 

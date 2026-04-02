@@ -11,8 +11,7 @@ import com.hhoa.kline.core.core.shared.proto.host.OpenTerminalRequest;
 import com.hhoa.kline.core.core.shared.proto.host.ShowTextDocumentOptions;
 import com.hhoa.kline.core.core.shared.proto.host.ShowTextDocumentRequest;
 import com.hhoa.kline.core.core.workspace.WorkspaceRootManager;
-import com.hhoa.kline.core.subscription.DefaultSubscriptionManager;
-import com.hhoa.kline.core.subscription.SubscriptionManager;
+import com.hhoa.kline.core.subscription.MessageSender;
 import com.hhoa.kline.core.subscription.message.WindowShowTextDocumentMessage;
 import com.hhoa.kline.core.subscription.message.WorkspaceOpenInFileExplorerPanelRequestMessage;
 import com.hhoa.kline.core.subscription.message.WorkspaceOpenProblemsPanelMessage;
@@ -55,8 +54,6 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class Mentions {
     private static final Pattern GIT_COMMIT_HASH_PATTERN = Pattern.compile("^[a-f0-9]{7,40}$");
-    private static final SubscriptionManager subscriptionManager =
-            DefaultSubscriptionManager.getInstance();
 
     /**
      * 打开提及。
@@ -70,7 +67,8 @@ public class Mentions {
             String mention,
             String cwd,
             Object workspaceClient, // 移除 HostProvider 依赖，改为 Object
-            Object windowClient) { // 移除 HostProvider 依赖，改为 Object
+            Object windowClient, // 移除 HostProvider 依赖，改为 Object
+            MessageSender messageSender) {
         if (mention == null || mention.isEmpty()) {
             return CompletableFuture.completedFuture(null);
         }
@@ -92,7 +90,7 @@ public class Mentions {
                                             OpenInFileExplorerPanelRequest.builder()
                                                     .path(absPath.toString())
                                                     .build();
-                                    subscriptionManager.send(
+                                    messageSender.send(
                                             new WorkspaceOpenInFileExplorerPanelRequestMessage(
                                                     explorerRequest));
                                 }
@@ -107,7 +105,7 @@ public class Mentions {
                                                                     .preview(false)
                                                                     .build())
                                                     .build();
-                                    subscriptionManager.send(
+                                    messageSender.send(
                                             new WindowShowTextDocumentMessage(textDocRequest));
                                 }
                             }
@@ -115,13 +113,13 @@ public class Mentions {
                             if (workspaceClient != null) {
                                 OpenProblemsPanelRequest problemsRequest =
                                         new OpenProblemsPanelRequest();
-                                subscriptionManager.send(
+                                messageSender.send(
                                         new WorkspaceOpenProblemsPanelMessage(problemsRequest));
                             }
                         } else if ("terminal".equals(mention)) {
                             if (workspaceClient != null) {
                                 OpenTerminalRequest terminalRequest = new OpenTerminalRequest();
-                                subscriptionManager.send(
+                                messageSender.send(
                                         new WorkspaceOpenTerminalMessage(terminalRequest));
                             }
                         } else if (mention.startsWith("http")) {
@@ -178,6 +176,7 @@ public class Mentions {
      * @param workspaceClient 工作区客户端（可选，用于获取诊断信息）
      * @param windowClient 窗口客户端（可选，用于显示错误消息）
      * @param telemetryService 遥测服务（可选，用于记录遥测数据）
+     * @param messageSender 当前任务上下文下的消息发送器
      * @return 解析后的文本
      */
     public static CompletableFuture<String> parseMentions(
@@ -188,7 +187,8 @@ public class Mentions {
             WorkspaceRootManager workspaceManager,
             Object workspaceClient, // 移除 HostProvider 依赖，改为 Object
             Object windowClient, // 移除 HostProvider 依赖，改为 Object
-            TelemetryService telemetryService) {
+            TelemetryService telemetryService,
+            MessageSender messageSender) {
         if (text == null || text.isEmpty()) {
             return CompletableFuture.completedFuture(text);
         }
@@ -291,7 +291,8 @@ public class Mentions {
                                                                 if (windowClient != null) {
                                                                     MentionsHelper.showErrorMessage(
                                                                             windowClient,
-                                                                            errorMessage);
+                                                                            errorMessage,
+                                                                            messageSender);
                                                                 }
                                                                 return exception;
                                                             })
@@ -320,7 +321,8 @@ public class Mentions {
                                                                             urlContentFetcher,
                                                                             browserError,
                                                                             windowClient,
-                                                                            telemetryService);
+                                                                            telemetryService,
+                                                                            messageSender);
                                                                 } else if (isFileMention(
                                                                         currentMention)) {
                                                                     return handleFileMention(
@@ -336,7 +338,8 @@ public class Mentions {
                                                                             textResult,
                                                                             workspaceClient,
                                                                             cwd,
-                                                                            telemetryService);
+                                                                            telemetryService,
+                                                                            messageSender);
                                                                 } else if ("terminal"
                                                                         .equals(currentMention)) {
                                                                     return handleTerminalMention(
@@ -395,7 +398,8 @@ public class Mentions {
             UrlContentFetcher urlContentFetcher,
             Exception launchBrowserError,
             Object windowClient, // 移除 HostProvider 依赖，改为 Object
-            TelemetryService telemetryService) {
+            TelemetryService telemetryService,
+            MessageSender messageSender) {
         if (launchBrowserError != null) {
             String result = "Error fetching content: " + launchBrowserError.getMessage();
             if (telemetryService != null) {
@@ -436,7 +440,8 @@ public class Mentions {
                                         "Error fetching content for "
                                                 + mention
                                                 + ": "
-                                                + errorMessage);
+                                                + errorMessage,
+                                        messageSender);
                             }
                             if (telemetryService != null) {
                                 telemetryService.captureMentionFailed(
@@ -698,8 +703,9 @@ public class Mentions {
             String text,
             Object workspaceClient, // 移除 HostProvider 依赖，改为 Object
             String cwd,
-            TelemetryService telemetryService) {
-        return MentionsHelper.getWorkspaceProblems(workspaceClient, cwd)
+            TelemetryService telemetryService,
+            MessageSender messageSender) {
+        return MentionsHelper.getWorkspaceProblems(workspaceClient, cwd, messageSender)
                 .thenApply(
                         problems -> {
                             // 记录成功的 problems mention 遥测

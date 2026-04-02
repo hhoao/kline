@@ -1,6 +1,8 @@
 package com.hhoa.kline.core.core.slashcommands;
 
 import com.hhoa.kline.core.core.prompts.Commands;
+import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamilyMatchers;
+import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
 import com.hhoa.kline.core.core.services.telemetry.TelemetryService;
 import com.hhoa.kline.core.core.shared.FocusChainSettings;
 import java.io.IOException;
@@ -84,9 +86,13 @@ public class SlashCommandParser {
             Map<String, Boolean> globalWorkflowToggles,
             String ulid,
             FocusChainSettings focusChainSettings,
+            SystemPromptContext.ApiProviderInfo providerInfo,
+            Boolean enableNativeToolCalls,
             TelemetryService telemetryService) {
 
-        Map<String, String> commandReplacements = buildCommandReplacements(focusChainSettings);
+        Map<String, String> commandReplacements =
+                buildCommandReplacements(
+                        focusChainSettings, providerInfo, enableNativeToolCalls);
 
         for (TagPattern tagPattern : tagPatterns) {
             Matcher matcher = tagPattern.getRegex().matcher(text);
@@ -176,16 +182,24 @@ public class SlashCommandParser {
 
     /** 构建命令替换映射 */
     private static Map<String, String> buildCommandReplacements(
-            FocusChainSettings focusChainSettings) {
+            FocusChainSettings focusChainSettings,
+            SystemPromptContext.ApiProviderInfo providerInfo,
+            Boolean enableNativeToolCalls) {
         Map<String, String> replacements = new HashMap<>();
         Boolean focusChainEnabled = focusChainSettings != null && focusChainSettings.isEnabled();
+        boolean willUseNativeTools =
+                ModelFamilyMatchers.isNativeToolCallingConfig(
+                        providerInfo, Boolean.TRUE.equals(enableNativeToolCalls));
 
-        replacements.put("newtask", Commands.newTaskToolResponse());
+        replacements.put("newtask", Commands.newTaskToolResponse(willUseNativeTools));
         replacements.put("smol", Commands.condenseToolResponse(focusChainEnabled));
         replacements.put("compact", Commands.condenseToolResponse(focusChainEnabled));
         replacements.put("newrule", Commands.newRuleToolResponse());
         replacements.put("reportbug", Commands.reportBugToolResponse());
-        replacements.put("deep-planning", Commands.deepPlanningToolResponse(focusChainEnabled));
+        replacements.put(
+                "deep-planning",
+                Commands.deepPlanningToolResponse(
+                        focusChainEnabled, providerInfo, willUseNativeTools));
         replacements.put("subagent", Commands.subagentToolResponse());
 
         return replacements;

@@ -24,7 +24,7 @@ public class ListCodeDefinitionNamesTool extends BaseToolSpec {
                                 createParameter(
                                         "path",
                                         true,
-                                        "The path of the directory (relative to the current working directory {{CWD}}){{MULTI_ROOT_HINT}} to list top level source code definitions for.",
+                                        "The path of a directory (not a file) relative to the current working directory {{CWD}}{{MULTI_ROOT_HINT}}. Lists definitions across all source files in that directory. To inspect a single file, use read_file instead.",
                                         "Directory path here"),
                                 createTaskProgressParameter()))
                 .build();

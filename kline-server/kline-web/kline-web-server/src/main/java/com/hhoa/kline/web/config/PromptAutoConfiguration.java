@@ -3,13 +3,8 @@ package com.hhoa.kline.web.config;
 import com.hhoa.kline.core.core.api.TaskContextHolder;
 import com.hhoa.kline.core.core.controller.LocalTaskManagerFactory;
 import com.hhoa.kline.core.core.controller.TaskManagerFactory;
+import com.hhoa.kline.core.core.prompts.systemprompt.DefaultSystemPromptServiceFactory;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptService;
-import com.hhoa.kline.core.core.prompts.systemprompt.registry.ComponentRegistry;
-import com.hhoa.kline.core.core.prompts.systemprompt.registry.DefaultComponents;
-import com.hhoa.kline.core.core.prompts.systemprompt.registry.PromptBuilder;
-import com.hhoa.kline.core.core.prompts.systemprompt.registry.PromptRegistry;
-import com.hhoa.kline.core.core.prompts.systemprompt.templates.TemplateEngine;
-import com.hhoa.kline.core.core.prompts.systemprompt.variants.VariantRegistry;
 import com.hhoa.kline.core.core.storage.GlobalFileNames;
 import com.hhoa.kline.core.core.task.ApiHandler;
 import com.hhoa.kline.web.core.SpringAIApiHandler;
@@ -79,13 +74,8 @@ public class PromptAutoConfiguration {
             AiToolService toolService,
             @Autowired(required = false) AiKnowledgeDocumentService knowledgeDocumentService) {
 
-        ComponentRegistry componentRegistry = new ComponentRegistry();
-        TemplateEngine templateEngine = new TemplateEngine();
-        DefaultComponents.registerAll(componentRegistry, templateEngine);
-        PromptBuilder promptBuilder = new PromptBuilder(componentRegistry, templateEngine);
-        VariantRegistry variantRegistry = new VariantRegistry();
-        PromptRegistry promptRegistry = new PromptRegistry(promptBuilder, variantRegistry);
-        SystemPromptService systemPromptService = new SystemPromptService(promptRegistry);
+        SystemPromptService systemPromptService =
+                DefaultSystemPromptServiceFactory.createSystemPromptService();
         Supplier<Path> basePathSupplier =
                 () -> {
                     var requestContext = TaskContextHolder.get();

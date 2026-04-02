@@ -5,6 +5,7 @@ import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.ignore.ClineIgnoreController;
 import com.hhoa.kline.core.core.integrations.editor.DiffViewProvider;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
+import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.services.telemetry.TelemetryService;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
@@ -50,7 +51,7 @@ public class WriteToFileToolHandler implements StateFullToolHandler {
     }
 
     private static String getToolDescription(ToolUse block) {
-        return "[" + block.getName() + " for '" + getStringParam(block, "path") + "']";
+        return "[" + block.getName() + " for '" + HandlerUtils.getPathParam(block) + "']";
     }
 
     private static String buildToolMessage(String tool, String path, String content) {
@@ -105,12 +106,18 @@ public class WriteToFileToolHandler implements StateFullToolHandler {
 
     @Override
     public String getDescription(ToolUse block) {
-        return "[" + block.getName() + " for '" + getStringParam(block, "path") + "']";
+        return "[" + block.getName() + " for '" + HandlerUtils.getPathParam(block) + "']";
+    }
+
+    @Override
+    public ClineToolSpec getClineToolSpec() {
+        // This handler serves multiple tools (write_to_file, replace_in_file, new_rule)
+        return null;
     }
 
     @Override
     public void handlePartialBlock(ToolUse block, UIHelpers ui) {
-        String rawRelPath = getStringParam(block, "path");
+        String rawRelPath = HandlerUtils.getPathParam(block);
         String rawContent = getStringParam(block, "content");
         String rawDiff = getStringParam(block, "diff");
 
@@ -156,9 +163,70 @@ public class WriteToFileToolHandler implements StateFullToolHandler {
 
     @Override
     public ToolExecuteResult execute(ToolContext context, ToolUse block) {
-        String rawRelPath = getStringParam(block, "path");
+        String rawRelPath = HandlerUtils.getPathParam(block);
         String rawContent = getStringParam(block, "content");
         String rawDiff = getStringParam(block, "diff");
+
+        if ("replace_in_file".equals(block.getName())
+                && (rawDiff == null || rawDiff.trim().isEmpty())) {
+            context.getTaskState()
+                    .setConsecutiveMistakeCount(
+                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+            if (context.getServices().getDiffViewProvider() != null) {
+                try {
+                    context.getServices().getDiffViewProvider().reset();
+                } catch (Exception ignored) {
+                }
+            }
+            return HandlerUtils.createToolExecuteResult(
+                    formatResponse.toolError(formatResponse.missingToolParameterError("diff")));
+        }
+
+        if ("write_to_file".equals(block.getName())
+                && (rawContent == null || rawContent.trim().isEmpty())) {
+            context.getTaskState()
+                    .setConsecutiveMistakeCount(
+                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+            if (context.getServices().getDiffViewProvider() != null) {
+                try {
+                    context.getServices().getDiffViewProvider().reset();
+                } catch (Exception ignored) {
+                }
+            }
+            int mistakeCount = context.getTaskState().getConsecutiveMistakeCount();
+            context.getCallbacks()
+                    .say(
+                            ClineSay.ERROR,
+                            "Cline tried to use write_to_file for '"
+                                    + rawRelPath
+                                    + "' without value for required parameter 'content'. "
+                                    + (mistakeCount >= 2
+                                            ? "This has happened multiple times — Cline will try a different approach."
+                                            : "Retrying..."),
+                            null,
+                            null,
+                            false,
+                            null);
+            return HandlerUtils.createToolExecuteResult(
+                    formatResponse.toolError(
+                            formatResponse.writeToFileMissingContentError(
+                                    rawRelPath, mistakeCount, null)));
+        }
+
+        if ("new_rule".equals(block.getName())
+                && (rawContent == null || rawContent.trim().isEmpty())) {
+            context.getTaskState()
+                    .setConsecutiveMistakeCount(
+                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+            if (context.getServices().getDiffViewProvider() != null) {
+                try {
+                    context.getServices().getDiffViewProvider().reset();
+                } catch (Exception ignored) {
+                }
+            }
+            return HandlerUtils.createToolExecuteResult(
+                    formatResponse.toolError(formatResponse.missingToolParameterError("content")));
+        }
 
         try {
             FileOperationResult result =
@@ -214,12 +282,14 @@ public class WriteToFileToolHandler implements StateFullToolHandler {
                 }
             }
 
+            context.getTaskState().setDidRejectTool(true);
+
             String fileDeniedNote =
                     result.fileExists
                             ? "The file was not updated, and maintains its original contents."
                             : "The file was not created.";
             return HandlerUtils.createToolExecuteResult(
-                    formatResponse.toolDenied() + " " + fileDeniedNote);
+                    "The user denied this operation. " + fileDeniedNote);
         }
 
         if (telemetry != null) {
@@ -480,6 +550,17 @@ public class WriteToFileToolHandler implements StateFullToolHandler {
         }
         dvp.scrollToFirstDiff();
         DiffViewProvider.SaveResult save = dvp.saveChanges();
+
+        // Reset consecutive mistake counter on successful file operation
+        config.getTaskState().setConsecutiveMistakeCount(0);
+
+        // Mark that a file was edited (used to determine if we should wait for busy terminal)
+        config.getTaskState().setDidEditFile(true);
+
+        // Invalidate file read cache for this file so re-reads get fresh content
+        config.getTaskState()
+                .getFileReadCache()
+                .remove(result.absolutePath.toString().toLowerCase());
 
         config.getServices().getFileContextTracker().markFileAsEditedByCline(result.relPath);
 

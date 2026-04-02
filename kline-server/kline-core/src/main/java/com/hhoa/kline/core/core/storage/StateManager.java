@@ -4,6 +4,7 @@ import com.hhoa.kline.core.core.assistant.MessageParam;
 import com.hhoa.kline.core.core.context.tracking.TaskMetadata;
 import com.hhoa.kline.core.core.controller.HistoryItem;
 import com.hhoa.kline.core.core.shared.storage.GlobalState;
+import com.hhoa.kline.core.core.shared.storage.LocalState;
 import com.hhoa.kline.core.core.shared.storage.Secrets;
 import com.hhoa.kline.core.core.shared.storage.Settings;
 import com.hhoa.kline.core.core.task.ClineMessage;
@@ -61,6 +62,20 @@ public interface StateManager {
 
     /** 关闭StateManager，停止定时任务并持久化数据 */
     void shutdown();
+
+    /**
+     * 获取本地状态（工作区/任务管理器范围）。
+     *
+     * @return LocalState 对象
+     */
+    LocalState getLocalState();
+
+    /**
+     * 更新本地状态。
+     *
+     * @param localState LocalState 对象
+     */
+    void updateLocalState(LocalState localState);
 
     /**
      * 确保任务目录存在

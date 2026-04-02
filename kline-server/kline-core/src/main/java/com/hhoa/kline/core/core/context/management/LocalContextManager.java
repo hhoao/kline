@@ -108,8 +108,10 @@ public class LocalContextManager implements ContextManager {
             List<ClineMessage> clineMessages,
             int contextWindow,
             int maxAllowedSize,
-            int previousApiReqIndex,
-            Double thresholdPercentage) {
+            int previousApiReqIndex) {
+
+        // Fixed threshold of 0.75 (aligned with upstream cline)
+        final double thresholdPercentage = 0.75;
 
         if (previousApiReqIndex >= 0 && previousApiReqIndex < clineMessages.size()) {
             ClineMessage previousRequest = clineMessages.get(previousApiReqIndex);
@@ -118,13 +120,8 @@ public class LocalContextManager implements ContextManager {
                         JsonUtils.parseObject(previousRequest.getText(), ClineApiReqInfo.class)
                                 .getTotalTokens();
 
-                int thresholdTokens;
-                if (thresholdPercentage != null) {
-                    int roundedThreshold = (int) Math.floor(contextWindow * thresholdPercentage);
-                    thresholdTokens = Math.min(roundedThreshold, maxAllowedSize);
-                } else {
-                    thresholdTokens = maxAllowedSize;
-                }
+                int roundedThreshold = (int) Math.floor(contextWindow * thresholdPercentage);
+                int thresholdTokens = Math.min(roundedThreshold, maxAllowedSize);
 
                 return totalTokens >= thresholdTokens;
             }

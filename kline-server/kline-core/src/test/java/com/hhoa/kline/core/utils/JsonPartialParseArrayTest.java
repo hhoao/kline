@@ -91,7 +91,7 @@ class JsonPartialParseArrayTest {
         List<String> result = PartialJsonUtils.parseArrayString(input);
 
         assertEquals(2, result.size());
-        assertEquals("Say \\\"hello\\\"", result.get(0));
+        assertEquals("Say \"hello\"", result.get(0));
         assertEquals("world", result.get(1));
     }
 }

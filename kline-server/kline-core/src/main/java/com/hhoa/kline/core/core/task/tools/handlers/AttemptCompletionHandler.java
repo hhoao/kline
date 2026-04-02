@@ -185,10 +185,14 @@ public class AttemptCompletionHandler implements StateFullToolHandler {
 
         List<UserContentBlock> cmdResult;
         if (!approved) {
+            context.getTaskState().setDidRejectTool(true);
             cmdResult = HandlerUtils.createTextBlocks(formatResponse.toolDenied());
         } else {
             ToolContext.ExecuteResult exec =
                     context.getCallbacks().executeCommandTool(state.getCommand(), null);
+            if (exec.userRejected) {
+                context.getTaskState().setDidRejectTool(true);
+            }
             cmdResult = HandlerUtils.createTextBlocks(exec.result);
         }
 

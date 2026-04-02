@@ -5,6 +5,7 @@ import com.hhoa.kline.core.core.task.TaskV2;
 import com.hhoa.kline.core.core.task.event.AskUserEvent;
 import com.hhoa.kline.core.core.task.event.ContextReadyEvent;
 import com.hhoa.kline.core.core.task.event.PrepareFailedEvent;
+import com.hhoa.kline.core.core.task.event.TaskCompleteEvent;
 import com.hhoa.kline.core.core.task.event.TaskEvent;
 import com.hhoa.kline.core.core.task.handler.PrepareContextResult;
 import com.hhoa.kline.core.core.task.statemachine.SingleArcTransition;
@@ -42,6 +43,8 @@ public class PrepareContextTransition implements SingleArcTransition<TaskV2, Tas
                                                 ClineAsk.AUTO_APPROVAL_MAX_REQ_REACHED,
                                                 message));
                             }
+                            case PrepareContextResult.EndLoop ignored ->
+                                    operand.handle(new TaskCompleteEvent(operand.getTaskId()));
                             default -> {}
                         }
                     } catch (Throwable t) {

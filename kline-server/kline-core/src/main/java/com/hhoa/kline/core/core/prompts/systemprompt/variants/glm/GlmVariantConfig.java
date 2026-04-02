@@ -1,5 +1,7 @@
 package com.hhoa.kline.core.core.prompts.systemprompt.variants.glm;
 
+import static com.hhoa.kline.core.core.prompts.systemprompt.ModelFamilyMatchers.*;
+
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.prompts.systemprompt.PromptConfig;
 import com.hhoa.kline.core.core.prompts.systemprompt.PromptVariant;
@@ -25,19 +27,18 @@ public class GlmVariantConfig {
     private static final List<SystemPromptSection> GLM_COMPONENT_ORDER =
             Arrays.asList(
                     SystemPromptSection.AGENT_ROLE,
-                    SystemPromptSection.COMPLETE_TRUNCATED_CONTENT,
                     SystemPromptSection.TOOL_USE,
+                    SystemPromptSection.TASK_PROGRESS,
                     SystemPromptSection.RULES,
                     SystemPromptSection.ACT_VS_PLAN,
-                    SystemPromptSection.CLI_SUBAGENTS,
                     SystemPromptSection.CAPABILITIES,
                     SystemPromptSection.EDITING_FILES,
                     SystemPromptSection.TODO,
                     SystemPromptSection.MCP,
-                    SystemPromptSection.TASK_PROGRESS,
                     SystemPromptSection.SYSTEM_INFO,
                     SystemPromptSection.OBJECTIVE,
-                    SystemPromptSection.USER_INSTRUCTIONS);
+                    SystemPromptSection.USER_INSTRUCTIONS,
+                    SystemPromptSection.SKILLS);
 
     private static final List<String> GLM_TOOLS =
             Stream.of(
@@ -53,10 +54,12 @@ public class GlmVariantConfig {
                             ClineDefaultTool.MCP_ACCESS,
                             ClineDefaultTool.ASK,
                             ClineDefaultTool.ATTEMPT,
-                            ClineDefaultTool.NEW_TASK,
                             ClineDefaultTool.PLAN_MODE,
                             ClineDefaultTool.MCP_DOCS,
-                            ClineDefaultTool.TODO)
+                            ClineDefaultTool.TODO,
+                            ClineDefaultTool.GENERATE_EXPLANATION,
+                            ClineDefaultTool.USE_SKILL,
+                            ClineDefaultTool.USE_SUBAGENTS)
                     .map(ClineDefaultTool::getValue)
                     .collect(Collectors.toList());
 
@@ -76,7 +79,9 @@ public class GlmVariantConfig {
                         .version(1)
                         .tags(Arrays.asList("glm", "stable"))
                         .labels(labels)
+                        .matcher(context -> isGLMModelFamily(getModelId(context)))
                         .componentOrder(GLM_COMPONENT_ORDER)
+                        .componentOverrides(GlmComponentOverrides.getOverrides())
                         .tools(GLM_TOOLS)
                         .placeholders(placeholders)
                         .config(PromptConfig.builder().build()));

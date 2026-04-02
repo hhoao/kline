@@ -16,4 +16,7 @@ public interface PrepareContextResult {
     record MaxMistakeLimitReached(String message) implements PrepareContextResult {}
 
     record AutoApprovalMaxReqReached(String message) implements PrepareContextResult {}
+
+    /** Signals that the task loop should end (e.g. yolo mode consecutive mistake failure). */
+    record EndLoop() implements PrepareContextResult {}
 }

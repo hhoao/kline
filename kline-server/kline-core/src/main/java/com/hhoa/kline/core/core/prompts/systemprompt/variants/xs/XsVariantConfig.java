@@ -1,5 +1,7 @@
 package com.hhoa.kline.core.core.prompts.systemprompt.variants.xs;
 
+import static com.hhoa.kline.core.core.prompts.systemprompt.ModelFamilyMatchers.*;
+
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.prompts.systemprompt.PromptConfig;
 import com.hhoa.kline.core.core.prompts.systemprompt.PromptVariant;
@@ -26,11 +28,15 @@ public class XsVariantConfig {
     private static final List<SystemPromptSection> XS_COMPONENT_ORDER =
             Arrays.asList(
                     SystemPromptSection.AGENT_ROLE,
-                    SystemPromptSection.COMPLETE_TRUNCATED_CONTENT,
                     SystemPromptSection.TOOL_USE,
                     SystemPromptSection.RULES,
+                    SystemPromptSection.ACT_VS_PLAN,
+                    SystemPromptSection.CAPABILITIES,
+                    SystemPromptSection.EDITING_FILES,
+                    SystemPromptSection.OBJECTIVE,
                     SystemPromptSection.SYSTEM_INFO,
-                    SystemPromptSection.OBJECTIVE);
+                    SystemPromptSection.USER_INSTRUCTIONS,
+                    SystemPromptSection.SKILLS);
 
     private static final List<String> XS_TOOLS =
             Stream.of(
@@ -39,18 +45,19 @@ public class XsVariantConfig {
                             ClineDefaultTool.FILE_NEW,
                             ClineDefaultTool.FILE_EDIT,
                             ClineDefaultTool.SEARCH,
-                            ClineDefaultTool.LIST_FILES,
                             ClineDefaultTool.ASK,
                             ClineDefaultTool.ATTEMPT,
-                            ClineDefaultTool.NEW_TASK,
-                            ClineDefaultTool.PLAN_MODE)
+                            ClineDefaultTool.PLAN_MODE,
+                            ClineDefaultTool.USE_SUBAGENTS)
                     .map(ClineDefaultTool::getValue)
                     .collect(Collectors.toList());
 
     public static PromptVariant createXsVariant() {
         Map<String, Integer> labels = new HashMap<>();
         labels.put("stable", 1);
-        labels.put("compact", 1);
+        labels.put("production", 1);
+        labels.put("advanced", 1);
+        labels.put("use_native_tools", 1);
 
         Map<String, String> placeholders = new HashMap<>();
         placeholders.put("MODEL_FAMILY", "xs");
@@ -61,11 +68,19 @@ public class XsVariantConfig {
                         .description(
                                 "Compact models with limited context windows. Streamlined for efficiency with essential tools only.")
                         .version(1)
-                        .tags(Arrays.asList("xs", "compact", "efficient"))
+                        .tags(Arrays.asList("local", "xs", "compact", "native_tools"))
                         .labels(labels)
+                        .matcher(context -> {
+                            var providerInfo = context.getProviderInfo();
+                            if (!isLocalModel(providerInfo)) {
+                                return false;
+                            }
+                            return "compact".equals(providerInfo.getCustomPrompt());
+                        })
                         .componentOrder(XS_COMPONENT_ORDER)
                         .tools(XS_TOOLS)
                         .placeholders(placeholders)
+                        .componentOverrides(XsComponentOverrides.getOverrides())
                         .config(PromptConfig.builder().build()));
     }
 

@@ -120,6 +120,7 @@ public final class StateKeys {
         public static final String ENABLE_CHECKPOINTS_SETTING = "enableCheckpointsSetting";
         public static final String STRICT_PLAN_MODE_ENABLED = "strictPlanModeEnabled";
         public static final String YOLO_MODE_TOGGLED = "yoloModeToggled";
+        public static final String AUTO_APPROVE_ALL_TOGGLED = "autoApproveAllToggled";
         public static final String USE_AUTO_CONDENSE = "useAutoCondense";
         public static final String HOOKS_ENABLED = "hooksEnabled";
         public static final String SUBAGENTS_ENABLED = "subagentsEnabled";

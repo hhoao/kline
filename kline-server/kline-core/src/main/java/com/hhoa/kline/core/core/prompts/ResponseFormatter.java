@@ -20,6 +20,8 @@ public class ResponseFormatter {
 
     private static final String LOCK_TEXT_SYMBOL = "\uD83D\uDD12";
 
+    private static final int CONTEXT_WINDOW_WARNING_THRESHOLD_PERCENT = 50;
+
     private static final String TOOL_USE_INSTRUCTIONS_REMINDER =
             """
             # Reminder: Instructions for Tool Use
@@ -79,20 +81,37 @@ public class ResponseFormatter {
                 path);
     }
 
+    /**
+     * Returns error message when CLINE_COMMAND_PERMISSIONS blocks a command.
+     *
+     * @param reason the reason the command was blocked
+     * @return formatted permission denied error message
+     */
+    public String permissionDeniedError(String reason) {
+        return String.format(
+                "Command execution blocked by CLINE_COMMAND_PERMISSIONS: %s. You must try a different approach or ask the user to update the permission settings.",
+                reason);
+    }
+
+    /** No-arg overload for backward compatibility. Always includes tool use instructions. */
     public String noToolsUsed() {
-        return MessageFormat.format(
-                """
-                [ERROR] You did not use a tool in your previous response! Please retry with a tool use.
+        return noToolsUsed(false);
+    }
 
-                {0}\
-
-                # Next Steps
-
-                If you have completed the user''s task, use the attempt_completion tool.\s
-                If you require additional information from the user, use the ask_followup_question tool.\s
-                Otherwise, if you have not completed the task and do not need additional information, then proceed with the next step of the task.\s
-                (This is an automated message, so do not respond to it conversationally.)""",
-                TOOL_USE_INSTRUCTIONS_REMINDER);
+    /**
+     * Returns error message when no tools were used in the previous response.
+     *
+     * @param usingNativeToolCalls if true, omits the XML tool use instructions reminder
+     * @return formatted no-tools-used error message
+     */
+    public String noToolsUsed(boolean usingNativeToolCalls) {
+        return "[ERROR] You did not use a tool in your previous response! Please retry with a tool use.\n\n"
+                + (usingNativeToolCalls ? "" : TOOL_USE_INSTRUCTIONS_REMINDER + "\n")
+                + "\n# Next Steps\n\n"
+                + "If you have completed the user's task, use the attempt_completion tool. \n"
+                + "If you require additional information from the user, use the ask_followup_question tool. \n"
+                + "Otherwise, if you have not completed the task and do not need additional information, then proceed with the next step of the task. \n"
+                + "(This is an automated message, so do not respond to it conversationally.)";
     }
 
     public String tooManyMistakes(String feedback) {
@@ -111,6 +130,71 @@ public class ResponseFormatter {
         return String.format(
                 "Missing value for required parameter '%s'. Please retry with complete response.\n\n%s",
                 paramName, TOOL_USE_INSTRUCTIONS_REMINDER);
+    }
+
+    /**
+     * Specialized error for write_to_file when the 'content' parameter is missing. Provides
+     * progressive guidance based on how many times this has happened consecutively, and includes
+     * token budget awareness to help the model understand output constraints.
+     *
+     * @param relPath the relative file path that was being written
+     * @param consecutiveFailures number of consecutive failures
+     * @param contextUsagePercent percentage of context window used (nullable)
+     * @return formatted error message with progressive guidance
+     */
+    public String writeToFileMissingContentError(
+            String relPath, int consecutiveFailures, Double contextUsagePercent) {
+        String baseError =
+                String.format(
+                        "Failed to write to '%s': The 'content' parameter was empty. This typically happens when the file content is too large to generate in a single response, or when output token limits are reached before the content parameter is fully written.",
+                        relPath);
+
+        String contextWarning =
+                (contextUsagePercent != null
+                                && contextUsagePercent > CONTEXT_WINDOW_WARNING_THRESHOLD_PERCENT)
+                        ? String.format(
+                                "\n\nWarning: Context window is %.0f%% full. The remaining output budget may be insufficient for large file writes. You MUST use a strategy that produces smaller outputs.",
+                                contextUsagePercent)
+                        : "";
+
+        if (consecutiveFailures >= 3) {
+            return baseError
+                    + contextWarning
+                    + "\n\n"
+                    + String.format(
+                            "CRITICAL: You have failed to write this file %d times in a row. You MUST change your approach — do NOT retry write_to_file for this file again.\n\n",
+                            consecutiveFailures)
+                    + "Required action — choose ONE of these strategies:\n"
+                    + "1. **Create an empty file first, then use replace_in_file** to add content in small sections (recommended)\n"
+                    + "2. **Break the file into multiple smaller files** if architecturally appropriate\n"
+                    + "3. **Write a minimal skeleton** using write_to_file (just imports, class/function signatures, no implementations), then use replace_in_file to fill in each section one at a time\n\n"
+                    + "Each replace_in_file call should add no more than 50-100 lines of content at a time.";
+        }
+
+        if (consecutiveFailures >= 2) {
+            String ordinalSuffix = consecutiveFailures == 2 ? "nd" : "rd";
+            return baseError
+                    + contextWarning
+                    + "\n\n"
+                    + String.format(
+                            "This is your %d%s failed attempt. The file content is likely too large to generate in one response. You must use a different strategy:\n\n",
+                            consecutiveFailures, ordinalSuffix)
+                    + "Recommended approaches:\n"
+                    + "1. **Use write_to_file with a minimal skeleton** (just the structure — imports, class/function signatures, no implementations), then use replace_in_file to fill in each section incrementally\n"
+                    + "2. **Use replace_in_file with smaller chunks** — if the file already exists, make targeted edits instead of rewriting the entire file\n"
+                    + "3. **Break the task into smaller steps** — write one function or section at a time\n\n"
+                    + "Do NOT attempt to write the full file content in a single write_to_file call again.";
+        }
+
+        // First failure
+        return baseError
+                + contextWarning
+                + "\n\n"
+                + "Suggestions:\n"
+                + "- If the file is large, try breaking down the task into smaller steps. Write a skeleton first, then fill in sections using replace_in_file.\n"
+                + "- If the file already exists, prefer replace_in_file to make targeted edits instead of rewriting the entire file.\n"
+                + "- Ensure the 'content' parameter contains the complete file content before closing the tool tag.\n\n"
+                + TOOL_USE_INSTRUCTIONS_REMINDER;
     }
 
     public String invalidMcpToolArgumentError(String serverName, String toolName) {
@@ -574,6 +658,24 @@ public class ResponseFormatter {
                 # .cursor/rules
 
                 The following is provided by a root-level .cursor/rules directory where the user has specified instructions for this working directory (%s)
+
+                %s""",
+                toPosix(cwd), content);
+    }
+
+    /**
+     * AGENTS.md file instructions for the working directory.
+     *
+     * @param cwd the current working directory
+     * @param content the combined AGENTS.md content
+     * @return formatted AGENTS.md instructions
+     */
+    public static String agentsRulesLocalFileInstructions(String cwd, String content) {
+        return String.format(
+                """
+                # AGENTS.md
+
+                The following is provided by AGENTS.md files found recursively throughout this working directory (%s) where the user has specified instructions. Nested AGENTS.md will be combined below, and you should only apply the instructions for each AGENTS.md file that is directly applicable to the current task, i.e. if you are reading or writing to a file in that directory.
 
                 %s""",
                 toPosix(cwd), content);

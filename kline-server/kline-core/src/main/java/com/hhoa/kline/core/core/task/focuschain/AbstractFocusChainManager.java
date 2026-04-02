@@ -84,76 +84,6 @@ public abstract class AbstractFocusChainManager implements FocusChainManager {
 
     @Override
     public String generateFocusChainInstructions() {
-        String listInstructionsInitial =
-                """
-
-                # TODO LIST CREATION REQUIRED - ACT MODE ACTIVATED
-
-                **You've just switched from PLAN MODE to ACT MODE!**
-
-                ** IMMEDIATE ACTION REQUIRED:**
-                1. Create a comprehensive todo list in your NEXT tool call
-                2. Use the task_progress parameter to provide the list
-                3. Format each item using markdown checklist syntax:
-                \t- [ ] For tasks to be done
-                \t- [x] For any tasks already completed
-
-                **Your todo list should include:**
-                   - All major implementation steps
-                   - Testing and validation tasks
-                   - Documentation updates if needed
-                   - Final verification steps
-
-                **Example format:**
-                   - [ ] Set up project structure
-                   - [ ] Implement core functionality
-                   - [ ] Add error handling
-                   - [ ] Write tests
-                   - [ ] Test implementation
-                   - [ ] Document changes
-
-                **Remember:** Keeping the todo list updated helps track progress and ensures nothing is missed.""";
-
-        String listInstructionsRecommended =
-                """
-
-                1. Include the task_progress parameter in your next tool call
-                2. Create a comprehensive checklist of all steps needed
-                3. Use markdown format: - [ ] for incomplete, - [x] for complete
-
-                **Benefits of creating a todo list now:**
-                \t- Clear roadmap for implementation
-                \t- Progress tracking throughout the task
-                \t- Nothing gets forgotten or missed
-                \t- Users can see, monitor, and edit the plan
-
-                **Example structure:**
-                ```
-                - [ ] Analyze requirements
-                - [ ] Set up necessary files
-                - [ ] Implement main functionality
-                - [ ] Handle edge cases
-                - [ ] Test the implementation
-                - [ ] Verify results
-                ```
-
-                Keeping the todo list updated helps track progress and ensures nothing is missed.""";
-
-        String listInstrunctionsReminder =
-                """
-
-                1. To create or update a todo list, include the task_progress parameter in the next tool call
-                2. Review each item and update its status:
-                   - Mark completed items with: - [x]
-                   - Keep incomplete items as: - [ ]
-                   - Add new items if you discover additional steps
-                3. Modify the list as needed:
-                \t\t- Add any new steps you've discovered
-                \t\t- Reorder if the sequence has changed
-                4. Ensure the list accurately reflects the current state
-
-                **Remember:** Keeping the todo list updated helps track progress and ensures nothing is missed.""";
-
         String currentList = taskState.getCurrentFocusChainChecklist();
 
         if (currentList != null && !currentList.isBlank()) {
@@ -165,7 +95,7 @@ public abstract class AbstractFocusChainManager implements FocusChainManager {
                     totalItems > 0 ? Math.round((float) (completedItems * 100) / totalItems) : 0;
 
             String introUpdateRequired =
-                    "# TODO LIST UPDATE REQUIRED - You MUST include the task_progress parameter in your NEXT tool call.";
+                    "# task_progress UPDATE REQUIRED - You MUST include the task_progress parameter in your NEXT tool call.";
             String listCurrentProgress =
                     "**Current Progress: "
                             + completedItems
@@ -188,7 +118,7 @@ public abstract class AbstractFocusChainManager implements FocusChainManager {
                         + "\n"
                         + userHasUpdatedList
                         + "\n"
-                        + listInstrunctionsReminder;
+                        + FocusChainPrompts.REMINDER;
             } else {
                 String progressBasedMessageStub = "";
                 if (completedItems == 0 && totalItems > 0) {
@@ -197,37 +127,23 @@ public abstract class AbstractFocusChainManager implements FocusChainManager {
 
 
                             **Note:** No items are marked complete yet. As you work through the task, remember to mark items as complete when finished.""";
-                } else if (percentComplete >= 25 && percentComplete < 50) {
+                } else if (completedItems == totalItems && totalItems > 0) {
                     progressBasedMessageStub =
-                            "\n\n**Note:** " + percentComplete + "% of items are complete.";
-                } else if (percentComplete >= 50 && percentComplete < 75) {
-                    progressBasedMessageStub =
-                            "\n\n**Note:** "
-                                    + percentComplete
-                                    + "% of items are complete. Proceed with the task.";
+                            MessageFormat.format(
+                                    FocusChainPrompts.COMPLETED, totalItems, currentList);
                 } else if (percentComplete >= 75) {
                     progressBasedMessageStub =
                             "\n\n**Note:** "
                                     + percentComplete
                                     + "% of items are complete! Focus on finishing the remaining items.";
-                } else if (completedItems == totalItems && totalItems > 0) {
+                } else if (percentComplete >= 50) {
                     progressBasedMessageStub =
-                            MessageFormat.format(
-                                    """
-
-
-                                    **\uD83C\uDF89 EXCELLENT! All {0} items have been completed!**
-
-                                    **Completed Items:**
-                                    {1}
-
-                                    **Next Steps:**
-                                    - If the task is fully complete and meets all requirements, use attempt_completion
-                                    - If you''ve discovered additional work that wasn''t in the original scope (new features, improvements, edge cases, etc.), create a new task_progress list with those items
-                                    - If there are related tasks or follow-up items the user might want, you can suggest them in a new checklist
-
-                                    **Remember:** Only use attempt_completion if you''re confident the task is truly finished. If there''s any remaining work, create a new focus chain list to track it.""",
-                                    totalItems, currentList);
+                            "\n\n**Note:** "
+                                    + percentComplete
+                                    + "% of items are complete. Proceed with the task.";
+                } else if (percentComplete >= 25) {
+                    progressBasedMessageStub =
+                            "\n\n**Note:** " + percentComplete + "% of items are complete.";
                 }
 
                 return "\n"
@@ -238,44 +154,21 @@ public abstract class AbstractFocusChainManager implements FocusChainManager {
                         + currentList
                         + "\n"
                         + "\n"
-                        + listInstrunctionsReminder
+                        + FocusChainPrompts.REMINDER
                         + "\n"
                         + progressBasedMessageStub;
             }
         } else if (taskState.isDidRespondToPlanAskBySwitchingMode()) {
-            return listInstructionsInitial;
+            return FocusChainPrompts.INITIAL;
         } else if (Mode.PLAN.equals(stateManager.getSettings().getMode())) {
-            return MessageFormat.format(
-                    """
-
-                            # Todo List (Optional - Plan Mode)
-
-                            While in PLAN MODE, if you''ve outlined concrete steps or requirements for the user, you may include a preliminary todo list using the task_progress parameter.
-                            Reminder on how to use the task_progress parameter:
-                            {0}""",
-                    listInstrunctionsReminder);
+            return FocusChainPrompts.PLAN_MODE_REMINDER;
         } else {
             boolean isEarlyInTask = taskState.getApiRequestCount() < 10;
             if (isEarlyInTask) {
-                return MessageFormat.format(
-                        """
-
-                        # TODO LIST RECOMMENDED
-                        When starting a new task, it is recommended to create a todo list.
-
-                        {0}
-                        """,
-                        listInstructionsRecommended);
+                return FocusChainPrompts.RECOMMENDED;
             } else {
                 return MessageFormat.format(
-                        """
-
-                                # TODO LIST\s
-                                You''ve made {0} API requests without a todo list. Consider creating one to track remaining work.
-
-                                {1}
-                                """,
-                        taskState.getApiRequestCount(), listInstrunctionsReminder);
+                        FocusChainPrompts.API_REQUEST_COUNT, taskState.getApiRequestCount());
             }
         }
     }

@@ -7,6 +7,8 @@ import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptSection;
 import com.hhoa.kline.core.core.prompts.systemprompt.templates.Placeholders;
 import com.hhoa.kline.core.core.prompts.systemprompt.templates.TemplateEngine;
+import com.hhoa.kline.core.core.task.tools.subagent.AgentConfigLoader;
+import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -116,6 +118,12 @@ public class PromptBuilder {
             if (!placeholders.containsKey(key)) {
                 placeholders.put(key, componentSections.getOrDefault(key, ""));
             }
+        }
+
+        // 合并运行时占位符（优先级最高）
+        if (context.getRuntimePlaceholders() != null) {
+            context.getRuntimePlaceholders().forEach(
+                    (key, value) -> placeholders.put(key, value != null ? value.toString() : ""));
         }
 
         return placeholders;
@@ -232,6 +240,8 @@ public class PromptBuilder {
                             .collect(Collectors.toList());
         }
 
+        resolvedTools = mergeDynamicSubagentToolSpecs(resolvedTools, variant, context);
+
         List<ClineToolSpec> enabledTools =
                 resolvedTools.stream()
                         .filter(
@@ -260,6 +270,71 @@ public class PromptBuilder {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 与 Cline {@code ClineToolSet.getDynamicSubagentToolSpecs} / {@code getEnabledToolSpecs}
+     * 一致：在启用子代理且存在 YAML 配置时，用动态 {@code use_subagent_*} 工具替换单一的 {@code use_subagents}。
+     */
+    private static List<ClineToolSpec> mergeDynamicSubagentToolSpecs(
+            List<ClineToolSpec> resolvedTools, PromptVariant variant, SystemPromptContext context) {
+        if (!Boolean.TRUE.equals(context.getSubagentsEnabled())
+                || Boolean.TRUE.equals(context.getIsSubagentRun())) {
+            return resolvedTools;
+        }
+        List<String> requestedIds =
+                variant.getTools() != null && !variant.getTools().isEmpty()
+                        ? variant.getTools()
+                        : List.of();
+        boolean shouldInclude =
+                requestedIds.isEmpty()
+                        || requestedIds.contains(ClineDefaultTool.USE_SUBAGENTS.getValue());
+        if (!shouldInclude) {
+            return resolvedTools;
+        }
+        List<AgentConfigLoader.AgentConfigWithToolName> agentConfigs =
+                AgentConfigLoader.getInstance().getAllCachedConfigsWithToolNames();
+        if (agentConfigs.isEmpty()) {
+            return resolvedTools;
+        }
+        List<ClineToolSpec> filtered = new ArrayList<>();
+        for (ClineToolSpec t : resolvedTools) {
+            if (!ClineDefaultTool.USE_SUBAGENTS.getValue().equals(t.getId())) {
+                filtered.add(t);
+            }
+        }
+        ModelFamily family =
+                variant.getFamily() != null ? variant.getFamily() : ModelFamily.GENERIC;
+        for (AgentConfigLoader.AgentConfigWithToolName entry : agentConfigs) {
+            filtered.add(buildDynamicSubagentSpec(entry, family));
+        }
+        return filtered;
+    }
+
+    private static ClineToolSpec buildDynamicSubagentSpec(
+            AgentConfigLoader.AgentConfigWithToolName entry, ModelFamily family) {
+        ClineToolSpec.ClineToolSpecParameter promptParam =
+                ClineToolSpec.ClineToolSpecParameter.builder()
+                        .name("prompt")
+                        .required(true)
+                        .instruction(
+                                "Helpful instruction for the task that the subagent will perform.")
+                        .build();
+
+        return ClineToolSpec.builder()
+                .variant(family)
+                .id(ClineDefaultTool.USE_SUBAGENTS.getValue())
+                .name(entry.toolName())
+                .description(
+                        String.format(
+                                "Use the \"%s\" subagent: %s",
+                                entry.config().name(), entry.config().description()))
+                .contextRequirements(
+                        ctx ->
+                                Boolean.TRUE.equals(ctx.getSubagentsEnabled())
+                                        && !Boolean.TRUE.equals(ctx.getIsSubagentRun()))
+                .parameters(List.of(promptParam))
+                .build();
+    }
+
     /** 构建单个工具的提示 */
     public static String tool(
             ClineToolSpec config, List<String> registry, SystemPromptContext context) {
@@ -268,7 +343,11 @@ public class PromptBuilder {
             return "";
         }
 
-        String title = "## " + config.getId();
+        String displayName =
+                config.getName() != null && !config.getName().isBlank()
+                        ? config.getName()
+                        : config.getId();
+        String title = "## " + displayName;
         List<String> description = new ArrayList<>();
         description.add(
                 "Description: " + (config.getDescription() != null ? config.getDescription() : ""));
@@ -315,8 +394,8 @@ public class PromptBuilder {
         List<String> sections = new ArrayList<>();
         sections.add(title);
         sections.add(String.join("\n", description));
-        sections.add(buildParametersSection(filteredParams));
-        sections.add(buildUsageSection(config.getId(), filteredParams));
+        sections.add(buildParametersSection(filteredParams, context));
+        sections.add(buildUsageSection(displayName, filteredParams));
 
         return sections.stream()
                 .filter(s -> s != null && !s.isBlank())
@@ -325,7 +404,7 @@ public class PromptBuilder {
 
     /** 构建参数部分 */
     private static String buildParametersSection(
-            List<ClineToolSpec.ClineToolSpecParameter> params) {
+            List<ClineToolSpec.ClineToolSpecParameter> params, SystemPromptContext context) {
         if (params == null || params.isEmpty()) {
             return "Parameters: None";
         }
@@ -335,8 +414,7 @@ public class PromptBuilder {
                         .map(
                                 p -> {
                                     String requiredText = p.isRequired() ? "required" : "optional";
-                                    String instruction =
-                                            p.getInstruction() != null ? p.getInstruction() : "";
+                                    String instruction = resolveInstruction(p, context);
                                     return String.format(
                                             "- %s: (%s) %s",
                                             p.getName(), requiredText, instruction);
@@ -347,6 +425,21 @@ public class PromptBuilder {
         sections.add("Parameters:");
         sections.addAll(paramList);
         return String.join("\n", sections);
+    }
+
+    /**
+     * 解析参数的 instruction，优先使用动态 instructionFn。
+     */
+    private static String resolveInstruction(
+            ClineToolSpec.ClineToolSpecParameter param, SystemPromptContext context) {
+        if (param.getInstructionFn() != null && context != null) {
+            try {
+                return param.getInstructionFn().apply(context);
+            } catch (Exception e) {
+                // fallback to static instruction
+            }
+        }
+        return param.getInstruction() != null ? param.getInstruction() : "";
     }
 
     /** 构建用法部分 */

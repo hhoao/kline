@@ -5,9 +5,7 @@ import reactor.core.publisher.Flux;
 
 public interface SubscriptionManager {
 
-    void send(SubscriptionMessage message);
-
-    UserSubscription getOrCreateUserSubscription(String userId);
+    MessageSender createMessageSender(Long taskManagerId);
 
     Flux<SubscriptionMessage> subscribe(String userId);
 

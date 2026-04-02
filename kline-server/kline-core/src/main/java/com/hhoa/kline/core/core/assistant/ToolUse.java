@@ -15,6 +15,18 @@ public class ToolUse extends AssistantMessageContent {
 
     private Map<String, Object> params;
 
+    /** The tool call signature (for native tool calls). */
+    private String signature;
+
+    /** The call_id for tracking tool execution chains. */
+    private String callId;
+
+    /** Whether this tool use came from a native tool call (not XML-parsed). */
+    private boolean isNativeToolCall;
+
+    /** Reasoning details attached to this tool use (from reasoning summary). */
+    private Object reasoningDetails;
+
     public ToolUse() {
         this.type = "tool_use";
     }

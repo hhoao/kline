@@ -10,6 +10,7 @@ import com.hhoa.kline.core.core.storage.StateManager;
 import com.hhoa.kline.core.core.task.focuschain.FocusChainManagerFactory;
 import com.hhoa.kline.core.core.task.tools.ToolExecutor;
 import com.hhoa.kline.core.core.workspace.WorkspaceRootManager;
+import com.hhoa.kline.core.subscription.MessageSender;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -46,8 +47,6 @@ public class TaskParams {
 
     @Builder.Default private int terminalOutputLineLimit = 500;
 
-    @Builder.Default private int subagentTerminalOutputLineLimit = 2000;
-
     private String defaultTerminalProfile;
 
     private StateManager stateManager;
@@ -81,6 +80,8 @@ public class TaskParams {
     @Builder.Default private String mode = "act";
 
     private ContextFactory contextFactory;
+
+    private MessageSender messageSender;
 
     /**
      * 便捷构建器方法，用于创建基本的 TaskParams。

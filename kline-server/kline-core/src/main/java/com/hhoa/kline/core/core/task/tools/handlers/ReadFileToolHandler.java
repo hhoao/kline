@@ -3,7 +3,6 @@ package com.hhoa.kline.core.core.task.tools.handlers;
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ImageContentBlock;
 import com.hhoa.kline.core.core.assistant.ToolUse;
-import com.hhoa.kline.core.core.assistant.UserContentBlock;
 import com.hhoa.kline.core.core.ignore.ClineIgnoreController;
 import com.hhoa.kline.core.core.integrations.FileContentExtractor;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
@@ -15,6 +14,7 @@ import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
+import com.hhoa.kline.core.core.task.TaskState;
 import com.hhoa.kline.core.core.task.TaskUtils;
 import com.hhoa.kline.core.core.task.tools.types.ToolContext;
 import com.hhoa.kline.core.core.task.tools.types.ToolExecuteResult;
@@ -26,9 +26,7 @@ import com.hhoa.kline.core.core.workspace.WorkspaceResolver;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import lombok.Getter;
 import lombok.Setter;
@@ -288,24 +286,146 @@ public class ReadFileToolHandler implements StateFullToolHandler {
             String displayPath) {
         Path absolutePath = Paths.get(absolutePathStr);
         boolean supportsImages = false;
+        try {
+            if (context.getApi() != null
+                    && context.getApi().getModel() != null
+                    && context.getApi().getModel().getInfo() != null
+                    && Boolean.TRUE.equals(
+                            context.getApi().getModel().getInfo().getSupportsImages())) {
+                supportsImages = true;
+            }
+        } catch (Exception ignored) {
+            // fallback to false
+        }
 
         Integer startLine = getIntParam(block, "start_line");
         Integer endLine = getIntParam(block, "end_line");
 
-        FileContentExtractor.FileContentResult fileContent =
-                FileContentExtractor.extractFileContent(absolutePath, supportsImages);
+        // === File Read Deduplication ===
+        // Check if we've already read this exact file in this task.
+        String cacheKey = absolutePathStr.toLowerCase();
+        var cached = context.getTaskState().getFileReadCache().get(cacheKey);
 
-        List<UserContentBlock> userContentBlocks = new ArrayList<>();
-
-        if (fileContent.imageBlock != null) {
-            if (fileContent.imageBlock.source != null) {
-                ImageContentBlock imageContentBlock =
-                        new ImageContentBlock(
-                                fileContent.imageBlock.source.data,
-                                fileContent.imageBlock.source.type,
-                                fileContent.imageBlock.source.mediaType);
-                userContentBlocks.add(imageContentBlock);
+        if (cached != null) {
+            // Check if file has been modified externally by comparing mtime
+            try {
+                long currentMtime =
+                        java.nio.file.Files.getLastModifiedTime(absolutePath).toMillis();
+                if (currentMtime != cached.getMtime()) {
+                    // File was modified — evict cache entry
+                    context.getTaskState().getFileReadCache().remove(cacheKey);
+                    cached = null;
+                }
+            } catch (Exception e) {
+                context.getTaskState().getFileReadCache().remove(cacheKey);
+                cached = null;
             }
+        }
+
+        // Re-check after possible mtime eviction
+        var validCached = context.getTaskState().getFileReadCache().get(cacheKey);
+
+        if (validCached != null) {
+            validCached.setReadCount(validCached.getReadCount() + 1);
+
+            // Re-push image block for multimodal models
+            if (validCached.getImageBlock() != null
+                    && context.getTaskState().getNextUserMessageContent() != null) {
+                context.getTaskState().getNextUserMessageContent().add(validCached.getImageBlock());
+            }
+
+            // Re-read from disk (cache doesn't store content to save memory)
+            FileContentExtractor.FileContentResult fileContent;
+            try {
+                fileContent = FileContentExtractor.extractFileContent(absolutePath, supportsImages);
+            } catch (Exception e) {
+                context.getTaskState()
+                        .setConsecutiveMistakeCount(
+                                context.getTaskState().getConsecutiveMistakeCount() + 1);
+                String errorMessage = e.getMessage() != null ? e.getMessage() : String.valueOf(e);
+                String normalizedMessage =
+                        errorMessage.startsWith("Error reading file:")
+                                ? errorMessage
+                                : "Error reading file: " + errorMessage;
+                return HandlerUtils.createToolExecuteResult(
+                        formatResponse.toolError(normalizedMessage));
+            }
+
+            String content = fileContent.text != null ? fileContent.text : "[Image file]";
+            if (startLine != null || endLine != null) {
+                content = extractLineRange(content, startLine, endLine);
+            }
+
+            if (validCached.getReadCount() >= 3) {
+                return HandlerUtils.createToolExecuteResult(
+                        "[DUPLICATE READ] You have already read '"
+                                + displayPath
+                                + "' "
+                                + validCached.getReadCount()
+                                + " times in this conversation. The content has not changed since your last read. Please use the information you already have and proceed with your task.\n\n"
+                                + content);
+            }
+
+            return HandlerUtils.createToolExecuteResult(
+                    "[File already read] The file '"
+                            + displayPath
+                            + "' was already read earlier in this conversation. Returning content:\n"
+                            + content);
+        }
+
+        // Execute the actual file read operation
+        FileContentExtractor.FileContentResult fileContent;
+        try {
+            fileContent = FileContentExtractor.extractFileContent(absolutePath, supportsImages);
+        } catch (Exception e) {
+            // Return a graceful tool error instead of crashing
+            context.getTaskState()
+                    .setConsecutiveMistakeCount(
+                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+            String errorMessage = e.getMessage() != null ? e.getMessage() : String.valueOf(e);
+            String normalizedMessage =
+                    errorMessage.startsWith("Error reading file:")
+                            ? errorMessage
+                            : "Error reading file: " + errorMessage;
+            return HandlerUtils.createToolExecuteResult(
+                    formatResponse.toolError(normalizedMessage));
+        }
+
+        // Only reset mistake count after a successful read
+        context.getTaskState().setConsecutiveMistakeCount(0);
+
+        // Track file read operation
+        if (context.getServices() != null
+                && context.getServices().getFileContextTracker() != null) {
+            context.getServices()
+                    .getFileContextTracker()
+                    .trackFileContext(relPath, "read_tool")
+                    .join();
+        }
+
+        // Cache metadata for deduplication (no content stored — saves memory)
+        long mtime = 0;
+        try {
+            mtime = java.nio.file.Files.getLastModifiedTime(absolutePath).toMillis();
+        } catch (Exception e) {
+            // If stat fails, use 0 — next cache hit will evict due to mtime mismatch
+        }
+
+        ImageContentBlock imageBlock = null;
+        if (fileContent.imageBlock != null && fileContent.imageBlock.source != null) {
+            imageBlock =
+                    new ImageContentBlock(
+                            fileContent.imageBlock.source.data,
+                            fileContent.imageBlock.source.type,
+                            fileContent.imageBlock.source.mediaType);
+        }
+        context.getTaskState()
+                .getFileReadCache()
+                .put(cacheKey, new TaskState.FileReadCacheEntry(1, mtime, imageBlock));
+
+        // Handle image blocks — push to userMessageContent
+        if (imageBlock != null && context.getTaskState().getNextUserMessageContent() != null) {
+            context.getTaskState().getNextUserMessageContent().add(imageBlock);
         }
 
         String content = fileContent.text != null ? fileContent.text : "[Image file]";
@@ -330,13 +450,6 @@ public class ReadFileToolHandler implements StateFullToolHandler {
             }
         }
 
-        if (context.getServices() != null
-                && context.getServices().getFileContextTracker() != null) {
-            context.getServices()
-                    .getFileContextTracker()
-                    .trackFileContext(relPath, "read_tool")
-                    .join();
-        }
         return HandlerUtils.createToolExecuteResult(content);
     }
 

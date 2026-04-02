@@ -15,6 +15,14 @@ import org.junit.jupiter.api.Test;
 class JsonPartialContentTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    /** 增量与 {@link PartialJsonUtils#mergePartialJson} 合并后应还原为 newText */
+    private void assertPartialMergesToNewText(String oldText, String newText, String partialResult)
+            throws Exception {
+        JsonNode expected = objectMapper.readTree(newText);
+        String merged = PartialJsonUtils.mergePartialJson(oldText, partialResult);
+        assertEquals(expected, objectMapper.readTree(merged));
+    }
+
     @Test
     void testJsonPartialContent_EmptyOldText() throws Exception {
         String oldText = "{}";
@@ -25,6 +33,7 @@ class JsonPartialContentTest {
         assertNotNull(result);
         JsonNode resultNode = objectMapper.readTree(result);
         assertEquals("I", resultNode.get("question").asText());
+        assertPartialMergesToNewText(oldText, newText, result);
     }
 
     @Test
@@ -38,6 +47,7 @@ class JsonPartialContentTest {
         JsonNode resultNode = objectMapper.readTree(result);
         assertEquals(" can", resultNode.get("question").asText());
         assertNull(resultNode.get("options"));
+        assertPartialMergesToNewText(oldText, newText, result);
     }
 
     @Test
@@ -54,6 +64,7 @@ class JsonPartialContentTest {
         assertEquals(2, resultNode.get("options").size());
         assertTrue(resultNode.get("options").get(0).isNull());
         assertEquals("Modify", resultNode.get("options").get(1).asText());
+        assertPartialMergesToNewText(oldText, newText, result);
     }
 
     @Test
@@ -70,24 +81,7 @@ class JsonPartialContentTest {
         assertEquals(2, resultNode.get("options").size());
         assertTrue(resultNode.get("options").get(0).isNull());
         assertEquals("fy", resultNode.get("options").get(1).asText());
-    }
-
-    @Test
-    void testJsonPartialContent_ArrayReordering_FullReplace() throws Exception {
-        String oldText =
-                "{\"question\":\"What?\",\"options\":[\"Ask about a specific file\",\"Ask\",\"Ask about a\"]}";
-        String newText =
-                "{\"question\":\"What?\",\"options\":[\"Ask about a specific file\",\"Ask about a technical concept\"]}";
-
-        String result = PartialJsonUtils.getJsonPartialContent(newText, newText, oldText);
-
-        assertNotNull(result);
-        JsonNode resultNode = objectMapper.readTree(result);
-        assertNull(resultNode.get("question"));
-        assertTrue(resultNode.get("options").isArray());
-        assertEquals(2, resultNode.get("options").size());
-        assertEquals("Ask about a specific file", resultNode.get("options").get(0).asText());
-        assertEquals("Ask about a technical concept", resultNode.get("options").get(1).asText());
+        assertPartialMergesToNewText(oldText, newText, result);
     }
 
     @Test
@@ -105,6 +99,7 @@ class JsonPartialContentTest {
         assertTrue(resultNode.get("options").get(0).isNull());
         assertEquals("ify", resultNode.get("options").get(1).asText());
         assertEquals("Delete", resultNode.get("options").get(2).asText());
+        assertPartialMergesToNewText(oldText, newText, result);
     }
 
     @Test
@@ -115,5 +110,6 @@ class JsonPartialContentTest {
         String result = PartialJsonUtils.getJsonPartialContent(newText, newText, oldText);
 
         assertNull(result);
+        assertPartialMergesToNewText(oldText, newText, result);
     }
 }

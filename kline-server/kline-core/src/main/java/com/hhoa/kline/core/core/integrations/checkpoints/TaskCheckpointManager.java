@@ -18,7 +18,7 @@ import com.hhoa.kline.core.core.task.MessageStateHandler;
 import com.hhoa.kline.core.core.task.MultiFileDiff;
 import com.hhoa.kline.core.core.task.TaskState;
 import com.hhoa.kline.core.core.workspace.WorkspaceRootManager;
-import com.hhoa.kline.core.subscription.DefaultSubscriptionManager;
+import com.hhoa.kline.core.subscription.MessageSender;
 import com.hhoa.kline.core.subscription.message.WindowShowMessageRequestMessage;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,6 +42,7 @@ public class TaskCheckpointManager implements ICheckpointManager {
     private final Runnable postStateToWebview;
     private final Runnable cancelTask;
     private final CheckpointManagerCallbacks callbacks;
+    private final MessageSender messageSender;
 
     private CheckpointTracker checkpointTracker;
     private CompletableFuture<CheckpointTracker> checkpointTrackerInitPromise;
@@ -59,7 +60,8 @@ public class TaskCheckpointManager implements ICheckpointManager {
             CheckpointManagerCallbacks callbacks,
             int[] initialConversationHistoryDeletedRange,
             String initialCheckpointManagerErrorMessage,
-            StateManager stateManager) {
+            StateManager stateManager,
+            MessageSender messageSender) {
         this.taskId = taskId;
         this.enableCheckpoints = enableCheckpoints;
         this.messageStateHandler = messageStateHandler;
@@ -71,6 +73,7 @@ public class TaskCheckpointManager implements ICheckpointManager {
         this.callbacks = callbacks;
         this.postStateToWebview = callbacks.getPostStateToWebview();
         this.cancelTask = callbacks.getCancelTask();
+        this.messageSender = messageSender;
 
         // Initialize state from parameters
         this.conversationHistoryDeletedRange = initialConversationHistoryDeletedRange;
@@ -698,7 +701,8 @@ public class TaskCheckpointManager implements ICheckpointManager {
                                 messageStateHandler,
                                 new CheckpointTrackerAdapter(checkpointTracker),
                                 messageTs,
-                                seeNewChangesSinceLastTaskCompletion);
+                                seeNewChangesSinceLastTaskCompletion,
+                                messageSender);
 
                         sendRelinquishControlEvent();
                     } catch (Exception e) {
@@ -992,7 +996,7 @@ public class TaskCheckpointManager implements ICheckpointManager {
     private void showErrorMessage(String message) {
         ShowMessageRequest request =
                 ShowMessageRequest.builder().type(ShowMessageType.ERROR).message(message).build();
-        DefaultSubscriptionManager.getInstance().send(new WindowShowMessageRequestMessage(request));
+        messageSender.send(new WindowShowMessageRequestMessage(request));
     }
 
     private void showInfoMessage(String message) {
@@ -1001,7 +1005,7 @@ public class TaskCheckpointManager implements ICheckpointManager {
                         .type(ShowMessageType.INFORMATION)
                         .message(message)
                         .build();
-        DefaultSubscriptionManager.getInstance().send(new WindowShowMessageRequestMessage(request));
+        messageSender.send(new WindowShowMessageRequestMessage(request));
     }
 
     private void sendRelinquishControlEvent() {

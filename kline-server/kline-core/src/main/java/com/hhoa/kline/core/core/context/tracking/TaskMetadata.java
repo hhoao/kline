@@ -13,14 +13,21 @@ public class TaskMetadata {
 
     private List<ModelMetadataEntry> modelUsage;
 
+    private List<EnvironmentMetadataEntry> environmentHistory;
+
     public TaskMetadata() {
         this.filesInContext = new ArrayList<>();
         this.modelUsage = new ArrayList<>();
+        this.environmentHistory = new ArrayList<>();
     }
 
     public TaskMetadata(
-            List<FileMetadataEntry> filesInContext, List<ModelMetadataEntry> modelUsage) {
+            List<FileMetadataEntry> filesInContext,
+            List<ModelMetadataEntry> modelUsage,
+            List<EnvironmentMetadataEntry> environmentHistory) {
         this.filesInContext = filesInContext != null ? filesInContext : new ArrayList<>();
         this.modelUsage = modelUsage != null ? modelUsage : new ArrayList<>();
+        this.environmentHistory =
+                environmentHistory != null ? environmentHistory : new ArrayList<>();
     }
 }

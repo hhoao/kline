@@ -22,6 +22,7 @@ import com.hhoa.kline.core.core.workspace.WorkspacePathAdapter;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -38,6 +39,34 @@ import lombok.Setter;
 public class ExecuteCommandToolHandler implements StateFullToolHandler {
 
     private static final String COMMAND_REQ_APP_STRING = " (requires approval)";
+
+    private static final int DEFAULT_COMMAND_TIMEOUT_SECONDS = 30;
+    private static final int LONG_RUNNING_COMMAND_TIMEOUT_SECONDS = 300;
+
+    private static final List<Pattern> LONG_RUNNING_COMMAND_PATTERNS =
+            List.of(
+                    Pattern.compile(
+                            "\\b(npm|pnpm|yarn|bun)\\s+(install|ci|build|test)\\b",
+                            Pattern.CASE_INSENSITIVE),
+                    Pattern.compile(
+                            "\\b(npm|pnpm|yarn|bun)\\s+run\\s+(build|test|lint|typecheck|check)\\b",
+                            Pattern.CASE_INSENSITIVE),
+                    Pattern.compile("\\b(pip|pip3|uv)\\s+install\\b", Pattern.CASE_INSENSITIVE),
+                    Pattern.compile("\\b(poetry|pipenv)\\s+install\\b", Pattern.CASE_INSENSITIVE),
+                    Pattern.compile(
+                            "\\b(cargo|go|mvn|gradle|gradlew)\\s+(build|test|check|install)\\b",
+                            Pattern.CASE_INSENSITIVE),
+                    Pattern.compile("\\b(make|cmake|ctest)\\b", Pattern.CASE_INSENSITIVE),
+                    Pattern.compile(
+                            "\\b(pytest|tox|nox|jest|vitest|mocha)\\b", Pattern.CASE_INSENSITIVE),
+                    Pattern.compile("\\b(docker|podman)\\s+build\\b", Pattern.CASE_INSENSITIVE),
+                    Pattern.compile(
+                            "\\b(torchrun|deepspeed|accelerate\\s+launch)\\b",
+                            Pattern.CASE_INSENSITIVE),
+                    Pattern.compile("\\bffmpeg\\b", Pattern.CASE_INSENSITIVE),
+                    Pattern.compile(
+                            "\\bpython(?:\\d+(?:\\.\\d+)?)?\\s+.*\\b(train|finetune)\\b",
+                            Pattern.CASE_INSENSITIVE));
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
 
@@ -77,9 +106,13 @@ public class ExecuteCommandToolHandler implements StateFullToolHandler {
     public void handlePartialBlock(ToolUse block, UIHelpers ui) {
         String command = HandlerUtils.getStringParam(block, "command");
         Boolean shouldAutoApprove = ui.shouldAutoApproveTool(ClineDefaultTool.BASH.getValue());
-        if (shouldAutoApprove) {
-            ui.ask(ClineAsk.COMMAND, command, block.isPartial(), null);
+        if (Boolean.TRUE.equals(shouldAutoApprove)) {
+            // For auto-approved commands, we can't partially stream a say prematurely
+            // since it may become an ask based on the requires_approval parameter.
+            // So we wait for the complete block (matching TS behavior).
+            return;
         }
+        ui.ask(ClineAsk.COMMAND, command, block.isPartial(), null);
     }
 
     @Override
@@ -144,7 +177,7 @@ public class ExecuteCommandToolHandler implements StateFullToolHandler {
 
         boolean requiresApproval = Boolean.parseBoolean(requiresApprovalRaw.toLowerCase());
         final Integer timeoutSeconds =
-                computeTimeoutSeconds(context.isYoloModeToggled(), timeoutParam);
+                computeTimeoutSeconds(context.isYoloModeToggled(), timeoutParam, rawCommand);
 
         boolean autoApproveSafe;
         boolean autoApproveAll;
@@ -202,6 +235,14 @@ public class ExecuteCommandToolHandler implements StateFullToolHandler {
                             timeoutSeconds,
                             true,
                             didAutoApprove);
+
+            // Invalidate file read cache after command execution — commands can modify files
+            if (!result.userRejected) {
+                context.getTaskState().getFileReadCache().clear();
+            }
+            if (result.userRejected) {
+                context.getTaskState().setDidRejectTool(true);
+            }
             return HandlerUtils.createToolExecuteResult(result.result);
         } else {
             TaskUtils.showNotificationForApprovalIfAutoApprovalEnabled(
@@ -243,6 +284,7 @@ public class ExecuteCommandToolHandler implements StateFullToolHandler {
 
         boolean approved = ToolResultUtils.processAskResult(askResult, context);
         if (!approved) {
+            context.getTaskState().setDidRejectTool(true);
             captureTelemetry(context, block, false, false, state.getWorkspaceContext());
             return HandlerUtils.createToolExecuteResult(formatResponse.toolDenied());
         }
@@ -258,6 +300,14 @@ public class ExecuteCommandToolHandler implements StateFullToolHandler {
                         state.getTimeoutSeconds(),
                         false,
                         didAutoApprove);
+
+        // Invalidate file read cache after command execution — commands can modify files
+        if (!result.userRejected) {
+            context.getTaskState().getFileReadCache().clear();
+        }
+        if (result.userRejected) {
+            context.getTaskState().setDidRejectTool(true);
+        }
         return HandlerUtils.createToolExecuteResult(result.result);
     }
 
@@ -284,15 +334,35 @@ public class ExecuteCommandToolHandler implements StateFullToolHandler {
         }
     }
 
-    private static Integer computeTimeoutSeconds(Boolean yoloModeToggled, String timeoutParam) {
+    /**
+     * Checks whether the given command matches known long-running command patterns.
+     *
+     * @param command the command string to check
+     * @return true if the command is likely long-running
+     */
+    static boolean isLikelyLongRunningCommand(String command) {
+        if (command == null) return false;
+        String normalized = command.trim().replaceAll("\\s+", " ");
+        return LONG_RUNNING_COMMAND_PATTERNS.stream()
+                .anyMatch(pattern -> pattern.matcher(normalized).find());
+    }
+
+    private static Integer computeTimeoutSeconds(
+            Boolean yoloModeToggled, String timeoutParam, String command) {
         if (!Boolean.TRUE.equals(yoloModeToggled)) return null;
-        if (timeoutParam == null) return 30;
-        try {
-            int parsed = Integer.parseInt(timeoutParam);
-            return parsed <= 0 ? 30 : parsed;
-        } catch (NumberFormatException e) {
-            return 30;
+
+        if (timeoutParam != null) {
+            try {
+                int parsed = Integer.parseInt(timeoutParam);
+                if (parsed > 0) return parsed;
+            } catch (NumberFormatException ignored) {
+                // fall through to default logic
+            }
         }
+
+        return isLikelyLongRunningCommand(command)
+                ? LONG_RUNNING_COMMAND_TIMEOUT_SECONDS
+                : DEFAULT_COMMAND_TIMEOUT_SECONDS;
     }
 
     private static ToolContext.ExecuteResult doExecuteWithTimeoutNotification(

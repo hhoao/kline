@@ -1,5 +1,7 @@
 package com.hhoa.kline.core.core.prompts.systemprompt.variants.gpt5;
 
+import static com.hhoa.kline.core.core.prompts.systemprompt.ModelFamilyMatchers.*;
+
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.prompts.systemprompt.PromptConfig;
 import com.hhoa.kline.core.core.prompts.systemprompt.PromptVariant;
@@ -25,18 +27,18 @@ public class Gpt5VariantConfig {
     private static final List<SystemPromptSection> GPT5_COMPONENT_ORDER =
             Arrays.asList(
                     SystemPromptSection.AGENT_ROLE,
-                    SystemPromptSection.COMPLETE_TRUNCATED_CONTENT,
                     SystemPromptSection.TOOL_USE,
+                    SystemPromptSection.TASK_PROGRESS,
                     SystemPromptSection.MCP,
                     SystemPromptSection.EDITING_FILES,
                     SystemPromptSection.ACT_VS_PLAN,
-                    SystemPromptSection.CLI_SUBAGENTS,
-                    SystemPromptSection.TODO,
                     SystemPromptSection.CAPABILITIES,
+                    SystemPromptSection.FEEDBACK,
                     SystemPromptSection.RULES,
                     SystemPromptSection.SYSTEM_INFO,
                     SystemPromptSection.OBJECTIVE,
-                    SystemPromptSection.USER_INSTRUCTIONS);
+                    SystemPromptSection.USER_INSTRUCTIONS,
+                    SystemPromptSection.SKILLS);
 
     private static final List<String> GPT5_TOOLS =
             Stream.of(
@@ -49,14 +51,17 @@ public class Gpt5VariantConfig {
                             ClineDefaultTool.LIST_CODE_DEF,
                             ClineDefaultTool.BROWSER,
                             ClineDefaultTool.WEB_FETCH,
+                            ClineDefaultTool.WEB_SEARCH,
                             ClineDefaultTool.MCP_USE,
                             ClineDefaultTool.MCP_ACCESS,
                             ClineDefaultTool.ASK,
                             ClineDefaultTool.ATTEMPT,
-                            ClineDefaultTool.NEW_TASK,
                             ClineDefaultTool.PLAN_MODE,
                             ClineDefaultTool.MCP_DOCS,
-                            ClineDefaultTool.TODO)
+                            ClineDefaultTool.TODO,
+                            ClineDefaultTool.GENERATE_EXPLANATION,
+                            ClineDefaultTool.USE_SKILL,
+                            ClineDefaultTool.USE_SUBAGENTS)
                     .map(ClineDefaultTool::getValue)
                     .collect(Collectors.toList());
 
@@ -75,9 +80,18 @@ public class Gpt5VariantConfig {
                         .version(1)
                         .tags(Arrays.asList("gpt-5", "stable"))
                         .labels(labels)
+                        .matcher(context -> {
+                            var providerInfo = context.getProviderInfo();
+                            String modelId = getModelId(context);
+                            return isGPT5ModelFamily(modelId)
+                                    && !modelId.toLowerCase().contains("chat")
+                                    && isNextGenModelProvider(providerInfo)
+                                    && !Boolean.TRUE.equals(context.getEnableNativeToolCalls());
+                        })
                         .componentOrder(GPT5_COMPONENT_ORDER)
                         .tools(GPT5_TOOLS)
                         .placeholders(placeholders)
+                        .componentOverrides(Gpt5ComponentOverrides.getOverrides())
                         .config(PromptConfig.builder().build()));
     }
 

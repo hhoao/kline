@@ -2,10 +2,17 @@ package com.hhoa.kline.core.core.prompts.systemprompt.variants;
 
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.prompts.systemprompt.PromptVariant;
+import com.hhoa.kline.core.core.prompts.systemprompt.variants.devstral.DevstralVariantConfig;
+import com.hhoa.kline.core.core.prompts.systemprompt.variants.gemini3.Gemini3VariantConfig;
 import com.hhoa.kline.core.core.prompts.systemprompt.variants.generic.GenericVariantConfig;
 import com.hhoa.kline.core.core.prompts.systemprompt.variants.glm.GlmVariantConfig;
 import com.hhoa.kline.core.core.prompts.systemprompt.variants.gpt5.Gpt5VariantConfig;
+import com.hhoa.kline.core.core.prompts.systemprompt.variants.hermes.HermesVariantConfig;
+import com.hhoa.kline.core.core.prompts.systemprompt.variants.nativegpt5.NativeGpt5VariantConfig;
+import com.hhoa.kline.core.core.prompts.systemprompt.variants.nativegpt51.NativeGpt51VariantConfig;
+import com.hhoa.kline.core.core.prompts.systemprompt.variants.nativenextgen.NativeNextGenVariantConfig;
 import com.hhoa.kline.core.core.prompts.systemprompt.variants.nextgen.NextGenVariantConfig;
+import com.hhoa.kline.core.core.prompts.systemprompt.variants.trinity.TrinityVariantConfig;
 import com.hhoa.kline.core.core.prompts.systemprompt.variants.xs.XsVariantConfig;
 import java.util.HashMap;
 import java.util.List;
@@ -38,6 +45,13 @@ public class VariantRegistry {
             variantConfigs.put(ModelFamily.NEXT_GEN, NextGenVariantConfig.getConfig());
             variantConfigs.put(ModelFamily.GPT_5, Gpt5VariantConfig.getConfig());
             variantConfigs.put(ModelFamily.XS, XsVariantConfig.getConfig());
+            variantConfigs.put(ModelFamily.NATIVE_GPT_5, NativeGpt5VariantConfig.getConfig());
+            variantConfigs.put(ModelFamily.NATIVE_GPT_5_1, NativeGpt51VariantConfig.getConfig());
+            variantConfigs.put(ModelFamily.NATIVE_NEXT_GEN, NativeNextGenVariantConfig.getConfig());
+            variantConfigs.put(ModelFamily.DEVSTRAL, DevstralVariantConfig.getConfig());
+            variantConfigs.put(ModelFamily.GEMINI_3, Gemini3VariantConfig.getConfig());
+            variantConfigs.put(ModelFamily.HERMES, HermesVariantConfig.getConfig());
+            variantConfigs.put(ModelFamily.TRINITY, TrinityVariantConfig.getConfig());
 
             log.info("Initialized {} prompt variants", variantConfigs.size());
         } catch (Exception e) {

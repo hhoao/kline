@@ -4,6 +4,7 @@ import com.hhoa.kline.core.core.controller.HistoryItem;
 import com.hhoa.kline.core.core.shared.api.ApiConfiguration;
 import com.hhoa.kline.core.core.shared.multiroot.WorkspaceRoot;
 import com.hhoa.kline.core.core.shared.proto.cline.BrowserSettings;
+import com.hhoa.kline.core.core.shared.remoteconfig.RemoteConfigSettings;
 import com.hhoa.kline.core.core.shared.storage.types.Mode;
 import com.hhoa.kline.core.core.shared.storage.types.OpenaiReasoningEffort;
 import com.hhoa.kline.core.core.task.ClineMessage;
@@ -76,4 +77,6 @@ public class ExtensionState {
     private ClineFeatureSetting hooksEnabled;
 
     private Boolean subagentsEnabled;
+
+    private RemoteConfigSettings remoteConfigSettings;
 }

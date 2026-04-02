@@ -3,6 +3,7 @@ package com.hhoa.kline.core.core.utils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import java.util.ArrayList;
@@ -159,5 +160,89 @@ public class PartialJsonUtils {
         }
 
         return result;
+    }
+
+    /**
+     * 将 {@link #getJsonPartialContent} 产生的增量 JSON 合并到基准 JSON 上，得到完整对象字符串。 字符串字段为拼接；数组按索引合并，JSON
+     * null 表示保留基准中对应元素；其它类型以增量为准。
+     *
+     * @param baseJson 基准 JSON 对象字符串（可为 null/空，视为 {@code {}})
+     * @param partialJson 增量 JSON 对象字符串（为 null 或空白时直接返回基准）
+     * @return 合并后的 JSON 对象字符串
+     */
+    public static String mergePartialJson(String baseJson, String partialJson) {
+        if (partialJson == null || partialJson.isBlank()) {
+            return baseJson != null && !baseJson.isBlank() ? baseJson : "{}";
+        }
+        try {
+            JsonNode baseNode =
+                    (baseJson == null || baseJson.isBlank())
+                            ? objectMapper.createObjectNode()
+                            : objectMapper.readTree(baseJson);
+            if (!baseNode.isObject()) {
+                throw new IllegalArgumentException("base JSON must be an object");
+            }
+            JsonNode partialNode = objectMapper.readTree(partialJson);
+            if (!partialNode.isObject()) {
+                throw new IllegalArgumentException("partial JSON must be an object");
+            }
+            ObjectNode result = (ObjectNode) baseNode.deepCopy();
+            mergePartialIntoObject(result, (ObjectNode) partialNode);
+            return objectMapper.writeValueAsString(result);
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("merge partial JSON failed", e);
+        }
+    }
+
+    private static void mergePartialIntoObject(ObjectNode base, ObjectNode partial) {
+        var it = partial.fields();
+        while (it.hasNext()) {
+            var entry = it.next();
+            String field = entry.getKey();
+            JsonNode delta = entry.getValue();
+            JsonNode oldVal = base.get(field);
+            base.set(field, mergePartialValue(oldVal, delta));
+        }
+    }
+
+    private static JsonNode mergePartialValue(JsonNode oldVal, JsonNode delta) {
+        if (delta == null || delta.isNull()) {
+            return oldVal != null ? oldVal.deepCopy() : objectMapper.nullNode();
+        }
+        if (delta.isTextual()) {
+            String oldStr = (oldVal != null && oldVal.isTextual()) ? oldVal.asText("") : "";
+            return objectMapper.getNodeFactory().textNode(oldStr + delta.asText(""));
+        }
+        if (delta.isArray()) {
+            return mergePartialArray(
+                    oldVal != null && oldVal.isArray() ? oldVal : null, (ArrayNode) delta);
+        }
+        return delta.deepCopy();
+    }
+
+    private static JsonNode mergePartialArray(JsonNode oldArr, ArrayNode deltaArr) {
+        int oldLen = oldArr != null ? oldArr.size() : 0;
+        int deltaLen = deltaArr.size();
+        int maxLen = Math.max(oldLen, deltaLen);
+        ArrayNode out = objectMapper.createArrayNode();
+        for (int i = 0; i < maxLen; i++) {
+            JsonNode deltaItem = i < deltaLen ? deltaArr.get(i) : null;
+            JsonNode oldItem = (oldArr != null && i < oldLen) ? oldArr.get(i) : null;
+            if (deltaItem == null || deltaItem.isNull()) {
+                if (oldItem != null) {
+                    out.add(oldItem.deepCopy());
+                } else {
+                    out.addNull();
+                }
+            } else if (deltaItem.isTextual() && oldItem != null && oldItem.isTextual()) {
+                String merged = oldItem.asText("") + deltaItem.asText("");
+                out.add(objectMapper.getNodeFactory().textNode(merged));
+            } else {
+                out.add(deltaItem.deepCopy());
+            }
+        }
+        return out;
     }
 }

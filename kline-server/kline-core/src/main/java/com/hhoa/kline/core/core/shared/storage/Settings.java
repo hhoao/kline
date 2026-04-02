@@ -32,6 +32,8 @@ public class Settings {
     private AutoApprovalSettings autoApprovalSettings = new AutoApprovalSettings();
     private Map<String, Boolean> globalWorkflowToggles = new HashMap<>();
     private Map<String, Boolean> globalClineRulesToggles = new HashMap<>();
+    private Map<String, Boolean> globalSkillsToggles = new HashMap<>();
+    private Map<String, Boolean> remoteRulesToggles = new HashMap<>();
     private BrowserSettings browserSettings = new BrowserSettings();
 
     private TelemetrySetting telemetrySetting = TelemetrySetting.UNSET;
@@ -52,6 +54,10 @@ public class Settings {
     private String qwenCodeOauthPath = null;
     private boolean strictPlanModeEnabled = true;
     private boolean yoloModeToggled = false;
+
+    /** 与 Cline {@code autoApproveAllToggled} 一致：一键自动批准（会话/全局由存储层决定）。 */
+    private boolean autoApproveAllToggled = false;
+
     private boolean useAutoCondense = false;
     private String preferredLanguage = "English";
     private OpenaiReasoningEffort openaiReasoningEffort = OpenaiReasoningEffort.MEDIUM;

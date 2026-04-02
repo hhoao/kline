@@ -6,6 +6,7 @@ import com.hhoa.kline.core.core.storage.StateManager;
 import com.hhoa.kline.core.core.task.MessageStateHandler;
 import com.hhoa.kline.core.core.task.TaskState;
 import com.hhoa.kline.core.core.workspace.WorkspaceRootManager;
+import com.hhoa.kline.core.subscription.MessageSender;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -21,7 +22,8 @@ public class CheckpointManagerFactory {
             TaskCheckpointManager.CheckpointManagerCallbacks callbacks,
             int[] initialConversationHistoryDeletedRange,
             String initialCheckpointManagerErrorMessage,
-            StateManager stateManager) {
+            StateManager stateManager,
+            MessageSender messageSender) {
 
         boolean enableCheckpoints = stateManager.getSettings().isEnableCheckpointsSetting();
 
@@ -41,7 +43,8 @@ public class CheckpointManagerFactory {
                 callbacks,
                 initialConversationHistoryDeletedRange,
                 initialCheckpointManagerErrorMessage,
-                stateManager);
+                stateManager,
+                messageSender);
     }
 
     public static boolean shouldUseMultiRoot(

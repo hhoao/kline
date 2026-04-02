@@ -1,9 +1,13 @@
 package com.hhoa.kline.core.core.task;
 
-import com.hhoa.kline.core.core.assistant.AssistantMessageParser;
+import com.hhoa.kline.core.core.assistant.parser.ClineTagConfigs;
+import com.hhoa.kline.core.core.assistant.parser.DefaultStreamingAssistantMessageParser;
+import com.hhoa.kline.core.core.assistant.parser.StreamingAssistantMessageParser;
 import com.hhoa.kline.core.core.context.management.ContextManager;
+import com.hhoa.kline.core.core.context.tracking.EnvironmentContextTracker;
 import com.hhoa.kline.core.core.context.tracking.FileContextTracker;
 import com.hhoa.kline.core.core.context.tracking.ModelContextTracker;
+import com.hhoa.kline.core.core.controller.utils.ControllerUtils;
 import com.hhoa.kline.core.core.ignore.ClineIgnoreController;
 import com.hhoa.kline.core.core.ignore.DefaultClineIgnoreController;
 import com.hhoa.kline.core.core.integrations.checkpoints.CheckpointManagerFactory;
@@ -40,7 +44,7 @@ import com.hhoa.kline.core.core.task.statemachine.StateMachine;
 import com.hhoa.kline.core.core.task.statemachine.StateMachineFactory;
 import com.hhoa.kline.core.core.task.tools.ToolExecutor;
 import com.hhoa.kline.core.core.workspace.WorkspaceRootManager;
-import com.hhoa.kline.core.subscription.DefaultSubscriptionManager;
+import com.hhoa.kline.core.subscription.MessageSender;
 import com.hhoa.kline.core.subscription.message.WindowShowMessageRequestMessage;
 import java.util.List;
 import java.util.Queue;
@@ -95,14 +99,17 @@ public class TaskV2 implements Recoverable<TaskState> {
     private final ContextManager contextManager;
     private final int askResponseTimeout;
     private final ContextFactory contextFactory;
+    private final MessageSender messageSender;
 
     // ---- infrastructure (created during core init, immutable refs) ----
     private final DiffViewProvider diffViewProvider;
     private final ClineIgnoreController clineIgnoreController;
     private final FileContextTracker fileContextTracker;
     private final ModelContextTracker modelContextTracker;
+    private final EnvironmentContextTracker environmentContextTracker;
     private final TelemetryService telemetryService;
-    private final AssistantMessageParser messageParser;
+    private final Supplier<StreamingAssistantMessageParser> messageParserFactory;
+    private final StreamingAssistantMessageParser streamingMessageParser;
     private final ResponseFormatter responseFormatter;
     private final AtomicLong tsGenerator = new AtomicLong(System.currentTimeMillis());
     private final BlockingQueue<AssistantMessageUpdate> messageQueue = new LinkedBlockingQueue<>();
@@ -143,6 +150,9 @@ public class TaskV2 implements Recoverable<TaskState> {
         if (params.getContextManager() == null) {
             throw new IllegalArgumentException("ContextManager is required");
         }
+        if (params.getMessageSender() == null) {
+            throw new IllegalArgumentException("MessageSender is required");
+        }
 
         this.taskInitializationStartTime = System.nanoTime() / 1_000_000;
         this.taskId = params.getTaskId();
@@ -170,14 +180,18 @@ public class TaskV2 implements Recoverable<TaskState> {
         this.shouldShowBackgroundTerminalSuggestion =
                 params.getShouldShowBackgroundTerminalSuggestion();
         this.askResponseTimeout = params.getAskResponseTimeout();
+        this.messageSender = params.getMessageSender();
 
         this.diffViewProvider = new DefaultDiffViewProvider();
         this.diffViewProvider.setWorkspaceManager(this.workspaceManager);
         this.clineIgnoreController = new DefaultClineIgnoreController(this.cwd);
         this.fileContextTracker = new FileContextTracker(this.taskId, this.cwd, this.stateManager);
         this.modelContextTracker = new ModelContextTracker(this.taskId, this.stateManager);
+        this.environmentContextTracker = new EnvironmentContextTracker(this.taskId, this.stateManager);
         this.telemetryService = new DefaultTelemetryService();
-        this.messageParser = new AssistantMessageParser();
+        this.messageParserFactory =
+                () -> new DefaultStreamingAssistantMessageParser(ClineTagConfigs.flatFormat());
+        this.streamingMessageParser = messageParserFactory.get();
         this.responseFormatter = new ResponseFormatter();
 
         this.taskState = new TaskState();
@@ -214,14 +228,83 @@ public class TaskV2 implements Recoverable<TaskState> {
                         this.messageStateHandler,
                         this.taskState,
                         this.postStateToWebview,
-                        this.taskId);
+                        this.taskId,
+                        params.getMessageSender());
+
+        // ---- Hook support ----
+        // Derive hooksDirs from workspace roots
+        Supplier<List<String>> hooksDirsSupplier =
+                () -> {
+                    List<String> dirs = new java.util.ArrayList<>();
+                    if (workspaceManager != null) {
+                        try {
+                            workspaceManager
+                                    .getRoots()
+                                    .forEach(r -> dirs.add(r.getPath() + "/.clinerules/hooks"));
+                        } catch (Exception e) {
+                            log.debug("Failed to get workspace roots for hooksDirs", e);
+                        }
+                    }
+                    if (dirs.isEmpty()) {
+                        dirs.add(cwd + "/.clinerules/hooks");
+                    }
+                    return dirs;
+                };
+
+        Supplier<List<String>> workspaceRootsSupplier =
+                () -> {
+                    List<String> roots = new java.util.ArrayList<>();
+                    if (workspaceManager != null) {
+                        try {
+                            workspaceManager
+                                    .getRoots()
+                                    .forEach(r -> roots.add(r.getPath()));
+                        } catch (Exception e) {
+                            log.debug("Failed to get workspace roots", e);
+                        }
+                    }
+                    if (roots.isEmpty()) {
+                        roots.add(cwd);
+                    }
+                    return roots;
+                };
+
+        TaskHookSupport hookSupport =
+                TaskHookSupport.builder()
+                        .taskId(this.taskId)
+                        .ulid(this.ulid)
+                        .say((type, text) -> sayAskHandler.say(type, text))
+                        .setActiveHookExecution(this::setActiveHookExecution)
+                        .clearActiveHookExecution(this::clearActiveHookExecution)
+                        .hooksEnabled(
+                                () -> {
+                                    try {
+                                        return stateManager.getSettings().isHooksEnabled();
+                                    } catch (Exception e) {
+                                        log.debug("Failed to get hooksEnabled", e);
+                                        return false;
+                                    }
+                                })
+                        .hooksDirs(hooksDirsSupplier)
+                        .workspaceRoots(workspaceRootsSupplier)
+                        .cancelTask(this.cancelTask)
+                        .messageStateHandler(this.messageStateHandler)
+                        .postStateToWebview(this.postStateToWebview)
+                        .stateManager(this.stateManager)
+                        .build();
+
+        // Set hook support on sayAskHandler (setter to avoid circular deps)
+        this.sayAskHandler.setHookSupport(hookSupport);
 
         this.startTaskHandler =
                 new TaskV2StartTaskHandler(
                         this.messageStateHandler,
                         this.postStateToWebview,
                         this.sayAskHandler,
-                        this.taskState);
+                        this.taskState,
+                        hookSupport,
+                        this.environmentContextTracker,
+                        ControllerUtils::getVersion);
 
         this.focusChainManager =
                 params.getFocusChainManagerFactory()
@@ -237,8 +320,6 @@ public class TaskV2 implements Recoverable<TaskState> {
         this.terminalManager.setShellIntegrationTimeout(params.getShellIntegrationTimeout());
         this.terminalManager.setTerminalReuseEnabled(params.isTerminalReuseEnabled());
         this.terminalManager.setTerminalOutputLineLimit(params.getTerminalOutputLineLimit());
-        this.terminalManager.setSubagentTerminalOutputLineLimit(
-                params.getSubagentTerminalOutputLineLimit());
         if (params.getDefaultTerminalProfile() != null) {
             this.terminalManager.setDefaultTerminalProfile(params.getDefaultTerminalProfile());
         }
@@ -249,7 +330,14 @@ public class TaskV2 implements Recoverable<TaskState> {
 
         this.resumeHandler =
                 new TaskV2ResumeHandler(
-                        stateManager, taskId, taskState, messageStateHandler, sayAskHandler);
+                        stateManager,
+                        taskId,
+                        taskState,
+                        messageStateHandler,
+                        sayAskHandler,
+                        hookSupport,
+                        this.environmentContextTracker,
+                        ControllerUtils::getVersion);
 
         this.contextPrepareHandler =
                 new TaskV2ContextPrepareHandler(
@@ -275,11 +363,12 @@ public class TaskV2 implements Recoverable<TaskState> {
                         ulid,
                         cwd,
                         taskInitializationStartTime,
-                        postStateToWebview);
+                        postStateToWebview,
+                        params.getMessageSender());
 
         this.messagePresenterHandler =
                 new TaskV2MessagePresenterHandler(
-                        messageParser,
+                        streamingMessageParser,
                         telemetryService,
                         diffViewProvider,
                         taskState,
@@ -329,7 +418,11 @@ public class TaskV2 implements Recoverable<TaskState> {
                         this::isTaskLockAcquired,
                         b -> this.taskLockAcquired = Boolean.TRUE.equals(b),
                         this.taskId,
-                        this.mcpHub);
+                        this.mcpHub,
+                        hookSupport,
+                        this.messageStateHandler,
+                        this.postStateToWebview,
+                        this::shouldRunTaskCancelHook);
 
         this.apiCallHandler =
                 new TaskV2ApiCallHandler(
@@ -338,7 +431,7 @@ public class TaskV2 implements Recoverable<TaskState> {
                         contextManager,
                         telemetryService,
                         diffViewProvider,
-                        messageParser,
+                        messageParserFactory,
                         systemPromptService,
                         contextFactory,
                         apiHandler,
@@ -353,6 +446,33 @@ public class TaskV2 implements Recoverable<TaskState> {
                         messagePresenterHandler,
                         contextPrepareHandler,
                         postStateToWebview);
+
+        // Wire StreamResponseHandler for native tool call support
+        this.apiCallHandler.setStreamResponseHandler(new StreamResponseHandler());
+
+        // Wire presentation scheduler for coalescing UI updates during streaming
+        if (!PresentationLatency.isPresentationSchedulingDisabled()) {
+            TaskPresentationScheduler presentationScheduler =
+                    new TaskPresentationScheduler(
+                            () -> messagePresenterHandler.presentAssistantMessage(null),
+                            (priority) ->
+                                    PresentationLatency.getPresentationCadenceMs(
+                                            PresentationLatency.isRemoteWorkspaceEnvironment(null),
+                                            priority),
+                            (error) ->
+                                    log.debug(
+                                            "Presentation flush failed: {}",
+                                            error.getMessage(),
+                                            error));
+            this.apiCallHandler.setSchedulePresentation(presentationScheduler::requestFlush);
+        }
+
+        // Wire hook state callbacks on DefaultExecutor
+        if (toolExecutor instanceof
+                com.hhoa.kline.core.core.task.tools.DefaultExecutor defaultExec) {
+            defaultExec.setSetActiveHookExecution(this::setActiveHookExecution);
+            defaultExec.setClearActiveHookExecution(this::clearActiveHookExecution);
+        }
     }
 
     void initCheckpointManager() {
@@ -401,7 +521,8 @@ public class TaskV2 implements Recoverable<TaskState> {
                             callbacks,
                             this.taskState.getConversationHistoryDeletedRange(),
                             this.taskState.getCheckpointManagerErrorMessage(),
-                            this.stateManager);
+                            this.stateManager,
+                            this.messageSender);
 
             if (CheckpointManagerFactory.shouldUseMultiRoot(
                     this.workspaceManager,
@@ -433,8 +554,7 @@ public class TaskV2 implements Recoverable<TaskState> {
                                 .type(ShowMessageType.ERROR)
                                 .message("Failed to initialize checkpoint manager: " + errorMessage)
                                 .build();
-                DefaultSubscriptionManager.getInstance()
-                        .send(new WindowShowMessageRequestMessage(request));
+                messageSender.send(new WindowShowMessageRequestMessage(request));
             }
             this.checkpointManager = null;
         }
@@ -455,6 +575,52 @@ public class TaskV2 implements Recoverable<TaskState> {
 
     void initStateMachine() {
         this.stateMachine = STATE_MACHINE_FACTORY.make(this, TaskStatus.NEW);
+    }
+
+    // ---- mutex-protected hook state management ----
+
+    public void setActiveHookExecution(HookExecution he) {
+        lock.lock();
+        try {
+            taskState.setActiveHookExecution(he);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public void clearActiveHookExecution() {
+        lock.lock();
+        try {
+            taskState.setActiveHookExecution(null);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public HookExecution getActiveHookExecution() {
+        lock.lock();
+        try {
+            return taskState.getActiveHookExecution();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * 判断是否应该运行 TaskCancel hook。
+     * 只有在有活跃工作时才触发（流式处理中、等待首个 chunk、有后台命令等）。
+     * 如果只是显示恢复/完成按钮而没有实际工作，则不触发。
+     */
+    public boolean shouldRunTaskCancelHook() {
+        lock.lock();
+        try {
+            return taskState.isStreaming()
+                    || taskState.isWaitingForFirstChunk()
+                    || activeBackgroundCommand != null
+                    || taskState.getActiveHookExecution() != null;
+        } finally {
+            lock.unlock();
+        }
     }
 
     // ---- runtime methods ----
@@ -492,6 +658,14 @@ public class TaskV2 implements Recoverable<TaskState> {
             info.providerId = "anthropic";
         }
         info.customPrompt = null;
+        if (this.stateManager != null && this.stateManager.getSettings() != null) {
+            info.mode =
+                    this.stateManager.getSettings().getMode() != null
+                            ? this.stateManager.getSettings().getMode().getValue()
+                            : "act";
+        } else {
+            info.mode = "act";
+        }
         return info;
     }
 

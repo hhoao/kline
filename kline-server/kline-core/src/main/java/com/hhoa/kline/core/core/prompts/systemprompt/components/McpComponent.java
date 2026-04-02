@@ -52,11 +52,13 @@ public class McpComponent implements SystemPromptComponent {
         return """
             MCP SERVERS
 
-            The Model Context Protocol (MCP) enables communication between the system and locally running MCP servers that provide additional tools and resources to extend your capabilities.
+            The Model Context Protocol (MCP) enables communication between the system and locally running MCP servers that provide additional tools, resources, and prompts to extend your capabilities.
 
             # Connected MCP Servers
 
             When a server is connected, you can use the server's tools via the `use_mcp_tool` tool, and access the server's resources via the `access_mcp_resource` tool.
+
+            Servers may also provide prompts - predefined templates that can be invoked by users to generate contextual messages.
 
             {{MCP_SERVERS_LIST}}
             """;
@@ -151,6 +153,38 @@ public class McpComponent implements SystemPromptComponent {
             }
         }
 
+        List<McpSchema.Prompt> prompts = fetchPrompts(conn.client());
+        if (!prompts.isEmpty()) {
+            sb.append("\n### Available Prompts\n");
+            for (McpSchema.Prompt prompt : prompts) {
+                String title = prompt.name() != null ? prompt.name() : "";
+                String desc =
+                        prompt.description() != null ? prompt.description() : "No description";
+                sb.append("- ").append(title).append(": ").append(desc);
+                if (prompt.arguments() != null && !prompt.arguments().isEmpty()) {
+                    String argsStr =
+                            prompt.arguments().stream()
+                                    .map(
+                                            arg -> {
+                                                String argName =
+                                                        arg.name() != null ? arg.name() : "";
+                                                String required =
+                                                        Boolean.TRUE.equals(arg.required())
+                                                                ? " (required)"
+                                                                : "";
+                                                String argDesc =
+                                                        arg.description() != null
+                                                                ? ": " + arg.description()
+                                                                : "";
+                                                return argName + required + argDesc;
+                                            })
+                                    .collect(java.util.stream.Collectors.joining(", "));
+                    sb.append("\n    Arguments: ").append(argsStr);
+                }
+                sb.append("\n");
+            }
+        }
+
         return sb.toString();
     }
 
@@ -202,6 +236,21 @@ public class McpComponent implements SystemPromptComponent {
                 return result != null && result.resourceTemplates() != null
                         ? result.resourceTemplates()
                         : List.of();
+            }
+        } catch (Exception ignored) {
+        }
+        return List.of();
+    }
+
+    private List<McpSchema.Prompt> fetchPrompts(IMcpClient client) {
+        try {
+            if (client instanceof IMcpSyncClient sync) {
+                McpSchema.ListPromptsResult result = sync.listPrompts();
+                return result != null && result.prompts() != null ? result.prompts() : List.of();
+            }
+            if (client instanceof IMcpASyncClient async) {
+                McpSchema.ListPromptsResult result = async.listPrompts().block();
+                return result != null && result.prompts() != null ? result.prompts() : List.of();
             }
         } catch (Exception ignored) {
         }

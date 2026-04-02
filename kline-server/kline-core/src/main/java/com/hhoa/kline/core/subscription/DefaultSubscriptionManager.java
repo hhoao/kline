@@ -1,13 +1,11 @@
 package com.hhoa.kline.core.subscription;
 
-import com.hhoa.kline.core.core.api.TaskContextHolder;
 import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Sinks;
 
 /**
  * 统一的订阅管理器
@@ -28,25 +26,42 @@ public class DefaultSubscriptionManager implements SubscriptionManager {
         log.info("[SubscriptionManager] 初始化完成");
     }
 
-    private String getCurrentUserId() {
-        Long loginId = TaskContextHolder.get().getTaskManagerId();
-        ;
-        return String.valueOf(loginId);
+    @Override
+    public MessageSender createMessageSender(Long taskManagerId) {
+        if (taskManagerId == null) {
+            throw new IllegalArgumentException("taskManagerId == null");
+        }
+        return (message) -> {
+            if (message == null) {
+                log.warn("[TaskContextMessageSender] 消息为 null，跳过发送");
+                return;
+            }
+
+            UserSubscription userSubscription =
+                    userSubscriptions.get(String.valueOf(taskManagerId));
+            if (userSubscription == null) {
+                log.warn("[TaskContextMessageSender] 用户订阅不存在，跳过发送");
+                return;
+            }
+
+            userSubscription.send(message);
+        };
     }
 
-    @Override
-    public UserSubscription getOrCreateUserSubscription(String userId) {
+    private UserSubscription getOrCreateUserSubscription(String userId) {
         UserSubscription existing = userSubscriptions.get(userId);
         if (existing != null && existing.isTerminated()) {
             userSubscriptions.remove(userId, existing);
         }
-        return userSubscriptions.computeIfAbsent(userId, k -> new UserSubscription(userId));
+        return userSubscriptions.computeIfAbsent(userId, UserSubscription::new);
     }
 
+    @Override
     public Flux<SubscriptionMessage> subscribe(String userId) {
         return subscribe(userId, DEFAULT_TIMEOUT);
     }
 
+    @Override
     public Flux<SubscriptionMessage> subscribe(String userId, Duration timeout) {
         UserSubscription userSubscription = getOrCreateUserSubscription(userId);
         return userSubscription
@@ -93,80 +108,13 @@ public class DefaultSubscriptionManager implements SubscriptionManager {
                         });
     }
 
-    public void send(SubscriptionMessage message) {
-        if (message == null) {
-            log.warn("[SubscriptionManager] 消息为 null，跳过发送");
-            return;
-        }
-
-        String userId = getCurrentUserId();
-        MessageType messageType = message.getType();
-        if (userId == null) {
-            throw new IllegalArgumentException("用户ID为 null");
-        }
-
-        try {
-            sendInternal(userId, message);
-        } catch (Exception e) {
-            log.error("[SubscriptionManager] 用户 {} 发送消息类型 {} 失败", userId, messageType, e);
-        }
-    }
-
-    private <T> void sendInternal(String userId, T message) {
-        if (message == null) {
-            log.warn("[SubscriptionManager] 用户 {} 消息为 null，跳过发送", userId);
-            return;
-        }
-
-        UserSubscription userSubscription = userSubscriptions.get(userId);
-        if (userSubscription == null) {
-            log.warn("[SubscriptionManager] 用户 {} 没有活跃的订阅，跳过发送", userId);
-            return;
-        }
-
-        Sinks.Many<T> sink = (Sinks.Many<T>) userSubscription.getSink();
-        sink.emitNext(
-                message,
-                (signalType, emitResult) -> {
-                    if (emitResult == Sinks.EmitResult.FAIL_TERMINATED) {
-                        log.error("[SubscriptionManager] 用户 {} Sink已终止，无法发送事件", userId);
-                        return false;
-                    }
-
-                    if (emitResult == Sinks.EmitResult.FAIL_OVERFLOW) {
-                        log.warn("[SubscriptionManager] 用户 {} Sink溢出，等待后重试", userId);
-                        try {
-                            Thread.sleep(10);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            log.error("[SubscriptionManager] 用户 {} 重试被中断", userId, e);
-                            return false;
-                        }
-                        return true;
-                    }
-
-                    if (emitResult == Sinks.EmitResult.FAIL_NON_SERIALIZED) {
-                        log.debug("[SubscriptionManager] 用户 {} 并发发送冲突，等待后重试", userId);
-                        try {
-                            Thread.sleep(50);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            log.error("[SubscriptionManager] 用户 {} 重试被中断", userId, e);
-                            return false;
-                        }
-                        return true;
-                    }
-
-                    log.warn("[SubscriptionManager] 用户 {} 发送失败: {}", userId, emitResult);
-                    return false;
-                });
-    }
-
+    @Override
     public int getSubscriberCount(String userId) {
         UserSubscription userSubscription = userSubscriptions.get(userId);
         return userSubscription != null ? userSubscription.getSubscriberCount() : 0;
     }
 
+    @Override
     public void shutdown(String userId) {
         UserSubscription userSubscription = userSubscriptions.remove(userId);
         if (userSubscription != null) {
@@ -178,6 +126,7 @@ public class DefaultSubscriptionManager implements SubscriptionManager {
         }
     }
 
+    @Override
     public void shutdownAll() {
         log.info("[SubscriptionManager] 正在关闭所有订阅，用户数: {}", userSubscriptions.size());
         userSubscriptions.forEach(
@@ -191,6 +140,7 @@ public class DefaultSubscriptionManager implements SubscriptionManager {
         userSubscriptions.clear();
     }
 
+    @Override
     public boolean isTerminated(String userId) {
         UserSubscription userSubscription = userSubscriptions.get(userId);
         if (userSubscription == null) {

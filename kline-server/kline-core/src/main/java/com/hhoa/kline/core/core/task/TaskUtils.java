@@ -3,6 +3,7 @@ package com.hhoa.kline.core.core.task;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -31,6 +32,14 @@ public final class TaskUtils {
             boolean notificationsEnabled,
             NotificationSender sender) {
         if (autoApprovalSettingsEnabled && notificationsEnabled && sender != null) {
+            sender.send("Approval Required", message);
+        }
+    }
+
+    /** 与 Cline {@code showNotificationForApproval} 一致：仅检查 notificationsEnabled。 */
+    public static void showNotificationForApproval(
+            String message, boolean notificationsEnabled, NotificationSender sender) {
+        if (notificationsEnabled && sender != null) {
             sender.send("Approval Required", message);
         }
     }
@@ -163,5 +172,22 @@ public final class TaskUtils {
             }
         }
         return available;
+    }
+
+    /**
+     * Extracts the domain from a provider URL string.
+     *
+     * @param url the URL to extract domain from
+     * @return the domain/hostname, or {@code null} if the URL is null or invalid
+     */
+    public static String extractProviderDomainFromUrl(String url) {
+        if (url == null || url.isEmpty()) {
+            return null;
+        }
+        try {
+            return URI.create(url).getHost();
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 }

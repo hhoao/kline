@@ -1,5 +1,7 @@
 package com.hhoa.kline.core.core.prompts.systemprompt.variants.generic;
 
+import static com.hhoa.kline.core.core.prompts.systemprompt.ModelFamilyMatchers.*;
+
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.prompts.systemprompt.PromptConfig;
 import com.hhoa.kline.core.core.prompts.systemprompt.PromptVariant;
@@ -25,19 +27,17 @@ public class GenericVariantConfig {
     private static final List<SystemPromptSection> GENERIC_COMPONENT_ORDER =
             Arrays.asList(
                     SystemPromptSection.AGENT_ROLE,
-                    SystemPromptSection.COMPLETE_TRUNCATED_CONTENT,
                     SystemPromptSection.TOOL_USE,
                     SystemPromptSection.TASK_PROGRESS,
                     SystemPromptSection.MCP,
                     SystemPromptSection.EDITING_FILES,
                     SystemPromptSection.ACT_VS_PLAN,
-                    SystemPromptSection.CLI_SUBAGENTS,
-                    SystemPromptSection.TODO,
                     SystemPromptSection.CAPABILITIES,
                     SystemPromptSection.RULES,
                     SystemPromptSection.SYSTEM_INFO,
                     SystemPromptSection.OBJECTIVE,
-                    SystemPromptSection.USER_INSTRUCTIONS);
+                    SystemPromptSection.USER_INSTRUCTIONS,
+                    SystemPromptSection.SKILLS);
 
     private static final List<String> GENERIC_TOOLS =
             Stream.of(
@@ -53,10 +53,12 @@ public class GenericVariantConfig {
                             ClineDefaultTool.MCP_ACCESS,
                             ClineDefaultTool.ASK,
                             ClineDefaultTool.ATTEMPT,
-                            ClineDefaultTool.NEW_TASK,
                             ClineDefaultTool.PLAN_MODE,
                             ClineDefaultTool.MCP_DOCS,
-                            ClineDefaultTool.TODO)
+                            ClineDefaultTool.TODO,
+                            ClineDefaultTool.GENERATE_EXPLANATION,
+                            ClineDefaultTool.USE_SKILL,
+                            ClineDefaultTool.USE_SUBAGENTS)
                     .map(ClineDefaultTool::getValue)
                     .collect(Collectors.toList());
 
@@ -75,6 +77,21 @@ public class GenericVariantConfig {
                         .version(1)
                         .tags(Arrays.asList("fallback", "stable"))
                         .labels(labels)
+                        .matcher(context -> {
+                            var providerInfo = context.getProviderInfo();
+                            if (providerInfo == null
+                                    || providerInfo.getProviderId() == null
+                                    || providerInfo.getModel() == null) {
+                                return true;
+                            }
+                            String modelId = getModelId(context);
+                            return !(("compact".equals(providerInfo.getCustomPrompt())
+                                            && isLocalModel(providerInfo))
+                                    || (isNextGenModelProvider(providerInfo)
+                                            && isNextGenModelFamily(modelId))
+                                    || isGLMModelFamily(modelId)
+                                    || isTrinityModelFamily(modelId));
+                        })
                         .componentOrder(GENERIC_COMPONENT_ORDER)
                         .tools(GENERIC_TOOLS)
                         .placeholders(placeholders)

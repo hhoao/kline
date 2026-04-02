@@ -6,7 +6,6 @@ import java.util.regex.Pattern;
 public class FocusChainUtils {
     /**
      * 灵活的正则表达式模式，用于匹配焦点链项，支持间距变化 匹配模式如 "- [x] text", "- [X] text", "- [ ] text", "- [ ] text" 等 对应
-     * TypeScript 版本的 FOCUS_CHAIN_ITEM_REGEX（导出的常量）
      */
     public static final Pattern FOCUS_CHAIN_ITEM_REGEX =
             Pattern.compile("^-\\s*\\[([ xX])\\]\\s*(.+)$");

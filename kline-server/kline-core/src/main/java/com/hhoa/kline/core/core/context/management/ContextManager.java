@@ -12,21 +12,19 @@ import java.util.List;
  */
 public interface ContextManager {
     /**
-     * 确定是否应该压缩上下文窗口，基于令牌计数
+     * 确定是否应该压缩上下文窗口，基于令牌计数。 使用固定的 0.75 阈值（与上游 cline 一致）。
      *
      * @param clineMessages Cline 消息列表
      * @param contextWindow 上下文窗口大小
      * @param maxAllowedSize 最大允许大小
      * @param previousApiReqIndex 上一个 API 请求索引
-     * @param thresholdPercentage 阈值百分比（可选）
      * @return 如果应该压缩则返回 true
      */
     boolean shouldCompactContextWindow(
             List<ClineMessage> clineMessages,
             int contextWindow,
             int maxAllowedSize,
-            int previousApiReqIndex,
-            Double thresholdPercentage);
+            int previousApiReqIndex);
 
     /**
      * 获取新的上下文消息和元数据的主要入口点

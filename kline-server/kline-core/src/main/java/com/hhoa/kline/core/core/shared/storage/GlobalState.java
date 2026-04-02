@@ -3,6 +3,7 @@ package com.hhoa.kline.core.core.shared.storage;
 import com.hhoa.kline.core.core.controller.HistoryItem;
 import com.hhoa.kline.core.core.shared.McpDisplayMode;
 import com.hhoa.kline.core.core.shared.TerminalExecutionMode;
+import com.hhoa.kline.core.core.shared.remoteconfig.RemoteConfigSettings;
 import com.hhoa.kline.core.core.shared.multiroot.WorkspaceRoot;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,4 +42,6 @@ public class GlobalState {
     private int lastDismissedCliBannerVersion = 0;
 
     private Boolean multiRootEnabled;
+
+    private RemoteConfigSettings remoteConfigSettings;
 }

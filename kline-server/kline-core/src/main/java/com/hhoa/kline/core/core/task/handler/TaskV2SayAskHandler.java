@@ -7,14 +7,15 @@ import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskPending;
 import com.hhoa.kline.core.core.task.ClineMessage;
 import com.hhoa.kline.core.core.task.MessageStateHandler;
+import com.hhoa.kline.core.core.task.TaskHookSupport;
 import com.hhoa.kline.core.core.task.TaskState;
 import com.hhoa.kline.core.core.utils.PartialJsonUtils;
-import com.hhoa.kline.core.subscription.DefaultSubscriptionManager;
-import com.hhoa.kline.core.subscription.SubscriptionManager;
+import com.hhoa.kline.core.subscription.MessageSender;
 import com.hhoa.kline.core.subscription.message.PartialMessage;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -25,18 +26,24 @@ public final class TaskV2SayAskHandler {
     private final TaskState taskState;
     private final Runnable postStateToWebview;
     private final String taskId;
+    private final MessageSender messageSender;
+
+    /** Hook support for notification hooks (set after construction to avoid circular deps). */
+    @Setter private TaskHookSupport hookSupport;
 
     public TaskV2SayAskHandler(
             AtomicLong tsGenerator,
             MessageStateHandler messageStateHandler,
             TaskState taskState,
             Runnable postStateToWebview,
-            String taskId) {
+            String taskId,
+            MessageSender messageSender) {
         this.tsGenerator = tsGenerator;
         this.messageStateHandler = messageStateHandler;
         this.taskState = taskState;
         this.postStateToWebview = postStateToWebview;
         this.taskId = taskId;
+        this.messageSender = messageSender;
     }
 
     private long nowTs() {
@@ -53,7 +60,6 @@ public final class TaskV2SayAskHandler {
                 && Boolean.TRUE.equals(isUpdatingPreviousPartial)) {
             return;
         }
-        SubscriptionManager defaultSubscriptionManager = DefaultSubscriptionManager.getInstance();
         PartialMessage partialMessage = new PartialMessage();
         partialMessage.setTs(message.getTs());
         partialMessage.setTaskId(taskId);
@@ -68,7 +74,7 @@ public final class TaskV2SayAskHandler {
         partialMessage.setCommandCompleted(message.getCommandCompleted());
         partialMessage.setFormat(message.getFormat());
         partialMessage.setIsUpdatingPreviousPartial(Boolean.TRUE.equals(isUpdatingPreviousPartial));
-        defaultSubscriptionManager.send(partialMessage);
+        messageSender.send(partialMessage);
     }
 
     private void resetAskResponse() {
@@ -125,7 +131,10 @@ public final class TaskV2SayAskHandler {
             String partialContent,
             Boolean partial,
             ClineMessageFormat format) {
-        if (taskState.isAbort()) {
+        // Allow resume asks even when aborted to enable resume button after cancellation
+        if (taskState.isAbort()
+                && type != ClineAsk.RESUME_TASK
+                && type != ClineAsk.RESUME_COMPLETED_TASK) {
             throw new IllegalStateException("Cline instance aborted");
         }
 
@@ -165,6 +174,18 @@ public final class TaskV2SayAskHandler {
         if (partial == null || (!partial)) {
             resetAskResponse();
             postStateToWebview.run();
+
+            // Fire notification hook async for non-excluded ask types
+            if (hookSupport != null
+                    && type != ClineAsk.COMMAND_OUTPUT
+                    && type != ClineAsk.RESUME_TASK
+                    && type != ClineAsk.RESUME_COMPLETED_TASK) {
+                hookSupport.executeNotificationHook(
+                        "user_attention",
+                        type.getValue(),
+                        text != null ? text : "",
+                        true);
+            }
         }
         return result;
     }
@@ -222,7 +243,10 @@ public final class TaskV2SayAskHandler {
             List<String> files,
             Boolean partial,
             ClineMessageFormat format) {
-        if (taskState.isAbort()) {
+        // Allow hook messages even when aborted to enable proper cleanup
+        if (taskState.isAbort()
+                && type != ClineSay.HOOK_STATUS
+                && type != ClineSay.HOOK_OUTPUT_STREAM) {
             throw new IllegalStateException("Cline instance aborted");
         }
         if ((text == null || text.isEmpty())

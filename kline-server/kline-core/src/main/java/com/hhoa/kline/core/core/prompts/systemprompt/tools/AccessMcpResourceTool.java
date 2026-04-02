@@ -12,18 +12,33 @@ import java.util.function.Function;
  *
  * @author hhoa
  */
-public class AccessMcpResourceTool extends BaseToolSpec {
+public class AccessMcpResourceTool extends BaseToolSpec
+{
 
-    public static ClineToolSpec create(ModelFamily modelFamily) {
-        Function<SystemPromptContext, Boolean> contextRequirements = (context) -> true;
+    private static final String GENERIC_DESCRIPTION =
+            "Request to access a resource provided by a connected MCP server. Resources represent data sources that can be used as context, such as files, API responses, or system information.";
+
+    private static final String NATIVE_DESCRIPTION =
+            "Request to access a resource provided by a connected MCP server. Resources represent data sources that can be used as context, such as files, API responses, or system information. You must only use this tool if you have been informed of the MCP server and the resource you are trying to access.";
+
+    private static final Function<SystemPromptContext, Boolean> CONTEXT_REQUIREMENTS =
+            (context) -> context.getMcpHub() != null;
+
+    public static ClineToolSpec create(ModelFamily modelFamily)
+    {
+        boolean isNative =
+                modelFamily == ModelFamily.NATIVE_GPT_5
+                        || modelFamily == ModelFamily.NATIVE_GPT_5_1
+                        || modelFamily == ModelFamily.NATIVE_NEXT_GEN;
+
+        String description = isNative ? NATIVE_DESCRIPTION : GENERIC_DESCRIPTION;
 
         return ClineToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.MCP_ACCESS.getValue())
                 .name(ClineDefaultTool.MCP_ACCESS.getValue())
-                .description(
-                        "Request to access a resource provided by a connected MCP server. Resources represent data sources that can be used as context, such as files, API responses, or system information.")
-                .contextRequirements(contextRequirements)
+                .description(description)
+                .contextRequirements(CONTEXT_REQUIREMENTS)
                 .parameters(
                         List.of(
                                 createParameter(

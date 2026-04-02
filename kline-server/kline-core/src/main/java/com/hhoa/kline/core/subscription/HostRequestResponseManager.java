@@ -29,8 +29,6 @@ public class HostRequestResponseManager {
 
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
 
-    private final SubscriptionManager subscriptionManager =
-            DefaultSubscriptionManager.getInstance();
     private final ConcurrentHashMap<String, CompletableFuture<Object>> pendingRequests =
             new ConcurrentHashMap<>();
 
@@ -38,13 +36,15 @@ public class HostRequestResponseManager {
         log.info("[HostRequestResponseManager] 初始化完成");
     }
 
-    public <T> CompletableFuture<T> sendRequest(SubscriptionRequestMessage message) {
-        return sendRequest(message, DEFAULT_TIMEOUT);
+    public <T> CompletableFuture<T> sendRequest(
+            MessageSender messageSender, SubscriptionRequestMessage message) {
+        return sendRequest(messageSender, message, DEFAULT_TIMEOUT);
     }
 
     /**
      * 发送请求并等待响应（自定义超时）
      *
+     * @param messageSender 当前任务上下文下的消息发送器
      * @param message 请求消息
      * @param timeout 超时时间
      * @param <T> 响应类型
@@ -52,13 +52,13 @@ public class HostRequestResponseManager {
      */
     @SuppressWarnings("unchecked")
     public <T> CompletableFuture<T> sendRequest(
-            SubscriptionRequestMessage message, Duration timeout) {
+            MessageSender messageSender, SubscriptionRequestMessage message, Duration timeout) {
         String requestId = message.getRequestId();
         CompletableFuture<T> future = new CompletableFuture<>();
 
         pendingRequests.put(requestId, (CompletableFuture<Object>) future);
 
-        subscriptionManager.send(message);
+        messageSender.send(message);
 
         log.debug(
                 "[HostRequestResponseManager] 发送请求: requestId={}, messageType={}",

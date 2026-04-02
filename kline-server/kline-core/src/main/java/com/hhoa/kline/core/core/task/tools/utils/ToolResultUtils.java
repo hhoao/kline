@@ -61,21 +61,26 @@ public final class ToolResultUtils {
             String feedback,
             String[] images,
             String fileContentString) {
-        boolean hasAny =
-                (feedback != null && !feedback.isEmpty())
-                        || (images != null && images.length > 0)
-                        || (fileContentString != null && !fileContentString.isEmpty());
-        if (!hasAny) return;
+        boolean hasMeaningfulFeedback = feedback != null && !feedback.trim().isEmpty();
+        boolean hasImages = images != null && images.length > 0;
+        boolean hasMeaningfulFileContent =
+                fileContentString != null && !fileContentString.trim().isEmpty();
 
-        String sb =
-                "The user provided the following feedback:\n<feedback>\n"
-                        + (feedback == null ? "" : feedback)
-                        + "\n</feedback>";
+        if (!hasMeaningfulFeedback && !hasImages && !hasMeaningfulFileContent) {
+            return;
+        }
 
-        TextContentBlock textBlock = new TextContentBlock(sb);
+        String feedbackText =
+                hasMeaningfulFeedback
+                        ? "The user provided the following feedback:\n<feedback>\n"
+                                + feedback
+                                + "\n</feedback>"
+                        : "The user provided additional content:";
+
+        TextContentBlock textBlock = new TextContentBlock(feedbackText);
         userMessageContent.add(textBlock);
 
-        if (fileContentString != null && !fileContentString.isEmpty()) {
+        if (hasMeaningfulFileContent) {
             userMessageContent.add(new TextContentBlock(fileContentString));
         }
     }
@@ -87,6 +92,10 @@ public final class ToolResultUtils {
             ClineMessageFormat format,
             ToolUse toolUse,
             String toolDescription) {
+        // Subagent execution auto-approves all tools
+        if (config.isSubagentExecution()) {
+            return null;
+        }
         AskPending askResult = config.getCallbacks().ask(type, completeMessage, false, format);
         PendingAskToken.ToolUsePendingAskToken token =
                 new PendingAskToken.ToolUsePendingAskToken(

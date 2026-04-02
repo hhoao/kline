@@ -10,15 +10,31 @@ import java.util.List;
  *
  * @author hhoa
  */
-public class ListFilesTool extends BaseToolSpec {
+public class ListFilesTool extends BaseToolSpec
+{
 
-    public static ClineToolSpec create(ModelFamily modelFamily) {
+    private static final String DESCRIPTION =
+            "Request to list files and directories within the specified directory. If recursive is true, it will list all files and directories recursively. If recursive is false or not provided, it will only list the top-level contents. Do not use this tool to confirm the existence of files you may have created, as the user will let you know if the files were created successfully or not.";
+
+    public static ClineToolSpec create(ModelFamily modelFamily)
+    {
+        if (modelFamily == ModelFamily.NATIVE_GPT_5
+                || modelFamily == ModelFamily.NATIVE_GPT_5_1
+                || modelFamily == ModelFamily.NATIVE_NEXT_GEN)
+        {
+            return createNativeVariant(modelFamily);
+        }
+
+        return createGenericVariant(modelFamily);
+    }
+
+    private static ClineToolSpec createGenericVariant(ModelFamily modelFamily)
+    {
         return ClineToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.LIST_FILES.getValue())
                 .name(ClineDefaultTool.LIST_FILES.getValue())
-                .description(
-                        "Request to list files and directories within the specified directory. If recursive is true, it will list all files and directories recursively. If recursive is false or not provided, it will only list the top-level contents. Do not use this tool to confirm the existence of files you may have created, as the user will let you know if the files were created successfully or not.")
+                .description(DESCRIPTION)
                 .parameters(
                         List.of(
                                 createParameter(
@@ -26,11 +42,36 @@ public class ListFilesTool extends BaseToolSpec {
                                         true,
                                         "The path of the directory to list contents for (relative to the current working directory {{CWD}}){{MULTI_ROOT_HINT}}",
                                         "Directory path here"),
-                                createParameter(
+                                createParameterWithType(
                                         "recursive",
                                         false,
                                         "Whether to list files recursively. Use true for recursive listing, false or omit for top-level only.",
-                                        "true or false (optional)"),
+                                        "true or false (optional)",
+                                        "boolean"),
+                                createTaskProgressParameter()))
+                .build();
+    }
+
+    private static ClineToolSpec createNativeVariant(ModelFamily modelFamily)
+    {
+        return ClineToolSpec.builder()
+                .variant(modelFamily)
+                .id(ClineDefaultTool.LIST_FILES.getValue())
+                .name(ClineDefaultTool.LIST_FILES.getValue())
+                .description(DESCRIPTION)
+                .parameters(
+                        List.of(
+                                createParameter(
+                                        "path",
+                                        true,
+                                        "The path of the directory to list contents for.",
+                                        null),
+                                createParameterWithType(
+                                        "recursive",
+                                        false,
+                                        "Whether to list files recursively. Use true for recursive listing, false or omit for top-level only.",
+                                        null,
+                                        "boolean"),
                                 createTaskProgressParameter()))
                 .build();
     }

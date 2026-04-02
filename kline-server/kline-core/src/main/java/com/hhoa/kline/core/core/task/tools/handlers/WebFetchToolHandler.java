@@ -33,6 +33,7 @@ public class WebFetchToolHandler implements StateFullToolHandler {
     @Setter
     public static class WebFetchToolState extends ToolState {
         private String url;
+        private String prompt;
     }
 
     @Override
@@ -71,6 +72,7 @@ public class WebFetchToolHandler implements StateFullToolHandler {
     @Override
     public ToolExecuteResult execute(ToolContext context, ToolUse block) {
         String url = HandlerUtils.getStringParam(block, "url");
+        String prompt = HandlerUtils.getStringParam(block, "prompt");
 
         Map<String, Object> messageProps = new HashMap<>();
         messageProps.put("tool", "webFetch");
@@ -87,7 +89,7 @@ public class WebFetchToolHandler implements StateFullToolHandler {
                     .say(ClineSay.TOOL, message, null, null, false, ClineMessageFormat.JSON);
 
             captureTelemetry(context, block, true, true);
-            return executeWebFetch(context, url);
+            return executeWebFetch(context, url, prompt);
         }
 
         // Need to ask user -- save state and return PendingAsk
@@ -102,6 +104,7 @@ public class WebFetchToolHandler implements StateFullToolHandler {
         WebFetchToolState state = (WebFetchToolState) context.getToolState();
         state.setPhase(1);
         state.setUrl(url);
+        state.setPrompt(prompt);
 
         var token =
                 ToolResultUtils.askApprovalAndPushFeedbackForToken(
@@ -126,10 +129,10 @@ public class WebFetchToolHandler implements StateFullToolHandler {
         }
 
         captureTelemetry(context, block, false, true);
-        return executeWebFetch(context, state.getUrl());
+        return executeWebFetch(context, state.getUrl(), state.getPrompt());
     }
 
-    private ToolExecuteResult executeWebFetch(ToolContext config, String url) {
+    private ToolExecuteResult executeWebFetch(ToolContext config, String url, String prompt) {
         try {
             String content = fetchWebContent(url);
             return HandlerUtils.createToolExecuteResult(

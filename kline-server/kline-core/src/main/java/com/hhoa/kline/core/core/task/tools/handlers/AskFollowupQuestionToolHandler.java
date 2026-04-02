@@ -92,6 +92,32 @@ public class AskFollowupQuestionToolHandler implements StateFullToolHandler {
         String question = HandlerUtils.getStringParam(block, "question");
         String optionsRaw = HandlerUtils.getStringParam(block, "options");
 
+        // In yolo mode, don't wait for user input - instruct AI to use tools instead
+        if (context.isYoloModeToggled()) {
+            String truncatedQuestion =
+                    question.length() > 100 ? question.substring(0, 100) + "..." : question;
+            context.getCallbacks()
+                    .say(
+                            ClineSay.INFO,
+                            "[YOLO MODE] Auto-responding to question: \""
+                                    + truncatedQuestion
+                                    + "\"",
+                            null,
+                            null,
+                            false,
+                            null);
+            return HandlerUtils.createToolExecuteResult(
+                    formatResponse.toolResult(
+                            "[YOLO MODE: User input is not available in non-interactive mode. "
+                                    + "You must use available tools (read_file, list_files, search_files, etc.) "
+                                    + "to gather the information you need instead of asking the user. "
+                                    + "Proceed with using tools to find the answer to your question: \""
+                                    + question
+                                    + "\"]",
+                            null,
+                            null));
+        }
+
         if (context.getAutoApprovalSettings() != null
                 && context.getAutoApprovalSettings().isEnabled()
                 && context.getAutoApprovalSettings().isEnableNotifications()) {

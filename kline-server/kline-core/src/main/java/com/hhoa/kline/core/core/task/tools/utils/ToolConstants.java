@@ -9,6 +9,10 @@ public final class ToolConstants {
 
     private ToolConstants() {}
 
+    /**
+     * 与 Cline {@code TaskConfig.ts} / {@code ToolConstants.ts} 的 {@code TASK_CONFIG_KEYS}
+     * 对齐（用于校验或文档）。
+     */
     public static final List<String> TASK_CONFIG_KEYS =
             Collections.unmodifiableList(
                     Arrays.asList(
@@ -18,7 +22,12 @@ public final class ToolConstants {
                             "mode",
                             "strictPlanModeEnabled",
                             "yoloModeToggled",
-                            "context",
+                            "doubleCheckCompletionEnabled",
+                            "vscodeTerminalExecutionMode",
+                            "enableParallelToolCalling",
+                            "isSubagentExecution",
+                            "workspaceManager",
+                            "isMultiRootEnabled",
                             "taskState",
                             "messageState",
                             "api",
@@ -30,6 +39,7 @@ public final class ToolConstants {
                             "callbacks",
                             "coordinator"));
 
+    /** 与 Cline {@code TASK_SERVICES_KEYS} 对齐。 */
     public static final List<String> TASK_SERVICES_KEYS =
             Collections.unmodifiableList(
                     Arrays.asList(
@@ -39,9 +49,11 @@ public final class ToolConstants {
                             "diffViewProvider",
                             "fileContextTracker",
                             "clineIgnoreController",
+                            "commandPermissionController",
                             "contextManager",
                             "stateManager"));
 
+    /** 与 Cline {@code TASK_CALLBACKS_KEYS} 对齐。 */
     public static final List<String> TASK_CALLBACKS_KEYS =
             Collections.unmodifiableList(
                     Arrays.asList(
@@ -49,6 +61,7 @@ public final class ToolConstants {
                             "ask",
                             "saveCheckpoint",
                             "sayAndCreateMissingParamError",
+                            "removeLastPartialMessageIfExistsWithType",
                             "executeCommandTool",
                             "doesLatestTaskCompletionHaveNewChanges",
                             "updateFCListFromToolResponse",
@@ -57,7 +70,11 @@ public final class ToolConstants {
                             "reinitExistingTaskFromId",
                             "cancelTask",
                             "updateTaskHistory",
-                            "switchToActMode"));
+                            "switchToActMode",
+                            "setActiveHookExecution",
+                            "clearActiveHookExecution",
+                            "getActiveHookExecution",
+                            "runUserPromptSubmitHook"));
 
     public static final List<String> PATH_REQUIRED_TOOLS =
             Collections.unmodifiableList(

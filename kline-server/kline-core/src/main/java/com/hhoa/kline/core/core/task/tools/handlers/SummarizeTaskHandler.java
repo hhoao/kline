@@ -165,7 +165,7 @@ public class SummarizeTaskHandler implements ToolHandler {
                                 FileContentExtractor.extractFileContent(absolutePath, false);
 
                         if (totalChars + fileContent.text.length() > MAX_CHARS) {
-                            continue;
+                            break;
                         }
 
                         if (config.getServices() != null

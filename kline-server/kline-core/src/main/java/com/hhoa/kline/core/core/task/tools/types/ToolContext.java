@@ -12,6 +12,7 @@ import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.shared.api.ApiProvider;
+import com.hhoa.kline.core.core.shared.api.ModelInfo;
 import com.hhoa.kline.core.core.shared.storage.types.Mode;
 import com.hhoa.kline.core.core.storage.StateManager;
 import com.hhoa.kline.core.core.task.AskPending;
@@ -45,6 +46,12 @@ public class ToolContext {
 
     @Builder.Default private boolean yoloModeToggled = false;
 
+    @Builder.Default private boolean doubleCheckCompletionEnabled = false;
+
+    @Builder.Default private boolean enableParallelToolCalling = false;
+
+    @Builder.Default private boolean isSubagentExecution = false;
+
     private MessageStateHandler messageState;
 
     private Api api;
@@ -69,6 +76,10 @@ public class ToolContext {
 
     public interface Model {
         String getId();
+
+        default ModelInfo getInfo() {
+            return null;
+        }
     }
 
     @Getter
@@ -125,6 +136,10 @@ public class ToolContext {
 
         ExecuteResult executeCommandTool(String command, Integer timeoutSeconds);
 
+        default Boolean cancelRunningCommandTool() {
+            return false;
+        }
+
         void sayUserFeedback(String text, String[] images, String[] files);
 
         Boolean switchToActMode();
@@ -132,6 +147,15 @@ public class ToolContext {
         Boolean updateFCListFromToolResponse(String text);
 
         Boolean doesLatestTaskCompletionHaveNewChanges();
+
+        // Hook execution callbacks
+        default void setActiveHookExecution(Object hookExecution) {}
+
+        default void clearActiveHookExecution() {}
+
+        default Object getActiveHookExecution() {
+            return null;
+        }
     }
 
     public static final class ExecuteResult {

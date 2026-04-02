@@ -1,5 +1,7 @@
 package com.hhoa.kline.core.core.prompts.systemprompt.variants.nextgen;
 
+import static com.hhoa.kline.core.core.prompts.systemprompt.ModelFamilyMatchers.*;
+
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.prompts.systemprompt.PromptConfig;
 import com.hhoa.kline.core.core.prompts.systemprompt.PromptVariant;
@@ -26,20 +28,18 @@ public class NextGenVariantConfig {
     private static final List<SystemPromptSection> NEXT_GEN_COMPONENT_ORDER =
             Arrays.asList(
                     SystemPromptSection.AGENT_ROLE,
-                    SystemPromptSection.COMPLETE_TRUNCATED_CONTENT,
                     SystemPromptSection.TOOL_USE,
-                    SystemPromptSection.TODO,
+                    SystemPromptSection.TASK_PROGRESS,
                     SystemPromptSection.MCP,
                     SystemPromptSection.EDITING_FILES,
                     SystemPromptSection.ACT_VS_PLAN,
-                    SystemPromptSection.CLI_SUBAGENTS,
-                    SystemPromptSection.TASK_PROGRESS,
                     SystemPromptSection.CAPABILITIES,
                     SystemPromptSection.FEEDBACK,
                     SystemPromptSection.RULES,
                     SystemPromptSection.SYSTEM_INFO,
                     SystemPromptSection.OBJECTIVE,
-                    SystemPromptSection.USER_INSTRUCTIONS);
+                    SystemPromptSection.USER_INSTRUCTIONS,
+                    SystemPromptSection.SKILLS);
 
     private static final List<String> NEXT_GEN_TOOLS =
             Stream.of(
@@ -52,14 +52,17 @@ public class NextGenVariantConfig {
                             ClineDefaultTool.LIST_CODE_DEF,
                             ClineDefaultTool.BROWSER,
                             ClineDefaultTool.WEB_FETCH,
+                            ClineDefaultTool.WEB_SEARCH,
                             ClineDefaultTool.MCP_USE,
                             ClineDefaultTool.MCP_ACCESS,
                             ClineDefaultTool.ASK,
                             ClineDefaultTool.ATTEMPT,
-                            ClineDefaultTool.NEW_TASK,
                             ClineDefaultTool.PLAN_MODE,
                             ClineDefaultTool.MCP_DOCS,
-                            ClineDefaultTool.TODO)
+                            ClineDefaultTool.TODO,
+                            ClineDefaultTool.GENERATE_EXPLANATION,
+                            ClineDefaultTool.USE_SKILL,
+                            ClineDefaultTool.USE_SUBAGENTS)
                     .map(ClineDefaultTool::getValue)
                     .collect(Collectors.toList());
 
@@ -80,9 +83,21 @@ public class NextGenVariantConfig {
                         .version(1)
                         .tags(Arrays.asList("next-gen", "advanced", "production"))
                         .labels(labels)
+                        .matcher(context -> {
+                            var providerInfo = context.getProviderInfo();
+                            String modelId = getModelId(context);
+                            if (isNextGenModelFamily(modelId) && !Boolean.TRUE.equals(context.getEnableNativeToolCalls())) {
+                                return true;
+                            }
+                            return !(("compact".equals(providerInfo.getCustomPrompt()) && isLocalModel(providerInfo))
+                                    || isNextGenModelProvider(providerInfo))
+                                    && isNextGenModelFamily(modelId)
+                                    && !(isGPT5ModelFamily(modelId) && !modelId.toLowerCase().contains("chat"));
+                        })
                         .componentOrder(NEXT_GEN_COMPONENT_ORDER)
                         .tools(NEXT_GEN_TOOLS)
                         .placeholders(placeholders)
+                        .componentOverrides(NextGenComponentOverrides.getOverrides())
                         .config(PromptConfig.builder().build()));
     }
 

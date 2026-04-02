@@ -49,12 +49,10 @@ public class DefaultTelemetryService implements TelemetryService {
         }
 
         try {
-            // 与 TypeScript 版本保持一致：使用 success 而不是 approved
             String counterKey =
                     String.format("tool.%s.%s", toolName, success ? "success" : "failed");
             counters.computeIfAbsent(counterKey, k -> new AtomicLong(0)).incrementAndGet();
 
-            // 与 TypeScript 版本保持一致
             Map<String, Object> properties = new HashMap<>();
             properties.put("ulid", taskId);
             properties.put("tool", toolName);
@@ -62,7 +60,6 @@ public class DefaultTelemetryService implements TelemetryService {
             properties.put("success", success);
             properties.put("modelId", modelId);
 
-            // 与 TypeScript 版本保持一致
             if (workspaceContext != null) {
                 properties.put("workspace_hint_used", workspaceContext.usedWorkspaceHint);
                 properties.put(
@@ -170,7 +167,6 @@ public class DefaultTelemetryService implements TelemetryService {
 
             counters.computeIfAbsent("task.completed", k -> new AtomicLong(0)).incrementAndGet();
 
-            // 与 TypeScript 版本保持一致：使用 ulid
             Map<String, Object> properties = new HashMap<>();
             properties.put("ulid", taskId);
             captureEvent(taskId, "task_completed", properties);
@@ -195,7 +191,6 @@ public class DefaultTelemetryService implements TelemetryService {
 
             counters.computeIfAbsent("option.selected", k -> new AtomicLong(0)).incrementAndGet();
 
-            // 与 TypeScript 版本保持一致：使用 ulid, qty, mode
             Map<String, Object> properties = new HashMap<>();
             properties.put("ulid", taskId);
             properties.put("qty", optionCount);
@@ -222,7 +217,6 @@ public class DefaultTelemetryService implements TelemetryService {
 
             counters.computeIfAbsent("option.ignored", k -> new AtomicLong(0)).incrementAndGet();
 
-            // 与 TypeScript 版本保持一致：使用 ulid, qty, mode
             Map<String, Object> properties = new HashMap<>();
             properties.put("ulid", taskId);
             properties.put("qty", optionCount);
@@ -245,9 +239,6 @@ public class DefaultTelemetryService implements TelemetryService {
             properties.put("root_count", rootCount);
             properties.put("vcs_types", vcsTypes != null ? vcsTypes : Collections.emptyList());
             properties.put("is_multi_root", rootCount > 1);
-            // 与 TypeScript 版本保持一致：检查 "Git" 和 "Mercurial"
-            // 注意：虽然枚举值是 "git"（小写），但 TypeScript 代码检查的是 "Git"（首字母大写）
-            // 这里我们同时兼容两种格式，但优先匹配 TypeScript 的格式
             if (vcsTypes != null) {
                 properties.put(
                         "has_git",
@@ -540,7 +531,6 @@ public class DefaultTelemetryService implements TelemetryService {
             counters.computeIfAbsent("focus_chain_list_written", k -> new AtomicLong(0))
                     .incrementAndGet();
             Map<String, Object> properties = new HashMap<>();
-            // 与 TypeScript 版本保持一致
             properties.put("ulid", taskId);
             captureEvent(taskId, "focus_chain_list_written", properties);
         } catch (Exception e) {
@@ -557,7 +547,6 @@ public class DefaultTelemetryService implements TelemetryService {
             counters.computeIfAbsent("focus_chain_progress_first", k -> new AtomicLong(0))
                     .incrementAndGet();
             Map<String, Object> properties = new HashMap<>();
-            // 与 TypeScript 版本保持一致
             properties.put("ulid", taskId);
             properties.put("totalItems", totalItems);
             captureEvent(taskId, "focus_chain_progress_first", properties);
@@ -575,11 +564,9 @@ public class DefaultTelemetryService implements TelemetryService {
             counters.computeIfAbsent("focus_chain_progress_update", k -> new AtomicLong(0))
                     .incrementAndGet();
             Map<String, Object> properties = new HashMap<>();
-            // 与 TypeScript 版本保持一致
             properties.put("ulid", taskId);
             properties.put("totalItems", totalItems);
             properties.put("completedItems", completedItems);
-            // 与 TypeScript 版本保持一致
             properties.put(
                     "completionPercentage",
                     totalItems > 0 ? Math.round((completedItems * 100.0) / totalItems) : 0);
@@ -599,12 +586,10 @@ public class DefaultTelemetryService implements TelemetryService {
             counters.computeIfAbsent("focus_chain_incomplete_on_completion", k -> new AtomicLong(0))
                     .incrementAndGet();
             Map<String, Object> properties = new HashMap<>();
-            // 与 TypeScript 版本保持一致
             properties.put("ulid", taskId);
             properties.put("totalItems", totalItems);
             properties.put("completedItems", completedItems);
             properties.put("incompleteItems", incompleteItems);
-            // 与 TypeScript 版本保持一致
             properties.put(
                     "completionPercentage",
                     totalItems > 0 ? Math.round((completedItems * 100.0) / totalItems) : 0);
@@ -639,7 +624,6 @@ public class DefaultTelemetryService implements TelemetryService {
             counters.computeIfAbsent("focus_chain_list_opened", k -> new AtomicLong(0))
                     .incrementAndGet();
             Map<String, Object> properties = new HashMap<>();
-            // 与 TypeScript 版本保持一致
             properties.put("ulid", taskId);
             captureEvent(taskId, "focus_chain_list_opened", properties);
         } catch (Exception e) {
@@ -957,7 +941,6 @@ public class DefaultTelemetryService implements TelemetryService {
             Map<String, Object> properties = new HashMap<>();
             properties.put("ulid", taskId);
             properties.put("model", model != null ? model : "");
-            // 与 TypeScript 版本保持一致，最大 500 字符
             String truncatedError =
                     errorMessage != null
                             ? errorMessage.substring(0, Math.min(500, errorMessage.length()))
@@ -1018,7 +1001,6 @@ public class DefaultTelemetryService implements TelemetryService {
             return;
         }
         try {
-            // 与 TypeScript 版本保持一致：清理文件名以移除路径信息
             String sanitizedFileName = ruleFileName;
             if (ruleFileName != null) {
                 int lastSlash =
@@ -1275,7 +1257,6 @@ public class DefaultTelemetryService implements TelemetryService {
             Map<String, Object> properties = new HashMap<>();
             properties.put("mentionType", mentionType != null ? mentionType : "");
             properties.put("errorType", errorType != null ? errorType : "");
-            // 与 TypeScript 版本保持一致，最大 500 字符
             if (errorMessage != null) {
                 properties.put(
                         "errorMessage",

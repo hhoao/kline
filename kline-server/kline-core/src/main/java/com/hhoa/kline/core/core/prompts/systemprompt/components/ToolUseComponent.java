@@ -496,7 +496,9 @@ public class ToolUseComponent implements SystemPromptComponent {
                 "CWD",
                 context.getCwd() != null ? context.getCwd() : System.getProperty("user.dir"));
 
-        placeholders.put("MULTI_ROOT_HINT", MULTI_ROOT_HINT);
+        String multiRootHint =
+                Boolean.TRUE.equals(context.getIsMultiRootEnabled()) ? MULTI_ROOT_HINT : "";
+        placeholders.put("MULTI_ROOT_HINT", multiRootHint);
 
         return placeholders;
     }

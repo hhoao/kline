@@ -87,6 +87,16 @@ public class PlanModeRespondHandler implements StateFullToolHandler {
                         .equalsIgnoreCase(
                                 HandlerUtils.getStringParam(block, "needs_more_exploration"));
 
+        // Validate required parameters
+        if (response == null || response.trim().isEmpty()) {
+            context.getTaskState()
+                    .setConsecutiveMistakeCount(
+                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+            return HandlerUtils.createToolExecuteResult(
+                    new ResponseFormatter().missingToolParameterError("response"));
+        }
+        context.getTaskState().setConsecutiveMistakeCount(0);
+
         if (needsMoreExploration) {
             return HandlerUtils.createToolExecuteResult(
                     formatResponse.toolResult(
@@ -120,6 +130,9 @@ public class PlanModeRespondHandler implements StateFullToolHandler {
             }
         }
 
+        // Set awaiting plan response state
+        context.getTaskState().setAwaitingPlanResponse(true);
+
         PlanModeRespondToolState state = (PlanModeRespondToolState) context.getToolState();
         state.setPhase(1);
         state.setOptions(options);
@@ -141,6 +154,8 @@ public class PlanModeRespondHandler implements StateFullToolHandler {
     public ToolExecuteResult resume(
             ToolContext context, ToolUse block, ToolState toolState, AskResult askResult) {
         PlanModeRespondToolState state = (PlanModeRespondToolState) toolState;
+
+        context.getTaskState().setAwaitingPlanResponse(false);
 
         String text = askResult != null ? askResult.getText() : null;
         String[] images =

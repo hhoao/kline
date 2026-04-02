@@ -28,23 +28,14 @@ public class AutoApprove {
             return AutoApproveToolResult.of(false);
         }
         if (stateManager.getSettings().isYoloModeToggled()) {
-            return switch (tool) {
-                case FILE_READ,
-                        LIST_FILES,
-                        LIST_CODE_DEF,
-                        SEARCH,
-                        NEW_RULE,
-                        FILE_NEW,
-                        FILE_EDIT,
-                        BASH ->
-                        AutoApproveToolResult.of(true, true);
-                case BROWSER, WEB_FETCH, MCP_ACCESS, MCP_USE -> AutoApproveToolResult.of(true);
-                default -> AutoApproveToolResult.of(false);
-            };
+            return yoloOrApproveAllResult(tool);
+        }
+        if (stateManager.getSettings().isAutoApproveAllToggled()) {
+            return yoloOrApproveAllResult(tool);
         }
 
         AutoApprovalSettings settings = stateManager.getSettings().getAutoApprovalSettings();
-        if (settings == null || !settings.isEnabled()) {
+        if (settings == null) {
             return AutoApproveToolResult.of(false);
         }
         AutoApprovalSettings.AutoApprovalActions actions = settings.getActions();
@@ -53,25 +44,48 @@ public class AutoApprove {
         }
 
         return switch (tool) {
-            case FILE_READ, LIST_FILES, LIST_CODE_DEF, SEARCH ->
+            case FILE_READ, LIST_FILES, LIST_CODE_DEF, SEARCH, USE_SUBAGENTS ->
                     AutoApproveToolResult.of(
                             actions.isReadFiles(),
                             Boolean.TRUE.equals(actions.getReadFilesExternally()));
-            case NEW_RULE, FILE_NEW, FILE_EDIT ->
+            case NEW_RULE, FILE_NEW, FILE_EDIT, APPLY_PATCH ->
                     AutoApproveToolResult.of(
                             actions.isEditFiles(),
                             Boolean.TRUE.equals(actions.getEditFilesExternally()));
             case BASH ->
                     AutoApproveToolResult.of(
                             actions.isExecuteSafeCommands(), actions.isExecuteAllCommands());
-            case BROWSER, WEB_FETCH -> AutoApproveToolResult.of(actions.isUseBrowser());
+            case BROWSER, WEB_FETCH, WEB_SEARCH -> AutoApproveToolResult.of(actions.isUseBrowser());
             case MCP_ACCESS, MCP_USE -> AutoApproveToolResult.of(actions.isUseMcp());
+            default -> AutoApproveToolResult.of(false);
+        };
+    }
+
+    /** 与 Cline {@code autoApprove.ts} 中 yolo / autoApproveAll 分支一致。 */
+    private static AutoApproveToolResult yoloOrApproveAllResult(ClineDefaultTool tool) {
+        return switch (tool) {
+            case FILE_READ,
+                    LIST_FILES,
+                    LIST_CODE_DEF,
+                    SEARCH,
+                    NEW_RULE,
+                    FILE_NEW,
+                    FILE_EDIT,
+                    APPLY_PATCH,
+                    BASH,
+                    USE_SUBAGENTS ->
+                    AutoApproveToolResult.of(true, true);
+            case BROWSER, WEB_FETCH, WEB_SEARCH, MCP_ACCESS, MCP_USE ->
+                    AutoApproveToolResult.of(true);
             default -> AutoApproveToolResult.of(false);
         };
     }
 
     public boolean shouldAutoApproveToolWithPath(String toolName, String path, String cwd) {
         if (stateManager.getSettings().isYoloModeToggled()) {
+            return true;
+        }
+        if (stateManager.getSettings().isAutoApproveAllToggled()) {
             return true;
         }
 

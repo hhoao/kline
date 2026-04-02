@@ -18,6 +18,8 @@ import com.hhoa.kline.core.core.task.focuschain.FocusChainManagerFactory;
 import com.hhoa.kline.core.core.task.focuschain.LocalFocusChainManagerFactory;
 import com.hhoa.kline.core.core.task.tools.DefaultExecutor;
 import com.hhoa.kline.core.core.task.tools.ToolExecutor;
+import com.hhoa.kline.core.subscription.DefaultSubscriptionManager;
+import com.hhoa.kline.core.subscription.MessageSender;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -114,6 +116,8 @@ public class LocalTaskManagerFactory implements TaskManagerFactory {
                                 taskContext.run(runnable);
                             }
                         };
+                MessageSender messageSender =
+                        DefaultSubscriptionManager.getInstance().createMessageSender(taskManagerId);
                 taskManagers.put(
                         taskManagerId,
                         new DefaultTaskManager(
@@ -124,7 +128,8 @@ public class LocalTaskManagerFactory implements TaskManagerFactory {
                                 toolExecutor,
                                 apiHandler,
                                 focusChainManagerFactory,
-                                contextFactory));
+                                contextFactory,
+                                messageSender));
             }
             return taskManagers.get(taskManagerId);
         } catch (IOException e) {

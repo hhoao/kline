@@ -9,6 +9,12 @@ import com.hhoa.kline.core.core.assistant.TextContentBlock;
 import com.hhoa.kline.core.core.assistant.UserContentBlock;
 import com.hhoa.kline.core.core.assistant.UserMessage;
 import com.hhoa.kline.core.core.context.instructions.userinstructions.ClineRules;
+import com.hhoa.kline.core.core.context.instructions.userinstructions.ExternalRules;
+import com.hhoa.kline.core.core.context.instructions.userinstructions.RuleConditionals;
+import com.hhoa.kline.core.core.context.instructions.userinstructions.RuleContextBuilder;
+import com.hhoa.kline.core.core.context.instructions.userinstructions.RuleHelpers;
+import com.hhoa.kline.core.core.context.instructions.userinstructions.SkillDiscovery;
+import com.hhoa.kline.core.core.context.instructions.userinstructions.SkillMetadata;
 import com.hhoa.kline.core.core.context.management.ContextManager;
 import com.hhoa.kline.core.core.context.management.ContextWindowUtils;
 import com.hhoa.kline.core.core.context.tracking.FileContextTracker;
@@ -19,6 +25,7 @@ import com.hhoa.kline.core.core.integrations.checkpoints.ICheckpointManager;
 import com.hhoa.kline.core.core.mentions.Mentions;
 import com.hhoa.kline.core.core.prompts.ContextManagement;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
+import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamilyMatchers;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptService;
 import com.hhoa.kline.core.core.services.mcp.IMcpHub;
@@ -31,8 +38,12 @@ import com.hhoa.kline.core.core.shared.LanguageKey;
 import com.hhoa.kline.core.core.shared.api.ModelInfo;
 import com.hhoa.kline.core.core.shared.proto.host.ShowMessageRequest;
 import com.hhoa.kline.core.core.shared.proto.host.ShowMessageType;
+import com.hhoa.kline.core.core.shared.remoteconfig.RemoteConfigSettings;
+import com.hhoa.kline.core.core.shared.storage.GlobalState;
+import com.hhoa.kline.core.core.shared.storage.LocalState;
 import com.hhoa.kline.core.core.shared.storage.types.Mode;
 import com.hhoa.kline.core.core.slashcommands.SlashCommandParser;
+import com.hhoa.kline.core.core.storage.GlobalFileNames;
 import com.hhoa.kline.core.core.storage.StateManager;
 import com.hhoa.kline.core.core.task.ClineMessage;
 import com.hhoa.kline.core.core.task.ContextFactory;
@@ -44,7 +55,7 @@ import com.hhoa.kline.core.core.task.TaskState;
 import com.hhoa.kline.core.core.task.deps.TaskDispatch;
 import com.hhoa.kline.core.core.task.focuschain.FocusChainManager;
 import com.hhoa.kline.core.core.workspace.WorkspaceRootManager;
-import com.hhoa.kline.core.subscription.DefaultSubscriptionManager;
+import com.hhoa.kline.core.subscription.MessageSender;
 import com.hhoa.kline.core.subscription.message.WindowShowMessageRequestMessage;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -85,6 +96,7 @@ public final class TaskV2ContextPrepareHandler {
     private final String cwd;
     private final long taskInitializationStartTime;
     private final Runnable postStateToWebview;
+    private final MessageSender messageSender;
 
     public TaskV2ContextPrepareHandler(
             StateManager stateManager,
@@ -109,7 +121,8 @@ public final class TaskV2ContextPrepareHandler {
             String ulid,
             String cwd,
             long taskInitializationStartTime,
-            Runnable postStateToWebview) {
+            Runnable postStateToWebview,
+            MessageSender messageSender) {
         this.stateManager = stateManager;
         this.modelContextTracker = modelContextTracker;
         this.contextManager = contextManager;
@@ -133,6 +146,7 @@ public final class TaskV2ContextPrepareHandler {
         this.cwd = cwd;
         this.taskInitializationStartTime = taskInitializationStartTime;
         this.postStateToWebview = postStateToWebview;
+        this.messageSender = messageSender;
     }
 
     public PrepareContextResult doPrepareContext() {
@@ -142,33 +156,27 @@ public final class TaskV2ContextPrepareHandler {
 
         int maxConsecutiveMistakes = stateManager.getSettings().getMaxConsecutiveMistakes();
         if (taskState.getConsecutiveMistakeCount() >= maxConsecutiveMistakes) {
+            // In yolo mode, don't wait for user input - fail the task
+            if (stateManager.getSettings().isYoloModeToggled()) {
+                String errorMessage =
+                        "[YOLO MODE] Task failed: Too many consecutive mistakes ("
+                                + taskState.getConsecutiveMistakeCount()
+                                + "). "
+                                + "The model may not be capable enough for this task. Consider using a more capable model.";
+                sayAskHandler.say(ClineSay.ERROR, errorMessage);
+                return new PrepareContextResult.EndLoop();
+            }
+
             String mistakeMessage;
             ProviderInfo providerInfo = getCurrentProviderInfo.get();
             if (providerInfo.getModel() != null && providerInfo.getModel().contains("claude")) {
                 mistakeMessage =
-                        "This may indicate a failure in his thought process or inability to use a tool properly, which can be mitigated with some user guidance (e.g. \"Try breaking down the task into smaller steps\").";
+                        "This may indicate a failure in Cline's thought process or inability to use a tool properly, which can be mitigated with some user guidance (e.g. \"Try breaking down the task into smaller steps\").";
             } else {
                 mistakeMessage =
-                        "Cline uses complex prompts and iterative task execution that may be challenging for less capable models. For best results, it's recommended to use Claude 4 Sonnet for its advanced agentic coding capabilities.";
+                        "Cline uses complex prompts and iterative task execution that may be challenging for less capable models. For best results, it's recommended to use Claude 4.5 Sonnet for its advanced agentic coding capabilities.";
             }
             return new PrepareContextResult.MaxMistakeLimitReached(mistakeMessage);
-        }
-
-        boolean yoloModeToggled = stateManager.getSettings().isYoloModeToggled();
-        boolean autoApprovalEnabled =
-                stateManager.getSettings().getAutoApprovalSettings().isEnabled();
-        int maxAutoApprovedRequests =
-                stateManager.getSettings().getAutoApprovalSettings().getMaxRequests();
-
-        if (!yoloModeToggled
-                && autoApprovalEnabled
-                && taskState.getConsecutiveAutoApprovedRequestsCount() >= maxAutoApprovedRequests) {
-            String message =
-                    String.format(
-                            "Cline has auto-approved %d API requests. Would you like to reset the count and proceed with the task?",
-                            maxAutoApprovedRequests);
-
-            return new PrepareContextResult.AutoApprovalMaxReqReached(message);
         }
 
         List<UserContentBlock> userContent = taskState.getCurrentUserContent();
@@ -253,8 +261,7 @@ public final class TaskV2ContextPrepareHandler {
                                 .type(ShowMessageType.ERROR)
                                 .message("Checkpoint initialization timed out: " + errorMessage)
                                 .build();
-                DefaultSubscriptionManager.getInstance()
-                        .send(new WindowShowMessageRequestMessage(request));
+                messageSender.send(new WindowShowMessageRequestMessage(request));
             }
         }
 
@@ -320,8 +327,6 @@ public final class TaskV2ContextPrepareHandler {
                     messageStateHandler.saveClineMessagesAndUpdateHistory();
                 }
             } else {
-                Double autoCondenseThreshold =
-                        stateManager.getSettings().getAutoCondenseThreshold();
                 ContextWindowUtils.ContextWindowInfo contextWindowInfo =
                         ContextWindowUtils.getContextWindowInfo(200000, providerInfo.getModel());
                 int contextWindow = contextWindowInfo.contextWindow();
@@ -331,8 +336,7 @@ public final class TaskV2ContextPrepareHandler {
                                 messageStateHandler.getClineMessages(),
                                 contextWindow,
                                 maxAllowedSize,
-                                previousApiReqIndex,
-                                autoCondenseThreshold);
+                                previousApiReqIndex);
                 if (shouldCompact && taskState.getConversationHistoryDeletedRange() != null) {
                     List<MessageParam> apiHistory = messageStateHandler.getApiConversationHistory();
                     int[] deletedRange = taskState.getConversationHistoryDeletedRange();
@@ -468,11 +472,21 @@ public final class TaskV2ContextPrepareHandler {
                                             workspaceManager,
                                             null,
                                             null,
-                                            telemetryService)
+                                            telemetryService,
+                                            messageSender)
                                     .join();
+                    SystemPromptContext.ApiProviderInfo slashCommandProviderInfo =
+                            toApiProviderInfo(getCurrentProviderInfo.get());
                     SlashCommandParser.SlashCommandParseResult slashCommandParseResult =
                             SlashCommandParser.parseSlashCommands(
-                                    text, null, null, null, null, telemetryService);
+                                    text,
+                                    null,
+                                    null,
+                                    ulid,
+                                    stateManager.getSettings().getFocusChainSettings(),
+                                    slashCommandProviderInfo,
+                                    resolveNativeToolCallingEnabled(slashCommandProviderInfo),
+                                    telemetryService);
                     text = slashCommandParseResult.getProcessedText();
                     if (slashCommandParseResult.isNeedsClinerulesFileCheck()) {
                         needsClinerulesFileCheck = true;
@@ -635,41 +649,98 @@ public final class TaskV2ContextPrepareHandler {
 
     public SystemPromptContext buildSystemPromptContext(boolean hasTruncatedConversationHistory) {
         SystemPromptContext context = new SystemPromptContext();
-
         context.setCwd(cwd);
 
         ProviderInfo providerInfo = getCurrentProviderInfo.get();
-        SystemPromptContext.ApiProviderInfo apiProviderInfo =
-                new SystemPromptContext.ApiProviderInfo();
-        ModelInfo modelInfo = new ModelInfo();
-        modelInfo.setMaxTokens(8000);
-
-        SystemPromptContext.ApiHandlerModel apiHandlerModel =
-                new SystemPromptContext.ApiHandlerModel();
-        apiHandlerModel.setId(providerInfo.getModel());
-        apiHandlerModel.setModelInfo(modelInfo);
-        apiProviderInfo.setModel(apiHandlerModel);
-        apiProviderInfo.setCustomPrompt(providerInfo.getCustomPrompt());
+        SystemPromptContext.ApiProviderInfo apiProviderInfo = toApiProviderInfo(providerInfo);
         context.setProviderInfo(apiProviderInfo);
-
         context.setSupportsBrowserUse(
                 stateManager.getSettings().getBrowserSettings().getRemoteBrowserEnabled());
-
         context.setMcpHub(mcpHub);
 
         FocusChainSettings focusChainSettings = stateManager.getSettings().getFocusChainSettings();
         focusChainSettings.setEnabled(focusChainSettings.isEnabled());
         context.setFocusChainSettings(focusChainSettings);
 
-        String globalClineRulesInstructions = null;
+        GlobalState globalState = stateManager.getGlobalState();
+        LocalState localState = stateManager.getLocalState();
+        RemoteConfigSettings remoteConfigSettings =
+                globalState != null ? globalState.getRemoteConfigSettings() : null;
+
+        RuleConditionals.RuleEvaluationContext evaluationContext =
+                RuleContextBuilder.buildEvaluationContext(
+                        RuleContextBuilder.RuleContextBuilderDeps.builder()
+                                .cwd(cwd)
+                                .messageStateHandler(messageStateHandler)
+                                .workspaceManager(workspaceManager)
+                                .build());
+
+        Map<String, Boolean> globalClineToggles =
+                new HashMap<>(stateManager.getSettings().getGlobalClineRulesToggles());
+        Map<String, Boolean> localClineToggles =
+                new HashMap<>(localState.getLocalClineRulesToggles());
+        Map<String, Boolean> remoteRulesToggles =
+                new HashMap<>(stateManager.getSettings().getRemoteRulesToggles());
+        ClineRules.RuleTogglesResult clineRuleToggles =
+                ClineRules.refreshClineRulesToggles(
+                        stateManager.getGlobalClineRulesDirectory(),
+                        cwd,
+                        globalClineToggles,
+                        localClineToggles,
+                        remoteConfigSettings,
+                        remoteRulesToggles);
+        stateManager.getSettings().setGlobalClineRulesToggles(clineRuleToggles.getGlobalToggles());
+        stateManager.getSettings().setRemoteRulesToggles(clineRuleToggles.getRemoteToggles());
+        localState.setLocalClineRulesToggles(clineRuleToggles.getLocalToggles());
+        stateManager.updateSettings(stateManager.getSettings());
+        stateManager.updateLocalState(localState);
+
         String globalClineRulesDir = stateManager.getGlobalClineRulesDirectory();
-        if (globalClineRulesDir != null) {
-            Map<String, Boolean> toggles =
-                    new HashMap<>(stateManager.getSettings().getGlobalClineRulesToggles());
-            globalClineRulesInstructions =
-                    ClineRules.getGlobalClineRules(globalClineRulesDir, toggles);
+        RuleHelpers.RuleLoadResultWithInstructions globalRules =
+                ClineRules.getGlobalClineRules(
+                        globalClineRulesDir,
+                        clineRuleToggles.getGlobalToggles(),
+                        evaluationContext,
+                        remoteConfigSettings,
+                        clineRuleToggles.getRemoteToggles());
+        context.setGlobalClineRulesFileInstructions(globalRules.getInstructions());
+
+        RuleHelpers.RuleLoadResultWithInstructions localRules =
+                ClineRules.getLocalClineRules(
+                        cwd, clineRuleToggles.getLocalToggles(), evaluationContext);
+        context.setLocalClineRulesFileInstructions(localRules.getInstructions());
+
+        ExternalRules.ExternalRuleTogglesResult externalToggles =
+                ExternalRules.refreshExternalRulesToggles(
+                        cwd,
+                        new HashMap<>(localState.getLocalWindsurfRulesToggles()),
+                        new HashMap<>(localState.getLocalCursorRulesToggles()),
+                        new HashMap<>(localState.getLocalAgentsRulesToggles()));
+        localState.setLocalWindsurfRulesToggles(externalToggles.getWindsurfLocalToggles());
+        localState.setLocalCursorRulesToggles(externalToggles.getCursorLocalToggles());
+        localState.setLocalAgentsRulesToggles(externalToggles.getAgentsLocalToggles());
+        stateManager.updateLocalState(localState);
+
+        ExternalRules.CursorRulesResult cursorResult =
+                ExternalRules.getLocalCursorRules(cwd, externalToggles.getCursorLocalToggles());
+        context.setLocalCursorRulesFileInstructions(cursorResult.getFileInstructions());
+        context.setLocalCursorRulesDirInstructions(cursorResult.getDirInstructions());
+        context.setLocalWindsurfRulesFileInstructions(
+                ExternalRules.getLocalWindsurfRules(cwd, externalToggles.getWindsurfLocalToggles()));
+        context.setLocalAgentsRulesFileInstructions(
+                ExternalRules.getLocalAgentsRules(cwd, externalToggles.getAgentsLocalToggles()));
+
+        List<RuleHelpers.ActivatedConditionalRule> activatedConditionalRules = new ArrayList<>();
+        activatedConditionalRules.addAll(globalRules.getActivatedConditionalRules());
+        activatedConditionalRules.addAll(localRules.getActivatedConditionalRules());
+        if (!activatedConditionalRules.isEmpty()) {
+            sayAskHandler.say(
+                    ClineSay.CONDITIONAL_RULES_APPLIED,
+                    JsonUtils.toJsonString(Map.of("rules", activatedConditionalRules)),
+                    null,
+                    null,
+                    null);
         }
-        context.setGlobalClineRulesFileInstructions(globalClineRulesInstructions);
 
         context.setClineIgnoreInstructions(null);
 
@@ -681,19 +752,82 @@ public final class TaskV2ContextPrepareHandler {
                         ? "# Preferred Language\n\nSpeak in " + preferredLanguage + "."
                         : "";
         context.setPreferredLanguageInstructions(preferredLanguageInstructions);
-
         context.setBrowserSettings(stateManager.getSettings().getBrowserSettings());
-
         context.setYoloModeToggled(stateManager.getSettings().isYoloModeToggled());
-
         context.setWorkspaceRoots(workspaceManager.getRoots());
-
-        context.setIsSubagentsEnabledAndCliInstalled(
-                stateManager.getSettings().isSubagentsEnabled());
-        context.setIsCliSubagent(stateManager.getSettings().isSubagentsEnabled());
-
+        context.setSubagentsEnabled(stateManager.getSettings().isSubagentsEnabled());
+        context.setIsSubagentRun(false);
+        context.setIsCliEnvironment(false);
         context.setHasTruncatedConversationHistory(hasTruncatedConversationHistory);
 
+        List<SkillMetadata> discoveredSkills =
+                SkillDiscovery.discoverSkills(cwd, GlobalFileNames.GLOBAL_SKILLS_DIR);
+        List<SkillMetadata> availableSkills = SkillDiscovery.getAvailableSkills(discoveredSkills);
+        Map<String, Boolean> globalSkillsToggles =
+                stateManager.getSettings().getGlobalSkillsToggles() != null
+                        ? stateManager.getSettings().getGlobalSkillsToggles()
+                        : new HashMap<>();
+        Map<String, Boolean> localSkillsToggles =
+                localState.getLocalSkillsToggles() != null
+                        ? localState.getLocalSkillsToggles()
+                        : new HashMap<>();
+        context.setSkills(
+                availableSkills.stream()
+                        .filter(
+                                skill -> {
+                                    Map<String, Boolean> toggles =
+                                            "global".equals(skill.getSource())
+                                                    ? globalSkillsToggles
+                                                    : localSkillsToggles;
+                                    return !Boolean.FALSE.equals(toggles.get(skill.getPath()));
+                                })
+                        .map(
+                                skill ->
+                                        new SystemPromptContext.SkillInfo(
+                                                skill.getName(), skill.getDescription()))
+                        .toList());
+
+        context.setEditorTabs(
+                new SystemPromptContext.EditorTabs(List.of(), List.of()));
+
+        boolean nativeToolCallsEnabled = resolveNativeToolCallingEnabled(apiProviderInfo);
+        context.setEnableNativeToolCalls(nativeToolCallsEnabled);
+        context.setEnableParallelToolCalling(
+                ModelFamilyMatchers.isParallelToolCallingEnabled(false, apiProviderInfo));
+
+        if (globalState != null && globalState.getTerminalExecutionMode() != null) {
+            context.setTerminalExecutionMode(
+                    globalState.getTerminalExecutionMode().name().toLowerCase());
+        } else {
+            context.setTerminalExecutionMode("vscodeTerminal");
+        }
+
+        context.setIsMultiRootEnabled(
+                globalState != null && Boolean.TRUE.equals(globalState.getMultiRootEnabled()));
+
         return context;
+    }
+
+    private SystemPromptContext.ApiProviderInfo toApiProviderInfo(ProviderInfo providerInfo) {
+        SystemPromptContext.ApiProviderInfo apiProviderInfo =
+                new SystemPromptContext.ApiProviderInfo();
+        ModelInfo modelInfo = new ModelInfo();
+        modelInfo.setMaxTokens(8000);
+
+        SystemPromptContext.ApiHandlerModel apiHandlerModel =
+                new SystemPromptContext.ApiHandlerModel();
+        if (providerInfo != null) {
+            apiHandlerModel.setId(providerInfo.getModel());
+            apiProviderInfo.setCustomPrompt(providerInfo.getCustomPrompt());
+            apiProviderInfo.setProviderId(providerInfo.getProviderId());
+        }
+        apiHandlerModel.setModelInfo(modelInfo);
+        apiProviderInfo.setModel(apiHandlerModel);
+        return apiProviderInfo;
+    }
+
+    private boolean resolveNativeToolCallingEnabled(
+            SystemPromptContext.ApiProviderInfo providerInfo) {
+        return ModelFamilyMatchers.isNativeToolCallingConfig(providerInfo, true);
     }
 }

@@ -317,56 +317,88 @@ public class FileContextTracker {
     }
 
     /**
-     * 在工作区状态中存储待处理的文件上下文警告，以便在任务重新初始化时保持
-     *
-     * @param files 文件列表
+     * 在本地状态中存储待处理的文件上下文警告，以便在任务重新初始化时保持。
      */
     public void storePendingFileContextWarning(List<String> files) {
         try {
-            // 注意：这里需要与 StateManager 集成
-            // 实际实现中需要调用 StateManager 的方法
-            // 例如：stateManager.setWorkspaceState("pendingFileContextWarning_" + taskId, files);
-            log.info("Storing pending file context warning for task " + taskId + ": " + files);
+            var localState = stateManager.getLocalState();
+            if (localState.getPendingFileContextWarnings() == null) {
+                localState.setPendingFileContextWarnings(new java.util.HashMap<>());
+            }
+            localState.getPendingFileContextWarnings().put(taskId, new ArrayList<>(files));
+            stateManager.updateLocalState(localState);
         } catch (Exception e) {
-            log.error("Error storing pending file context warning: " + e.getMessage());
+            log.error("Error storing pending file context warning", e);
         }
     }
 
-    /**
-     * 从工作区状态检索待处理的文件上下文警告（不清除）
-     *
-     * @return 文件列表
-     */
+    /** 从本地状态检索待处理的文件上下文警告（不清除）。 */
     public List<String> retrievePendingFileContextWarning() {
         try {
-            // 注意：这里需要与 StateManager 集成
-            // 实际实现中需要调用 StateManager 的方法
-            // 例如：return stateManager.getWorkspaceStateKey("pendingFileContextWarning_" + taskId);
-            return null;
+            var localState = stateManager.getLocalState();
+            if (localState.getPendingFileContextWarnings() == null) {
+                return null;
+            }
+            List<String> files = localState.getPendingFileContextWarnings().get(taskId);
+            return files != null ? new ArrayList<>(files) : null;
         } catch (Exception e) {
-            log.error("Error retrieving pending file context warning: " + e.getMessage());
+            log.error("Error retrieving pending file context warning", e);
             return null;
         }
     }
 
-    /**
-     * 从工作区状态检索并清除待处理的文件上下文警告
-     *
-     * @return 文件列表
-     */
+    /** 从本地状态检索并清除待处理的文件上下文警告。 */
     public List<String> retrieveAndClearPendingFileContextWarning() {
         try {
             List<String> files = retrievePendingFileContextWarning();
             if (files != null) {
-                // 注意：这里需要与 StateManager 集成
-                // 实际实现中需要调用 StateManager 的方法来清除
-                // 例如：stateManager.setWorkspaceState("pendingFileContextWarning_" + taskId, null);
-                log.info("Clearing pending file context warning for task " + taskId);
+                var localState = stateManager.getLocalState();
+                if (localState.getPendingFileContextWarnings() != null) {
+                    localState.getPendingFileContextWarnings().remove(taskId);
+                    stateManager.updateLocalState(localState);
+                }
                 return files;
             }
         } catch (Exception e) {
-            log.error("Error retrieving pending file context warning: " + e.getMessage());
+            log.error("Error retrieving pending file context warning", e);
         }
         return null;
+    }
+
+    /** 清理已不存在任务的待处理文件上下文警告。 */
+    public static void cleanupOrphanedWarnings(StateManager stateManager) {
+        long startTime = System.currentTimeMillis();
+        try {
+            var localState = stateManager.getLocalState();
+            if (localState.getPendingFileContextWarnings() == null
+                    || localState.getPendingFileContextWarnings().isEmpty()) {
+                return;
+            }
+
+            Set<String> existingTaskIds =
+                    stateManager.getGlobalState().getTaskHistory() == null
+                            ? Set.of()
+                            : stateManager.getGlobalState().getTaskHistory().stream()
+                                    .map(task -> task.getId())
+                                    .filter(Objects::nonNull)
+                                    .collect(java.util.stream.Collectors.toSet());
+
+            int before = localState.getPendingFileContextWarnings().size();
+            localState.getPendingFileContextWarnings()
+                    .entrySet()
+                    .removeIf(entry -> !existingTaskIds.contains(entry.getKey()));
+            int removed = before - localState.getPendingFileContextWarnings().size();
+            if (removed > 0) {
+                stateManager.updateLocalState(localState);
+            }
+            log.info(
+                    "FileContextTracker: Processed {} tasks, found {} pending warnings, deleted {}, took {}ms",
+                    existingTaskIds.size(),
+                    before,
+                    removed,
+                    System.currentTimeMillis() - startTime);
+        } catch (Exception e) {
+            log.error("[FileContextTracker] Error cleaning up orphaned file context warnings", e);
+        }
     }
 }

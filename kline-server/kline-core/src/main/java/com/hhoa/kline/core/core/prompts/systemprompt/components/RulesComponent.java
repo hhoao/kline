@@ -5,6 +5,7 @@ import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptComponent;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptSection;
 import com.hhoa.kline.core.core.prompts.systemprompt.templates.TemplateEngine;
+import java.util.HashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 
@@ -34,17 +35,18 @@ public class RulesComponent implements SystemPromptComponent {
                 Boolean.TRUE.equals(context.getSupportsBrowserUse()) ? getBrowserRules() : "";
         String browserWaitRules =
                 Boolean.TRUE.equals(context.getSupportsBrowserUse()) ? getBrowserWaitRules() : "";
+        String cliRules =
+                Boolean.TRUE.equals(context.getIsCliEnvironment()) ? getCliRules() : "";
 
-        return templateEngine.resolve(
-                template,
-                context,
-                Map.of(
-                        "CWD",
-                                context.getCwd() != null
-                                        ? context.getCwd()
-                                        : System.getProperty("user.dir"),
-                        "BROWSER_RULES", browserRules,
-                        "BROWSER_WAIT_RULES", browserWaitRules));
+        Map<String, String> placeholders = new HashMap<>();
+        placeholders.put(
+                "CWD",
+                context.getCwd() != null ? context.getCwd() : System.getProperty("user.dir"));
+        placeholders.put("BROWSER_RULES", browserRules);
+        placeholders.put("BROWSER_WAIT_RULES", browserWaitRules);
+        placeholders.put("CLI_RULES", cliRules);
+
+        return templateEngine.resolve(template, context, placeholders);
     }
 
     @Override
@@ -61,7 +63,7 @@ public class RulesComponent implements SystemPromptComponent {
         String yoloModeTerminalText =
                 Boolean.TRUE.equals(context.getYoloModeToggled())
                         ? ""
-                        : " If you absolutely need to see the actual terminal output, use the ask_followup_question tool to request the user to copy and paste it back to you.";
+                        : " If output is still unavailable after reasonable checks and you need it to continue, use the ask_followup_question tool to request the user to copy and paste it back to you.";
 
         return String.format(
                 """
@@ -78,10 +80,15 @@ public class RulesComponent implements SystemPromptComponent {
             - When you want to modify a file, use the replace_in_file or write_to_file tool directly with the desired changes. You do not need to display the changes before using the tool.
             - Do not ask for more information than necessary. Use the tools provided to accomplish the user's request efficiently and effectively. When you've completed your task, you must use the attempt_completion tool to present the result to the user. The user may provide feedback, which you can use to make improvements and try again.
             - %s. For example, if the user mentions a file that may be in an outside directory like the Desktop, you should use the list_files tool to list the files in the Desktop and check if the file they are talking about is there, rather than asking the user to provide the file path themselves.
-            - When executing commands, if you don't see the expected output, assume the terminal executed the command successfully and proceed with the task. The user's terminal may be unable to stream the output back properly.%s
+            - When executing commands, do not assume success when expected output is missing or incomplete. Treat the result as unverified and run follow-up checks (for example checking exit status, verifying files with `test`/`ls`, or validating content with `grep`/`wc`) before proceeding. The user's terminal may be unable to stream output reliably.%s
+            - When passing untrusted or variable text as positional command arguments, insert `--` before the positional values if they may begin with `-` (for example `my-cli -- "$value"`). This prevents the values from being parsed as options.
             - The user may provide a file's contents directly in their message, in which case you shouldn't use the read_file tool to get the file contents again since you already have it.
             - Your goal is to try to accomplish the user's task, NOT engage in a back and forth conversation.
-            {{BROWSER_RULES}}- NEVER end attempt_completion result with a question or request to engage in further conversation! Formulate the end of your result in a way that is final and does not require further input from the user.
+            - When writing output files, produce exactly what the task specifies—no extra columns, fields, debug output, or commentary. Match the requested format precisely.
+            - When the task specifies numerical thresholds or accuracy targets, verify your result meets the criteria before completing. If close but not passing, iterate rather than declaring completion.
+            - When fixing a bug, if existing tests fail after your change, your code is likely wrong. Fix your code to pass the tests rather than modifying test assertions to match your new behavior, unless the user explicitly asks you to update tests.
+            - After fixing a bug, verify your change by running the project's existing test suite rather than only a reproduction script you wrote. If you're unsure which tests to run, search for test files related to the code you changed.
+            {{BROWSER_RULES}}{{CLI_RULES}}- NEVER end attempt_completion result with a question or request to engage in further conversation! Formulate the end of your result in a way that is final and does not require further input from the user.
             - You are STRICTLY FORBIDDEN from starting your messages with "Great", "Certainly", "Okay", "Sure". You should NOT be conversational in your responses, but rather direct and to the point. For example you should NOT say "Great, I've updated the CSS" but instead something like "I've updated the CSS". It is important you be clear and technical in your messages.
             - When presented with images, utilize your vision capabilities to thoroughly examine them and extract meaningful information. Incorporate these insights into your thought process as you accomplish the user's task.
             - At the end of each user message, you will automatically receive environment_details. This information is not written by the user themselves, but is auto-generated to provide potentially relevant context about the project structure and environment. While this information can be valuable for understanding the project context, do not treat it as a direct part of the user's request or response. Use it to inform your actions and decisions, but don't assume the user is explicitly asking about or referring to this information unless they clearly do so in their message. When using environment_details, explain your actions clearly to ensure the user understands, as they may not be aware of these details.
@@ -94,6 +101,10 @@ public class RulesComponent implements SystemPromptComponent {
             - 如果上文是因 maxTokens 限制被截断的内容，请继续补全上文调用内容。如果是正在进行工具调用，补全内容需完全贴合原工具的语法规则，无额外冗余信息。
             """,
                 yoloModeText, yoloModeTerminalText);
+    }
+
+    private String getCliRules() {
+        return "- After making code changes, consider running any available validation tools for the project (such as type checkers, linters, test suites, or build scripts) to catch errors, since you won't receive automatic diagnostics after edits.\n";
     }
 
     private String getBrowserRules() {

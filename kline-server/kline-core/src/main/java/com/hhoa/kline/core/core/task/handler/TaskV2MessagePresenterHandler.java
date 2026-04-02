@@ -3,11 +3,11 @@ package com.hhoa.kline.core.core.task.handler;
 import com.hhoa.kline.core.common.Tuple2;
 import com.hhoa.kline.core.core.assistant.AssistantMessage;
 import com.hhoa.kline.core.core.assistant.AssistantMessageContent;
-import com.hhoa.kline.core.core.assistant.AssistantMessageParser;
 import com.hhoa.kline.core.core.assistant.TextContent;
 import com.hhoa.kline.core.core.assistant.TextContentBlock;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.assistant.UserContentBlock;
+import com.hhoa.kline.core.core.assistant.parser.StreamingAssistantMessageParser;
 import com.hhoa.kline.core.core.context.management.ContextManager;
 import com.hhoa.kline.core.core.context.tracking.FileContextTracker;
 import com.hhoa.kline.core.core.ignore.ClineIgnoreController;
@@ -57,7 +57,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public final class TaskV2MessagePresenterHandler {
 
-    private final AssistantMessageParser messageParser;
+    private final StreamingAssistantMessageParser messageParser;
     private final TelemetryService telemetryService;
     private final DiffViewProvider diffViewProvider;
     private final TaskState taskState;
@@ -83,7 +83,7 @@ public final class TaskV2MessagePresenterHandler {
     private final String cwd;
 
     public TaskV2MessagePresenterHandler(
-            AssistantMessageParser messageParser,
+            StreamingAssistantMessageParser messageParser,
             TelemetryService telemetryService,
             DiffViewProvider diffViewProvider,
             TaskState taskState,
@@ -306,47 +306,21 @@ public final class TaskV2MessagePresenterHandler {
         };
     }
 
-    public void updateAssistantMessageContent(String assistantMessage, String oldAssistantMessage) {
+    public void startAssistantResponseStream() {
+        messageParser.reset();
+        messageQueue.clear();
+        taskState.setAssistantMessageContent(new ArrayList<>());
+        taskState.setCurrentStreamingContentIndex(0);
+        taskState.setUserMessageContentReady(false);
+    }
+
+    public void updateAssistantMessageContent(String chunk) {
         if (taskState.isAbort()) {
             return;
         }
-        AssistantMessageUpdate update =
-                new AssistantMessageUpdate(assistantMessage, oldAssistantMessage);
+        AssistantMessageUpdate update = new AssistantMessageUpdate(chunk);
         messageQueue.offer(update);
         checkAndPresentAssistantMessage(false);
-    }
-
-    public void processAssistantMessageUpdate(TextContent newTextBlock, TextContent oldTextBlock) {
-        String currentText = newTextBlock.getContent();
-        String oldText = oldTextBlock == null ? "" : oldTextBlock.getContent();
-        boolean hasIncrementalContent = false;
-        if (currentText != null && !currentText.isEmpty()) {
-            String incrementalContent = null;
-            if (currentText.length() > oldText.length() && currentText.startsWith(oldText)) {
-                incrementalContent = currentText.substring(oldText.length());
-                hasIncrementalContent = true;
-            } else if (oldText.length() > currentText.length() && oldText.startsWith(currentText)) {
-                incrementalContent = "";
-                hasIncrementalContent = true;
-                log.warn(
-                        "Old text length is greater than new text length and old text starts with new text, oldText: {}, newText: {}",
-                        oldText,
-                        currentText);
-            } else if (!currentText.equals(oldText)) {
-                incrementalContent = currentText;
-                hasIncrementalContent = true;
-                log.warn(
-                        "Content is different, sending full content, oldText: {}, newText: {}",
-                        oldText,
-                        currentText);
-            }
-            if (incrementalContent != null) {
-                newTextBlock.setIncrementalContent(incrementalContent);
-            }
-        }
-        if (hasIncrementalContent) {
-            taskState.setUserMessageContentReady(false);
-        }
     }
 
     public void checkAndPresentAssistantMessage(boolean wait) {
@@ -360,9 +334,7 @@ public final class TaskV2MessagePresenterHandler {
             }
             if (lockAcquired) {
                 AssistantMessageUpdate poll = messageQueue.poll();
-                if (taskState.isDidAlreadyUseTool()
-                        || taskState.isDidRejectTool()
-                        || taskState.isAbort()) {
+                if (taskState.isDidRejectTool() || taskState.isAbort()) {
                     messageQueue.clear();
                     return;
                 }
@@ -396,50 +368,37 @@ public final class TaskV2MessagePresenterHandler {
             throw new IllegalStateException("Cline instance aborted");
         }
         try {
-            List<AssistantMessageContent> newContentBlocks =
-                    messageParser.parseAssistantMessage(update.assistantMessage(), true);
+            List<AssistantMessageContent> newContentBlocks = messageParser.feed(update.chunk());
             if (newContentBlocks.isEmpty()) {
                 return;
             }
-            int currentIndex = taskState.getCurrentStreamingContentIndex();
             List<AssistantMessageContent> oldContentBlocks = taskState.getAssistantMessageContent();
 
             if (newContentBlocks.size() > oldContentBlocks.size()) {
                 taskState.setUserMessageContentReady(false);
             }
 
-            AssistantMessageContent currentContentBlock;
-            try {
-                currentContentBlock = newContentBlocks.get(currentIndex);
-            } catch (IndexOutOfBoundsException e) {
-                log.error(
-                        "IndexOutOfBoundsException: currentIndex={}, newContentBlocks.size={}",
-                        currentIndex,
-                        newContentBlocks.size());
-                return;
-            }
-
-            AssistantMessageContent oldMessageContent =
-                    currentIndex < oldContentBlocks.size()
-                            ? oldContentBlocks.get(currentIndex)
-                            : null;
-            if (currentContentBlock instanceof TextContent textContent) {
-                processAssistantMessageUpdate(textContent, (TextContent) oldMessageContent);
-            }
-
             taskState.setAssistantMessageContent(new ArrayList<>(newContentBlocks));
+            presentAvailableAssistantBlocks();
+        } catch (Exception e) {
+            log.error("Error in presentAssistantMessageContent: {}", e.getMessage(), e);
+        }
+    }
 
-            oldContentBlocks = taskState.getAssistantMessageContent();
+    private void presentAvailableAssistantBlocks() {
+        while (true) {
+            int currentIndex = taskState.getCurrentStreamingContentIndex();
+            List<AssistantMessageContent> currentAssistantContent =
+                    taskState.getAssistantMessageContent();
 
-            if (currentIndex >= oldContentBlocks.size()) {
+            if (currentIndex >= currentAssistantContent.size()) {
                 if (taskState.isDidCompleteReadingStream()) {
                     taskState.setUserMessageContentReady(true);
                 }
-                checkAndPresentAssistantMessage(false);
                 return;
             }
 
-            AssistantMessageContent block = oldContentBlocks.get(currentIndex);
+            AssistantMessageContent block = currentAssistantContent.get(currentIndex);
 
             if (block instanceof TextContent textContent) {
                 processTextContent(textContent);
@@ -465,34 +424,42 @@ public final class TaskV2MessagePresenterHandler {
                 }
             }
 
-            boolean isComplete = !block.isPartial();
-
-            List<AssistantMessageContent> currentAssistantContent =
-                    taskState.getAssistantMessageContent();
-
-            if (isComplete) {
-                if (currentIndex == currentAssistantContent.size() - 1) {
-                    taskState.setUserMessageContentReady(true);
-                }
-                taskState.setCurrentStreamingContentIndex(currentIndex + 1);
-                if (taskState.getCurrentStreamingContentIndex() < currentAssistantContent.size()) {
-                    presentAssistantMessageContent(update);
-                }
+            if (block.isPartial()) {
+                return;
             }
-        } catch (Exception e) {
-            log.error("Error in presentAssistantMessageContent: {}", e.getMessage(), e);
+
+            if (currentIndex == currentAssistantContent.size() - 1) {
+                taskState.setUserMessageContentReady(true);
+            }
+
+            taskState.setCurrentStreamingContentIndex(currentIndex + 1);
         }
     }
 
     public void processTextContent(TextContent textContent) {
+        // Skip text rendering if tool was rejected, or if a tool was already used and parallel
+        // calling is disabled
         if (taskState.isDidRejectTool() || taskState.isDidAlreadyUseTool()) {
             return;
+        }
+        String content = textContent.getContent();
+        if (content != null) {
+            // Remove all instances of <thinking> tags
+            content = content.replaceAll("<thinking>\\s?", "");
+            content = content.replaceAll("\\s?</thinking>", "");
+            // Remove all instances of <think> tags (alternative to <thinking>, some models use
+            // this)
+            content = content.replaceAll("<think>\\s?", "");
+            content = content.replaceAll("\\s?</think>", "");
+            // Remove <function_calls> tags
+            content = content.replaceAll("<function_calls>\\s?", "");
+            content = content.replaceAll("\\s?</function_calls>", "");
         }
         String incrementalContent = textContent.getIncrementalContent();
         try {
             sayAskHandler.say(
                     ClineSay.TEXT,
-                    textContent.getContent(),
+                    content,
                     incrementalContent,
                     null,
                     null,

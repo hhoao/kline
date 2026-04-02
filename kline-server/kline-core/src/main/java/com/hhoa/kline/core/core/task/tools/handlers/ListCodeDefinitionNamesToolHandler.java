@@ -105,32 +105,48 @@ public class ListCodeDefinitionNamesToolHandler implements StateFullToolHandler 
     public ToolExecuteResult execute(ToolContext context, ToolUse block) {
         String relPath = HandlerUtils.getStringParam(block, "path");
 
-        if (context.getWorkspaceManager() == null) {
-            throw new IllegalStateException("workspaceManager 未配置，无法列举代码定义");
-        }
-        WorkspaceConfig workspaceConfig = new WorkspaceConfig(context.getWorkspaceManager());
-        Object pathResult =
-                WorkspaceResolver.resolveWorkspacePath(
-                        workspaceConfig, relPath, "ListCodeDefinitionNamesToolHandler.execute");
-
+        // try/catch so that failures (e.g. bad workspace hint, non-existent
+        // directory) return a graceful tool error instead of crashing the task.
         String absolutePath;
         String displayPath;
-        if (pathResult instanceof String) {
-            absolutePath = (String) pathResult;
-            displayPath = relPath;
-        } else {
-            WorkspaceResolver.WorkspacePathResult workspacePathResult =
-                    (WorkspaceResolver.WorkspacePathResult) pathResult;
-            absolutePath = workspacePathResult.absolutePath();
-            displayPath = workspacePathResult.displayPath();
-        }
-
         String result;
         try {
+            if (context.getWorkspaceManager() == null) {
+                throw new IllegalStateException("workspaceManager 未配置，无法列举代码定义");
+            }
+            WorkspaceConfig workspaceConfig = new WorkspaceConfig(context.getWorkspaceManager());
+            WorkspaceResolver.WorkspacePathResult pathResult =
+                    WorkspaceResolver.resolveWorkspacePath(
+                            workspaceConfig, relPath, "ListCodeDefinitionNamesToolHandler.execute");
+
+            absolutePath = pathResult.absolutePath();
+            displayPath = pathResult.displayPath();
             result = parseCodeDefinitions(Paths.get(absolutePath), context);
-        } catch (IOException e) {
-            result = "Error parsing code definitions: " + e.getMessage();
+        } catch (Exception e) {
+            context.getTaskState()
+                    .setConsecutiveMistakeCount(
+                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+            String errorMessage = e.getMessage() != null ? e.getMessage() : String.valueOf(e);
+            return HandlerUtils.createToolExecuteResult(
+                    formatResponse.toolError("Error listing code definitions: " + errorMessage));
         }
+
+        // parseCodeDefinitions returns error strings for file paths
+        // and non-existent directories rather than throwing. Check for these error
+        // conditions and increment the counter so repeated failures accumulate.
+        boolean isErrorResult =
+                result.contains("does not exist or you do not have permission")
+                        || result.contains("The specified path is not a directory");
+        if (isErrorResult) {
+            context.getTaskState()
+                    .setConsecutiveMistakeCount(
+                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+            return HandlerUtils.createToolExecuteResult(formatResponse.toolError(result));
+        }
+
+        // Only reset after a successful operation so repeated failures
+        // accumulate toward the yolo-mode mistake limit.
+        context.getTaskState().setConsecutiveMistakeCount(0);
 
         Map<String, Object> completeMessageMap = new HashMap<>();
         completeMessageMap.put("tool", "listCodeDefinitionNames");

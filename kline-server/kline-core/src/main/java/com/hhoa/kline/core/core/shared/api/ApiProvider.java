@@ -48,7 +48,11 @@ public enum ApiProvider {
     VERCEL_AI_GATEWAY("vercel-ai-gateway", null),
     ZAI("zai", null),
     OCA("oca", null),
-    MINIMAX("minimax", null);
+    MINIMAX("minimax", null),
+    OPENAI_CODEX("openai-codex", null),
+    AIHUBMIX("aihubmix", null),
+    HICAP("hicap", null),
+    WANDB("wandb", null);
 
     private final String value;
     private final String url;

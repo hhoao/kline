@@ -7,4 +7,10 @@ import lombok.Data;
 public class AskPending {
     private String pendingId;
     private ClineAsk askType;
+
+    /** Whether this ask was cancelled by a hook. */
+    private boolean cancelled;
+
+    /** Hook context modification to inject into user content (set by TaskResume hook). */
+    private String hookContextModification;
 }

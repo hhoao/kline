@@ -25,6 +25,22 @@ public class ContextManagement {
                         ? "Updating task progress:\nThere is an optional task_progress parameter which you should use to provide an updated checklist to keep the user informed of the latest state of the progress for this task. You should always return the most up to date version of the checklist if there is already an existing checklist. If no task_progress list was included in the previous context, you should NOT create a new task_progress list - do not return a new task_progress list if one does not already exist."
                         : "";
 
+        String taskProgressUsageTag =
+                Boolean.TRUE.equals(focusChainEnabled)
+                        ? "<task_progress>task_progress list here</task_progress>"
+                        : "";
+
+        String taskProgressExampleTag =
+                Boolean.TRUE.equals(focusChainEnabled)
+                        ? """
+                <task_progress>
+                - [x] Completed task example
+                - [x] Completed task example
+                - [ ] Remaining task example
+                - [ ] Remaining task example
+                </task_progress>"""
+                        : "";
+
         return String.format(
                 """
                 <explicit_instructions type="summarize_task">
@@ -65,10 +81,55 @@ public class ContextManagement {
 
                 %s
 
-                Below is the the user's input when they indicated that they wanted to create a new task.
+                Usage:
+                <summarize_task>
+                <context>Your detailed summary</context>
+                %s
+                </summarize_task>
+
+                Here's an example of how your output should be structured:
+
+                <example>
+                <thinking>
+                [Your thought process, ensuring all points are covered thoroughly and accurately]
+                </thinking>
+                <summarize_task>
+                <context>
+                1. Primary Request and Intent:
+                   [Detailed description]
+                2. Key Technical Concepts:
+                   - [Concept 1]
+                   - [Concept 2]
+                   - [...]
+                3. Files and Code Sections:
+                   - [File Name 1]
+                      - [Summary of why this file is important]
+                      - [Summary of the changes made to this file, if any]
+                      - [Important Code Snippet]
+                   - [File Name 2]
+                      - [Important Code Snippet]
+                   - [...]
+                4. Problem Solving:
+                   [Description of solved problems and ongoing troubleshooting]
+                5. Pending Tasks:
+                   - [Task 1]
+                   - [Task 2]
+                   - [...]
+                6. Current Work:
+                   [Precise description of current work]
+                7. Optional Next Step:
+                   [Optional Next step to take]
+                8. Optional Required Files:
+                   - [file path 1]
+                   - [file path 2]
+                </context>
+                %s
+                </summarize_task>
+                </example>
+
                 </explicit_instructions>
                 """,
-                CWD, MULTI_ROOT_HINT, focusChainText);
+                CWD, MULTI_ROOT_HINT, focusChainText, taskProgressUsageTag, taskProgressExampleTag);
     }
 
     /** Continuation prompt for resuming conversations */

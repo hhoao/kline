@@ -5,6 +5,7 @@ import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptComponent;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptSection;
 import com.hhoa.kline.core.core.prompts.systemprompt.templates.TemplateEngine;
+import java.util.HashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 
@@ -48,7 +49,11 @@ public class SystemInfoComponent implements SystemPromptComponent {
         String workspaceTitle;
         String workingDirInfo;
 
-        if (context.getWorkspaceRoots() != null) {
+        boolean isMultiRoot = Boolean.TRUE.equals(context.getIsMultiRootEnabled())
+                && context.getWorkspaceRoots() != null
+                && context.getWorkspaceRoots().size() > 1;
+
+        if (isMultiRoot) {
             workspaceTitle = "Workspace Roots";
             StringBuilder rootsInfo = new StringBuilder();
             for (var root : context.getWorkspaceRoots()) {
@@ -66,15 +71,17 @@ public class SystemInfoComponent implements SystemPromptComponent {
             workingDirInfo = cwd;
         }
 
-        return templateEngine.resolve(
-                template,
-                context,
-                Map.of(
-                        "os", os,
-                        "shell", shell,
-                        "homeDir", homeDir,
-                        "WORKSPACE_TITLE", workspaceTitle,
-                        "workingDir", workingDirInfo));
+        String ide = context.getIde() != null ? context.getIde() : "Unknown";
+
+        Map<String, String> placeholders = new HashMap<>();
+        placeholders.put("os", os);
+        placeholders.put("ide", ide);
+        placeholders.put("shell", shell);
+        placeholders.put("homeDir", homeDir);
+        placeholders.put("WORKSPACE_TITLE", workspaceTitle);
+        placeholders.put("workingDir", workingDirInfo);
+
+        return templateEngine.resolve(template, context, placeholders);
     }
 
     @Override

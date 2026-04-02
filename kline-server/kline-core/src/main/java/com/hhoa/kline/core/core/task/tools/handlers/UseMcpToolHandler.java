@@ -111,6 +111,9 @@ public class UseMcpToolHandler implements StateFullToolHandler {
                 Map<String, Object> parsed = objectMapper.convertValue(jsonNode, Map.class);
                 parsedArguments = parsed;
             } catch (Exception e) {
+                context.getTaskState()
+                        .setConsecutiveMistakeCount(
+                                context.getTaskState().getConsecutiveMistakeCount() + 1);
                 context.getCallbacks()
                         .say(
                                 ClineSay.ERROR,
@@ -128,6 +131,8 @@ public class UseMcpToolHandler implements StateFullToolHandler {
         } else {
             parsedArguments = null;
         }
+
+        context.getTaskState().setConsecutiveMistakeCount(0);
 
         Map<String, Object> completeMessageMap = new HashMap<>();
         completeMessageMap.put("type", "use_mcp_tool");
@@ -147,7 +152,7 @@ public class UseMcpToolHandler implements StateFullToolHandler {
         }
 
         Boolean shouldAutoApprove = context.getCallbacks().shouldAutoApproveTool(block.getName());
-        boolean autoApprove = shouldAutoApprove && isToolAutoApproved;
+        boolean autoApprove = Boolean.TRUE.equals(shouldAutoApprove) || isToolAutoApproved;
 
         if (autoApprove) {
             context.getCallbacks()

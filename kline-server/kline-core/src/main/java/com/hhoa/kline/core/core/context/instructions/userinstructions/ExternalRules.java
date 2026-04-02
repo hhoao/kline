@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,12 +19,15 @@ public class ExternalRules {
     public static class ExternalRuleTogglesResult {
         private final Map<String, Boolean> windsurfLocalToggles;
         private final Map<String, Boolean> cursorLocalToggles;
+        private final Map<String, Boolean> agentsLocalToggles;
 
         public ExternalRuleTogglesResult(
                 Map<String, Boolean> windsurfLocalToggles,
-                Map<String, Boolean> cursorLocalToggles) {
+                Map<String, Boolean> cursorLocalToggles,
+                Map<String, Boolean> agentsLocalToggles) {
             this.windsurfLocalToggles = windsurfLocalToggles;
             this.cursorLocalToggles = cursorLocalToggles;
+            this.agentsLocalToggles = agentsLocalToggles;
         }
 
         public Map<String, Boolean> getWindsurfLocalToggles() {
@@ -32,6 +36,10 @@ public class ExternalRules {
 
         public Map<String, Boolean> getCursorLocalToggles() {
             return cursorLocalToggles;
+        }
+
+        public Map<String, Boolean> getAgentsLocalToggles() {
+            return agentsLocalToggles;
         }
     }
 
@@ -46,7 +54,8 @@ public class ExternalRules {
     public static ExternalRuleTogglesResult refreshExternalRulesToggles(
             String workingDirectory,
             Map<String, Boolean> localWindsurfRulesToggles,
-            Map<String, Boolean> localCursorRulesToggles) {
+            Map<String, Boolean> localCursorRulesToggles,
+            Map<String, Boolean> localAgentsRulesToggles) {
 
         try {
             // 本地 Windsurf 切换状态
@@ -79,14 +88,23 @@ public class ExternalRules {
             // 注意：实际使用时需要调用 stateManager.setWorkspaceState("localCursorRulesToggles",
             // updatedLocalCursorToggles)
 
+            String localAgentsRulesFilePath =
+                    Paths.get(workingDirectory, GlobalFileNames.AGENTS_RULES_FILE).toString();
+            Map<String, Boolean> updatedLocalAgentsToggles =
+                    RuleHelpers.synchronizeRuleToggles(
+                            localAgentsRulesFilePath, localAgentsRulesToggles);
+
             return new ExternalRuleTogglesResult(
-                    updatedLocalWindsurfToggles, updatedLocalCursorToggles);
+                    updatedLocalWindsurfToggles,
+                    updatedLocalCursorToggles,
+                    updatedLocalAgentsToggles);
         } catch (Exception e) {
             log.error("Failed to refresh external rules toggles: " + e.getMessage());
             e.printStackTrace();
             return new ExternalRuleTogglesResult(
                     localWindsurfRulesToggles != null ? localWindsurfRulesToggles : new HashMap<>(),
-                    localCursorRulesToggles != null ? localCursorRulesToggles : new HashMap<>());
+                    localCursorRulesToggles != null ? localCursorRulesToggles : new HashMap<>(),
+                    localAgentsRulesToggles != null ? localAgentsRulesToggles : new HashMap<>());
         }
     }
 
@@ -222,5 +240,60 @@ public class ExternalRules {
         }
 
         return new CursorRulesResult(cursorRulesFileInstructions, cursorRulesDirInstructions);
+    }
+
+    public static String getLocalAgentsRules(String cwd, Map<String, Boolean> toggles) {
+        String agentsRulesFilePath = Paths.get(cwd, GlobalFileNames.AGENTS_RULES_FILE).toString();
+        if (toggles != null
+                && toggles.containsKey(agentsRulesFilePath)
+                && Boolean.FALSE.equals(toggles.get(agentsRulesFilePath))) {
+            return null;
+        }
+
+        try {
+            List<Path> agentsFiles = findAgentsMdFiles(cwd);
+            if (agentsFiles.isEmpty()) {
+                return null;
+            }
+
+            List<String> contents = new ArrayList<>();
+            for (Path file : agentsFiles) {
+                String content = Files.readString(file).trim();
+                if (content.isEmpty()) {
+                    continue;
+                }
+                contents.add(
+                        "## "
+                                + Paths.get(cwd).relativize(file).toString().replace('\\', '/')
+                                + "\n\n"
+                                + content);
+            }
+
+            if (contents.isEmpty()) {
+                return null;
+            }
+
+            return ResponseFormatter.agentsRulesLocalFileInstructions(
+                    cwd, String.join("\n\n", contents));
+        } catch (Exception e) {
+            log.error("Failed to read agents.md files: " + e.getMessage(), e);
+            return null;
+        }
+    }
+
+    private static List<Path> findAgentsMdFiles(String cwd) throws IOException {
+        Path rootAgentsPath = Paths.get(cwd, GlobalFileNames.AGENTS_RULES_FILE);
+        if (!Files.isRegularFile(rootAgentsPath)) {
+            return List.of();
+        }
+
+        try (var stream = Files.walk(Paths.get(cwd))) {
+            return stream.filter(Files::isRegularFile)
+                    .filter(
+                            path ->
+                                    GlobalFileNames.AGENTS_RULES_FILE.equalsIgnoreCase(
+                                            path.getFileName().toString()))
+                    .toList();
+        }
     }
 }

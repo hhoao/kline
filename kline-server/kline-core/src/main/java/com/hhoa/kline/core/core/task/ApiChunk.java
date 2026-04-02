@@ -32,6 +32,12 @@ public interface ApiChunk {
 
     String data();
 
+    /** Tool use block ID (for native tool use streaming). */
+    String toolId();
+
+    /** Call ID for tracking tool use invocations. */
+    String callId();
+
     @Getter
     enum ChunkType {
         TEXT("text"),

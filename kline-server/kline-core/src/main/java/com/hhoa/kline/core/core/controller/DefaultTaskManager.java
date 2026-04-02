@@ -43,8 +43,7 @@ import com.hhoa.kline.core.core.task.tools.ToolExecutor;
 import com.hhoa.kline.core.core.workspace.WorkspaceDetection;
 import com.hhoa.kline.core.core.workspace.WorkspaceRootManager;
 import com.hhoa.kline.core.core.workspace.WorkspaceSetup;
-import com.hhoa.kline.core.subscription.DefaultSubscriptionManager;
-import com.hhoa.kline.core.subscription.SubscriptionManager;
+import com.hhoa.kline.core.subscription.MessageSender;
 import com.hhoa.kline.core.subscription.message.StateMessage;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -78,7 +77,7 @@ public class DefaultTaskManager implements TaskManager {
 
     private final ContextFactory contextFactory;
 
-    private final SubscriptionManager subscriptionManager;
+    private final MessageSender messageSender;
 
     private final ShellIntegrationWarningTracker shellIntegrationWarningTracker =
             new ShellIntegrationWarningTracker();
@@ -98,7 +97,8 @@ public class DefaultTaskManager implements TaskManager {
             ToolExecutor toolExecutor,
             ApiHandler apiHandler,
             FocusChainManagerFactory focusChainManagerFactory,
-            ContextFactory contextFactory) {
+            ContextFactory contextFactory,
+            MessageSender messageSender) {
         this.mcpHub = mcpHub;
         this.stateManager = stateManager;
         this.systemPromptService = systemPromptService;
@@ -106,7 +106,7 @@ public class DefaultTaskManager implements TaskManager {
         this.toolExecutor = toolExecutor;
         this.apiHandler = apiHandler;
         this.contextFactory = contextFactory;
-        this.subscriptionManager = DefaultSubscriptionManager.getInstance();
+        this.messageSender = messageSender;
         this.workspaceManager = setupWorkspaceManager();
         this.focusChainManagerFactory = focusChainManagerFactory;
         this.taskExecutor =
@@ -148,8 +148,6 @@ public class DefaultTaskManager implements TaskManager {
             int shellIntegrationTimeout = stateManager.getSettings().getShellIntegrationTimeout();
             boolean terminalReuseEnabled = stateManager.getGlobalState().isTerminalReuseEnabled();
             int terminalOutputLineLimit = stateManager.getSettings().getTerminalOutputLineLimit();
-            int subagentTerminalOutputLineLimit =
-                    stateManager.getSettings().getSubagentTerminalOutputLineLimit();
             String defaultTerminalProfile = stateManager.getSettings().getDefaultTerminalProfile();
 
             this.workspaceManager = setupWorkspaceManager();
@@ -206,7 +204,6 @@ public class DefaultTaskManager implements TaskManager {
                             .shellIntegrationTimeout(shellIntegrationTimeout)
                             .terminalReuseEnabled(terminalReuseEnabled)
                             .terminalOutputLineLimit(terminalOutputLineLimit)
-                            .subagentTerminalOutputLineLimit(subagentTerminalOutputLineLimit)
                             .defaultTerminalProfile(defaultTerminalProfile)
                             .stateManager(stateManager)
                             .workspaceManager(workspaceManager)
@@ -215,7 +212,8 @@ public class DefaultTaskManager implements TaskManager {
                             .images(images)
                             .files(files)
                             .historyItem(historyItem)
-                            .taskLockAcquired(taskLockAcquired);
+                            .taskLockAcquired(taskLockAcquired)
+                            .messageSender(messageSender);
 
             TaskParams taskParams = paramsBuilder.build();
             TaskV2 task = TaskV2Factory.create(taskParams);
@@ -361,7 +359,7 @@ public class DefaultTaskManager implements TaskManager {
         ExtensionState state = getStateToPostToWebview(taskId);
 
         StateMessage stateMessage = new StateMessage(state);
-        subscriptionManager.send(stateMessage);
+        messageSender.send(stateMessage);
     }
 
     @Override
@@ -522,6 +520,7 @@ public class DefaultTaskManager implements TaskManager {
                 .lastDismissedModelBannerVersion(lastDismissedModelBannerVersion)
                 .lastDismissedCliBannerVersion(lastDismissedCliBannerVersion)
                 .subagentsEnabled(subagentsEnabled)
+                .remoteConfigSettings(stateManager.getGlobalState().getRemoteConfigSettings())
                 .build();
     }
 

@@ -2,6 +2,7 @@ package com.hhoa.kline.core.core.prompts.systemprompt;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.Builder;
 import lombok.Data;
@@ -26,6 +27,12 @@ public class PromptVariant {
     private ModelFamily family;
 
     private String description;
+
+    /**
+     * 变体匹配函数，用于根据上下文判断是否应使用此变体。
+     * 对应 TS PromptVariant.matcher
+     */
+    private Function<SystemPromptContext, Boolean> matcher;
 
     private PromptConfig config;
 
@@ -72,6 +79,7 @@ public class PromptVariant {
                     .labels(variant.getLabels())
                     .family(variant.getFamily())
                     .description(variant.getDescription())
+                    .matcher(variant.getMatcher())
                     .config(variant.getConfig())
                     .baseTemplate(template)
                     .componentOrder(variant.getComponentOrder())

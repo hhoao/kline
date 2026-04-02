@@ -88,7 +88,6 @@ public class CombineApiRequestsUtils {
                                         message.getConversationHistoryDeletedRange());
                                 combinedApiRequests.add(combinedMessage);
 
-                                // 在 TypeScript 中，i = j 会跳过到 api_req_finished 消息
                                 // 在 Java 中，我们需要将 i 设置为 j-1，这样在循环递增后 i 会变成 j，从而跳过已处理的
                                 // api_req_finished
                                 i = j - 1;

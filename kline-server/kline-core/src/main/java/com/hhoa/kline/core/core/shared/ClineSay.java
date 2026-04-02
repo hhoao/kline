@@ -38,8 +38,16 @@ public enum ClineSay {
     CLINEIGNORE_ERROR("clineignore_error"),
     CHECKPOINT_CREATED("checkpoint_created"),
     LOAD_MCP_DOCUMENTATION("load_mcp_documentation"),
-    INFO("info"), // Added for general informational messages like retry status
-    TASK_PROGRESS("task_progress");
+    INFO("info"),
+    TASK_PROGRESS("task_progress"),
+    USE_SUBAGENTS("use_subagents"),
+    SUBAGENT("subagent"),
+    SUBAGENT_USAGE("subagent_usage"),
+    GENERATE_EXPLANATION("generate_explanation"),
+    COMMAND_PERMISSION_DENIED("command_permission_denied"),
+    HOOK_STATUS("hook_status"),
+    HOOK_OUTPUT_STREAM("hook_output_stream"),
+    CONDITIONAL_RULES_APPLIED("conditional_rules_applied");
 
     private final String value;
 

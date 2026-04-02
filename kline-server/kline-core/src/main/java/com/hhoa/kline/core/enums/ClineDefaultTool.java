@@ -1,8 +1,6 @@
 package com.hhoa.kline.core.enums;
 
 /**
- * Cline 默认工具枚举 与前端 TypeScript ClineDefaultTool 枚举保持一致
- *
  * @author hhoa
  */
 public enum ClineDefaultTool {
@@ -26,7 +24,13 @@ public enum ClineDefaultTool {
     CONDENSE("condense"),
     SUMMARIZE_TASK("summarize_task"),
     REPORT_BUG("report_bug"),
-    NEW_RULE("new_rule");
+    NEW_RULE("new_rule"),
+    ACT_MODE("act_mode_respond"),
+    APPLY_PATCH("apply_patch"),
+    USE_SKILL("use_skill"),
+    WEB_SEARCH("web_search"),
+    USE_SUBAGENTS("use_subagents"),
+    GENERATE_EXPLANATION("generate_explanation");
 
     private final String value;
 

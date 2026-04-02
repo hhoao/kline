@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -167,10 +168,152 @@ public class Graph {
         return generateGraphViz("");
     }
 
+    /** 生成 Mermaid 文本：无子图时用 {@code stateDiagram-v2}（状态语义、短状态名、较易读）；含子图时退回 {@code flowchart TD}。 */
+    public String generateMermaid(String indent) {
+        if (this.parent == null && this.subgraphs.isEmpty()) {
+            return generateMermaidStateDiagramV2();
+        }
+        return generateMermaidFlowchart(indent);
+    }
+
+    public String generateMermaid() {
+        return generateMermaid("");
+    }
+
+    /** 扁平状态图：{@code stateDiagram-v2}，节点用状态短名，边按源状态排序并分组空行。 */
+    private String generateMermaidStateDiagramV2() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("%% ").append(name).append("\n");
+        sb.append("stateDiagram-v2\n");
+        sb.append("  direction LR\n");
+        List<Node> sorted = new ArrayList<>(nodes);
+        sorted.sort(Comparator.comparing(n -> n.id));
+        for (Node n : sorted) {
+            List<Edge> combinedOuts = combineEdges(n.outs);
+            if (combinedOuts.isEmpty()) {
+                continue;
+            }
+            combinedOuts.sort(Comparator.comparing(e -> e.to.id));
+            for (Edge e : combinedOuts) {
+                String fromId = sanitizeMermaidId(e.from.id);
+                String toId = sanitizeMermaidId(e.to.id);
+                String lbl = escapeMermaidStateTransitionLabel(e.label);
+                sb.append("  ").append(fromId).append(" --> ").append(toId).append(" : ");
+                appendQuotedIfNeeded(sb, lbl);
+                sb.append("\n");
+            }
+            sb.append("\n");
+        }
+        return sb.toString();
+    }
+
+    private String generateMermaidFlowchart(String indent) {
+        StringBuilder sb = new StringBuilder();
+        if (this.parent == null) {
+            sb.append("%% ").append(name).append("\n");
+            sb.append("flowchart TD\n");
+        } else {
+            String subgraphId = sanitizeMermaidId("cluster_" + name);
+            sb.append(indent)
+                    .append("subgraph ")
+                    .append(subgraphId)
+                    .append("[\"")
+                    .append(escapeMermaidNodeText(name))
+                    .append("\"]\n");
+            sb.append(indent).append("  direction TB\n");
+        }
+        for (Graph g : subgraphs) {
+            sb.append(g.generateMermaid(indent + "  "));
+        }
+        String lineIndent = (indent.isEmpty() && parent == null) ? "  " : indent;
+        List<Node> sorted = new ArrayList<>(nodes);
+        sorted.sort(Comparator.comparing(n -> n.id));
+        for (Node n : sorted) {
+            String mid = sanitizeMermaidId(n.getUniqueId());
+            sb.append(lineIndent)
+                    .append(mid)
+                    .append("[\"")
+                    .append(escapeMermaidNodeText(n.id))
+                    .append("\"]\n");
+            List<Edge> combinedOuts = combineEdges(n.outs);
+            combinedOuts.sort(Comparator.comparing(e -> e.to.getUniqueId()));
+            for (Edge e : combinedOuts) {
+                String fromId = sanitizeMermaidId(e.from.getUniqueId());
+                String toId = sanitizeMermaidId(e.to.getUniqueId());
+                String edgeLabel = escapeMermaidFlowchartEdgeLabel(e.label);
+                sb.append(lineIndent)
+                        .append(fromId)
+                        .append(" -->|")
+                        .append(edgeLabel)
+                        .append("| ")
+                        .append(toId)
+                        .append("\n");
+            }
+            sb.append("\n");
+        }
+        if (this.parent != null) {
+            sb.append(indent).append("end\n");
+        }
+        return sb.toString();
+    }
+
+    private static void appendQuotedIfNeeded(StringBuilder sb, String lbl) {
+        if (lbl.isEmpty()) {
+            return;
+        }
+        if (mustQuoteStateTransitionLabel(lbl)) {
+            sb.append('"').append(lbl.replace("\\", "\\\\").replace("\"", "\\\"")).append('"');
+        } else {
+            sb.append(lbl);
+        }
+    }
+
+    private static boolean mustQuoteStateTransitionLabel(String lbl) {
+        if (lbl.indexOf(':') >= 0 || lbl.indexOf(' ') >= 0) {
+            return true;
+        }
+        return lbl.indexOf(',') >= 0;
+    }
+
+    private static String sanitizeMermaidId(String uniqueId) {
+        String s = uniqueId.replaceAll("[^a-zA-Z0-9_]", "_");
+        if (s.isEmpty()) {
+            return "_node";
+        }
+        if (Character.isDigit(s.charAt(0))) {
+            return "_" + s;
+        }
+        return s;
+    }
+
+    /** 节点显示文本（flowchart 方括号内）。 */
+    private static String escapeMermaidNodeText(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text.replace("\\", "\\\\").replace("\"", "#quot;");
+    }
+
+    /** stateDiagram 边上说明（冒号后）。 */
+    private static String escapeMermaidStateTransitionLabel(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text.replace("\n", " ").replace("\r", "").replace(",", ", ");
+    }
+
+    /** flowchart 边上 |…| 内文本。 */
+    private static String escapeMermaidFlowchartEdgeLabel(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text.replace("|", "/").replace("\n", " ").replace("\r", "").replace(",", ", ");
+    }
+
     public void save(String filepath) throws IOException {
         try (OutputStreamWriter fout =
                 new OutputStreamWriter(new FileOutputStream(filepath), Charset.forName("UTF-8"))) {
-            fout.write(generateGraphViz());
+            fout.write(generateMermaid());
         }
     }
 
