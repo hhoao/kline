@@ -277,7 +277,6 @@ public class LocalStateManager implements StateManager {
         }
     }
 
-
     private synchronized void loadLocalStateFromDisk() {
         if (localStateCacheLoaded.get()) {
             return;

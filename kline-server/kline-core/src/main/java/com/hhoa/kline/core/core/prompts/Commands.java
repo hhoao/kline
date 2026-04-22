@@ -13,9 +13,10 @@ import lombok.extern.slf4j.Slf4j;
 public class Commands {
 
     public static String newTaskToolResponse(boolean willUseNativeTools) {
-        String nativeToolsText = willUseNativeTools
-                ? " You MUST call the new_task tool EVEN if it's not in your existing toolset."
-                : "";
+        String nativeToolsText =
+                willUseNativeTools
+                        ? " You MUST call the new_task tool EVEN if it's not in your existing toolset."
+                        : "";
 
         return String.format(
                 """
@@ -79,28 +80,29 @@ public class Commands {
     public static String condenseToolResponse(Boolean focusChainEnabled) {
         boolean enabled = Boolean.TRUE.equals(focusChainEnabled);
 
-        String taskProgressParam = enabled
-                ? """
+        String taskProgressParam =
+                enabled
+                        ? """
                 - task_progress: (required) The current state of the task_progress list, with completed items marked. Important information on this parameter is as follows:
                   1. XML schema matches that of prior task_progress lists.
                   2. All items are retained, with the exact same desciptive content as in prior occurences.
                   3. All completed items are marked as completed.
                   4. The only compenent of this list that can be changed is the completion state of invidiual items in the list"""
-                : "";
+                        : "";
 
-        String taskProgressUsage = enabled
-                ? "\n<task_progress>task_progress list here</task_progress>"
-                : "";
+        String taskProgressUsage =
+                enabled ? "\n<task_progress>task_progress list here</task_progress>" : "";
 
-        String taskProgressExample = enabled
-                ? """
+        String taskProgressExample =
+                enabled
+                        ? """
                 <task_progress>
                 - [x] Set up project structure
                 - [x] Install dependencies
                 - [ ] Create components
                 - [ ] Test application
                 </task_progress>"""
-                : "";
+                        : "";
 
         return String.format(
                 """
@@ -166,9 +168,7 @@ public class Commands {
 
                 </explicit_instructions>
                 """,
-                taskProgressParam,
-                taskProgressUsage,
-                taskProgressExample);
+                taskProgressParam, taskProgressUsage, taskProgressExample);
     }
 
     public static String focusChainToolResponse() {
@@ -392,4 +392,3 @@ public class Commands {
                 focusChainEnabled, providerInfo, enableNativeToolCalls);
     }
 }
-

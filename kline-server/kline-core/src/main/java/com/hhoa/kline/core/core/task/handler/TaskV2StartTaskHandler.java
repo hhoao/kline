@@ -46,9 +46,7 @@ public final class TaskV2StartTaskHandler {
         this.versionSupplier = versionSupplier;
     }
 
-    /**
-     * 启动新任务。返回 true 表示正常继续，返回 false 表示被 hook 取消。
-     */
+    /** 启动新任务。返回 true 表示正常继续，返回 false 表示被 hook 取消。 */
     public boolean startTask(String taskText, List<String> images, List<String> files) {
         messageStateHandler.setClineMessages(new ArrayList<>());
         messageStateHandler.getApiConversationHistory().clear();

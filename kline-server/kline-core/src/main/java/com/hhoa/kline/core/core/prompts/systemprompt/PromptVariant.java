@@ -28,10 +28,7 @@ public class PromptVariant {
 
     private String description;
 
-    /**
-     * 变体匹配函数，用于根据上下文判断是否应使用此变体。
-     * 对应 TS PromptVariant.matcher
-     */
+    /** 变体匹配函数，用于根据上下文判断是否应使用此变体。 对应 TS PromptVariant.matcher */
     private Function<SystemPromptContext, Boolean> matcher;
 
     private PromptConfig config;

@@ -1,16 +1,15 @@
 package com.hhoa.kline.core.core.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.hhoa.kline.core.core.controller.testsupport.AbstractLocalTaskIntegrationTest;
 import com.hhoa.kline.core.core.controller.testsupport.ScriptedConversationApiHandler;
 import com.hhoa.kline.core.core.task.TaskLockUtils;
 import com.hhoa.kline.core.core.task.TaskV2;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
-import org.junit.jupiter.api.Test;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 class LocalTaskConversationIntegrationTest extends AbstractLocalTaskIntegrationTest {
 
@@ -20,8 +19,8 @@ class LocalTaskConversationIntegrationTest extends AbstractLocalTaskIntegrationT
         ScriptedConversationApiHandler apiHandler =
                 ScriptedConversationApiHandler.singleTurnTextReply(expectedAssistantText);
 
-        LocalTaskManagerFactory factory = new LocalTaskManagerFactory(
-                apiHandler, systemPromptService, () -> baseDir, null);
+        LocalTaskManagerFactory factory =
+                new LocalTaskManagerFactory(apiHandler, systemPromptService, () -> baseDir, null);
 
         DefaultTaskManager taskManager = (DefaultTaskManager) factory.getOrCreateTaskManager();
         applyIntegrationSettings(taskManager.getStateManager(), false);
@@ -51,24 +50,22 @@ class LocalTaskConversationIntegrationTest extends AbstractLocalTaskIntegrationT
         Files.createDirectories(workspaceRoot);
         Files.writeString(workspaceRoot.resolve("doc.txt"), "multi-turn-secret");
 
-        String readFileToolXml = "<%s>\n<path>doc.txt</path>\n</%s>"
-                .formatted(ClineDefaultTool.FILE_READ.getValue(),
-                        ClineDefaultTool.FILE_READ.getValue());
+        String readFileToolXml =
+                "<%s>\n<path>doc.txt</path>\n</%s>"
+                        .formatted(
+                                ClineDefaultTool.FILE_READ.getValue(),
+                                ClineDefaultTool.FILE_READ.getValue());
 
-        ScriptedConversationApiHandler apiHandler = ScriptedConversationApiHandler.multiTurnRounds(
-                readFileToolXml, "已读取工作区文件，内容为：multi-turn-secret。");
+        ScriptedConversationApiHandler apiHandler =
+                ScriptedConversationApiHandler.multiTurnRounds(
+                        readFileToolXml, "已读取工作区文件，内容为：multi-turn-secret。");
 
-        LocalTaskManagerFactory factory = new LocalTaskManagerFactory(
-                apiHandler, systemPromptService, () -> baseDir, null);
+        LocalTaskManagerFactory factory =
+                new LocalTaskManagerFactory(apiHandler, systemPromptService, () -> baseDir, null);
 
         DefaultTaskManager taskManager = (DefaultTaskManager) factory.getOrCreateTaskManager();
         applyIntegrationSettings(taskManager.getStateManager(), true);
-        String taskId = taskManager.initTask(
-                "请先读取 doc.txt，再用一句话说明读到的内容。",
-                null,
-                null,
-                null,
-                null);
+        String taskId = taskManager.initTask("请先读取 doc.txt，再用一句话说明读到的内容。", null, null, null, null);
         try {
             TaskV2 task = taskManager.getTask(taskId);
             assertThat(task).isNotNull();
@@ -77,14 +74,14 @@ class LocalTaskConversationIntegrationTest extends AbstractLocalTaskIntegrationT
             flushPendingMergedIncrements();
 
             assertThat(partialMessages).isNotEmpty();
-            String docAbs = workspaceRoot.resolve("doc.txt").toAbsolutePath().normalize().toString();
+            String docAbs =
+                    workspaceRoot.resolve("doc.txt").toAbsolutePath().normalize().toString();
             String expectedMergedToolJson =
                     """
                         {"path":"%s","tool":"readFile","content":"%s","operationIsLocatedInWorkspace":"true"}"""
                             .formatted(docAbs, docAbs);
             assertThat(mergedIncrementSeries)
-                    .containsExactly(
-                            expectedMergedToolJson, "已读取工作区文件，内容为：multi-turn-secret。");
+                    .containsExactly(expectedMergedToolJson, "已读取工作区文件，内容为：multi-turn-secret。");
 
             assertThat(apiHandler.getStreamInvocationCount()).isEqualTo(2);
             assertThat(statePushCount.get()).isPositive();

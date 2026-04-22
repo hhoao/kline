@@ -10,8 +10,7 @@ import java.util.List;
  *
  * @author hhoa
  */
-public class AttemptCompletionTool extends BaseToolSpec
-{
+public class AttemptCompletionTool extends BaseToolSpec {
 
     private static final String GENERIC_DESCRIPTION =
             "After each tool use, the user will respond with the result of that tool use, i.e. if it succeeded or failed, along with any reasons for failure. Once you've received the results of tool uses and can confirm that the task is complete, use this tool to present the result of your work to the user. Optionally you may provide a CLI command to showcase the result of your work. The user may respond with feedback if they are not satisfied with the result, which you can use to make improvements and try again.\n"
@@ -24,22 +23,17 @@ public class AttemptCompletionTool extends BaseToolSpec
     private static final String NATIVE_DESCRIPTION =
             "Once you've completed the user's task, use this tool to present the final result to the user, including a brief and very short (1-2 paragraph) summary of the task and what was done to resolve it. Provide the basics, hitting the highlights, but do delve into the specifics. You should only call this tool when you have completed all tasks in the task_progress list, and completed all changes that are necessary to satisfy the user's request. You should not provide the contents of the task_progress list in the result parameter, it must be included in the task_progress parameter.";
 
-    public static ClineToolSpec create(ModelFamily modelFamily)
-    {
+    public static ClineToolSpec create(ModelFamily modelFamily) {
         if (modelFamily == ModelFamily.NATIVE_GPT_5
                 || modelFamily == ModelFamily.NATIVE_GPT_5_1
-                || modelFamily == ModelFamily.NATIVE_NEXT_GEN)
-        {
+                || modelFamily == ModelFamily.NATIVE_NEXT_GEN) {
             return createNativeVariant(modelFamily);
         }
 
         String description;
-        if (modelFamily == ModelFamily.GPT_5)
-        {
+        if (modelFamily == ModelFamily.GPT_5) {
             description = GPT_5_DESCRIPTION;
-        }
-        else
-        {
+        } else {
             description = GENERIC_DESCRIPTION;
         }
 
@@ -70,8 +64,7 @@ public class AttemptCompletionTool extends BaseToolSpec
                 .build();
     }
 
-    private static ClineToolSpec createNativeVariant(ModelFamily modelFamily)
-    {
+    private static ClineToolSpec createNativeVariant(ModelFamily modelFamily) {
         return ClineToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.ATTEMPT.getValue())

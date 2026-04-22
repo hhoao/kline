@@ -3,8 +3,8 @@ package com.hhoa.kline.core.core.task.handler;
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.MessageParam;
 import com.hhoa.kline.core.core.context.tracking.EnvironmentContextTracker;
-import com.hhoa.kline.core.core.shared.ClineApiReqInfo;
 import com.hhoa.kline.core.core.hooks.HookExecutionResult;
+import com.hhoa.kline.core.core.shared.ClineApiReqInfo;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageType;
 import com.hhoa.kline.core.core.shared.ClineSay;
@@ -50,9 +50,7 @@ public final class TaskV2ResumeHandler {
         this.versionSupplier = versionSupplier;
     }
 
-    /**
-     * 从历史记录恢复任务。返回的 AskPending 中 isCancelled() 为 true 表示被 hook 取消。
-     */
+    /** 从历史记录恢复任务。返回的 AskPending 中 isCancelled() 为 true 表示被 hook 取消。 */
     public AskPending resumeTaskFromHistory() {
         List<ClineMessage> savedClineMessages = stateManager.getSavedClineMessages(taskId);
 

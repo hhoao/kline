@@ -81,24 +81,25 @@ public class NativeGpt5VariantConfig {
                                 Arrays.asList(
                                         "gpt", "gpt-5", "advanced", "production", "native_tools"))
                         .labels(labels)
-                        .matcher(context -> {
-                            if (!Boolean.TRUE.equals(context.getEnableNativeToolCalls())) {
-                                return false;
-                            }
-                            var providerInfo = context.getProviderInfo();
-                            String modelId = getModelId(context);
-                            if (!isNextGenModelProvider(providerInfo)) {
-                                return false;
-                            }
-                            if (isGptOssModelFamily(modelId)) {
-                                return true;
-                            }
-                            return isGPT5ModelFamily(modelId)
-                                    && !isGPT51Model(modelId)
-                                    && !isGPT52Model(modelId)
-                                    && !modelId.toLowerCase().contains("chat")
-                                    && isNextGenModelProvider(providerInfo);
-                        })
+                        .matcher(
+                                context -> {
+                                    if (!Boolean.TRUE.equals(context.getEnableNativeToolCalls())) {
+                                        return false;
+                                    }
+                                    var providerInfo = context.getProviderInfo();
+                                    String modelId = getModelId(context);
+                                    if (!isNextGenModelProvider(providerInfo)) {
+                                        return false;
+                                    }
+                                    if (isGptOssModelFamily(modelId)) {
+                                        return true;
+                                    }
+                                    return isGPT5ModelFamily(modelId)
+                                            && !isGPT51Model(modelId)
+                                            && !isGPT52Model(modelId)
+                                            && !modelId.toLowerCase().contains("chat")
+                                            && isNextGenModelProvider(providerInfo);
+                                })
                         .componentOrder(COMPONENT_ORDER)
                         .tools(TOOLS)
                         .placeholders(placeholders)

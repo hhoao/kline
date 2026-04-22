@@ -88,18 +88,19 @@ public class NativeGpt51VariantConfig {
                                         "production",
                                         "native_tools"))
                         .labels(labels)
-                        .matcher(context -> {
-                            if (!Boolean.TRUE.equals(context.getEnableNativeToolCalls())) {
-                                return false;
-                            }
-                            var providerInfo = context.getProviderInfo();
-                            String modelId = getModelId(context);
-                            if (modelId.toLowerCase().contains("chat")) {
-                                return false;
-                            }
-                            return (isGPT51Model(modelId) || isGPT52Model(modelId))
-                                    && isNextGenModelProvider(providerInfo);
-                        })
+                        .matcher(
+                                context -> {
+                                    if (!Boolean.TRUE.equals(context.getEnableNativeToolCalls())) {
+                                        return false;
+                                    }
+                                    var providerInfo = context.getProviderInfo();
+                                    String modelId = getModelId(context);
+                                    if (modelId.toLowerCase().contains("chat")) {
+                                        return false;
+                                    }
+                                    return (isGPT51Model(modelId) || isGPT52Model(modelId))
+                                            && isNextGenModelProvider(providerInfo);
+                                })
                         .componentOrder(COMPONENT_ORDER)
                         .tools(TOOLS)
                         .placeholders(placeholders)

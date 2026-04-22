@@ -14,13 +14,16 @@ public class ContextErrorHandling {
         Pattern.compile("\\b(?:input\\s*)?tokens?\\s*exceed", Pattern.CASE_INSENSITIVE),
         Pattern.compile("\\btoo\\s*many\\s*tokens?\\b", Pattern.CASE_INSENSITIVE),
         Pattern.compile("input is too long", Pattern.CASE_INSENSITIVE),
-        Pattern.compile("requested input length.*exceeds.*maximum input length", Pattern.CASE_INSENSITIVE),
-        Pattern.compile("prompt is too long.*tokens?\\s*>\\s*\\d+\\s*maximum", Pattern.CASE_INSENSITIVE),
+        Pattern.compile(
+                "requested input length.*exceeds.*maximum input length", Pattern.CASE_INSENSITIVE),
+        Pattern.compile(
+                "prompt is too long.*tokens?\\s*>\\s*\\d+\\s*maximum", Pattern.CASE_INSENSITIVE),
     };
 
     private static final Pattern[] BEDROCK_CONTEXT_PATTERNS = {
         Pattern.compile("maximum tokens.*exceeds.*model limit", Pattern.CASE_INSENSITIVE),
-        Pattern.compile("input length and max_tokens exceed context limit", Pattern.CASE_INSENSITIVE),
+        Pattern.compile(
+                "input length and max_tokens exceed context limit", Pattern.CASE_INSENSITIVE),
         Pattern.compile("context length.*exceeds", Pattern.CASE_INSENSITIVE),
         Pattern.compile("total number of tokens.*exceeds.*limit", Pattern.CASE_INSENSITIVE),
         Pattern.compile("requested.*tokens.*exceeds.*limit", Pattern.CASE_INSENSITIVE),
@@ -138,7 +141,8 @@ public class ContextErrorHandling {
             messages.add(message);
             String status = extractStatusCode(message);
             boolean hasValidStatus = "400".equals(status);
-            boolean has400InMessage = message.contains("\"code\":400") || message.contains("\"code\": 400");
+            boolean has400InMessage =
+                    message.contains("\"code\":400") || message.contains("\"code\": 400");
             if (!hasValidStatus && !has400InMessage) {
                 return false;
             }

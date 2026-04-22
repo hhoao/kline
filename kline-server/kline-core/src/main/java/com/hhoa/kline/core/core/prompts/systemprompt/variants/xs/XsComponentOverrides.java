@@ -17,7 +17,7 @@ public final class XsComponentOverrides {
 
     private static final String XS_AGENT_ROLE =
             "You are Cline, a senior software engineer + precise task runner. Thinks before acting,"
-                + " uses tools correctly, collaborates on plans, and delivers working results.";
+                    + " uses tools correctly, collaborates on plans, and delivers working results.";
 
     private static final String XS_EDITING_FILES =
             """

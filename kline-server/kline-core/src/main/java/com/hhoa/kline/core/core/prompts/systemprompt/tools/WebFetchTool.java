@@ -10,8 +10,7 @@ import java.util.List;
  *
  * @author hhoa
  */
-public class WebFetchTool extends BaseToolSpec
-{
+public class WebFetchTool extends BaseToolSpec {
 
     private static final String GENERIC_DESCRIPTION =
             "Fetches content from a specified URL and analyzes it using your prompt\n"
@@ -29,8 +28,7 @@ public class WebFetchTool extends BaseToolSpec
                     + "IMPORTANT: If an MCP-provided web fetch tool is available, prefer using that tool "
                     + "instead of this one, as it may have fewer restrictions.";
 
-    public static ClineToolSpec create(ModelFamily modelFamily)
-    {
+    public static ClineToolSpec create(ModelFamily modelFamily) {
         boolean isNative =
                 modelFamily == ModelFamily.NATIVE_GPT_5
                         || modelFamily == ModelFamily.NATIVE_NEXT_GEN;
@@ -38,24 +36,17 @@ public class WebFetchTool extends BaseToolSpec
         String description = isNative ? CONCISE_DESCRIPTION : GENERIC_DESCRIPTION;
 
         List<ClineToolSpec.ClineToolSpecParameter> parameters;
-        if (isNative)
-        {
+        if (isNative) {
             parameters =
                     List.of(
-                            createParameter(
-                                    "url",
-                                    true,
-                                    "The URL to fetch content from",
-                                    null),
+                            createParameter("url", true, "The URL to fetch content from", null),
                             createParameter(
                                     "prompt",
                                     true,
                                     "Prompt for analyzing the webpage content",
                                     null),
                             createTaskProgressParameter());
-        }
-        else
-        {
+        } else {
             parameters =
                     List.of(
                             createParameter(

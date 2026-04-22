@@ -91,8 +91,8 @@ public class RuleHelpers {
         }
     }
 
-    private static List<String> readDirectory(String directoryPath, List<List<String>> excludedPaths)
-            throws IOException {
+    private static List<String> readDirectory(
+            String directoryPath, List<List<String>> excludedPaths) throws IOException {
         Path dir = Paths.get(directoryPath);
         if (!Files.exists(dir) || !Files.isDirectory(dir)) {
             return new ArrayList<>();

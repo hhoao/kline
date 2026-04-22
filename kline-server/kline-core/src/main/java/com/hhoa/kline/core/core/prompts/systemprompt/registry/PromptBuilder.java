@@ -122,8 +122,10 @@ public class PromptBuilder {
 
         // 合并运行时占位符（优先级最高）
         if (context.getRuntimePlaceholders() != null) {
-            context.getRuntimePlaceholders().forEach(
-                    (key, value) -> placeholders.put(key, value != null ? value.toString() : ""));
+            context.getRuntimePlaceholders()
+                    .forEach(
+                            (key, value) ->
+                                    placeholders.put(key, value != null ? value.toString() : ""));
         }
 
         return placeholders;
@@ -427,9 +429,7 @@ public class PromptBuilder {
         return String.join("\n", sections);
     }
 
-    /**
-     * 解析参数的 instruction，优先使用动态 instructionFn。
-     */
+    /** 解析参数的 instruction，优先使用动态 instructionFn。 */
     private static String resolveInstruction(
             ClineToolSpec.ClineToolSpecParameter param, SystemPromptContext context) {
         if (param.getInstructionFn() != null && context != null) {

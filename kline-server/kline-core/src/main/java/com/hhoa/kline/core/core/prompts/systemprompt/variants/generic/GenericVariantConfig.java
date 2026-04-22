@@ -77,21 +77,22 @@ public class GenericVariantConfig {
                         .version(1)
                         .tags(Arrays.asList("fallback", "stable"))
                         .labels(labels)
-                        .matcher(context -> {
-                            var providerInfo = context.getProviderInfo();
-                            if (providerInfo == null
-                                    || providerInfo.getProviderId() == null
-                                    || providerInfo.getModel() == null) {
-                                return true;
-                            }
-                            String modelId = getModelId(context);
-                            return !(("compact".equals(providerInfo.getCustomPrompt())
-                                            && isLocalModel(providerInfo))
-                                    || (isNextGenModelProvider(providerInfo)
-                                            && isNextGenModelFamily(modelId))
-                                    || isGLMModelFamily(modelId)
-                                    || isTrinityModelFamily(modelId));
-                        })
+                        .matcher(
+                                context -> {
+                                    var providerInfo = context.getProviderInfo();
+                                    if (providerInfo == null
+                                            || providerInfo.getProviderId() == null
+                                            || providerInfo.getModel() == null) {
+                                        return true;
+                                    }
+                                    String modelId = getModelId(context);
+                                    return !(("compact".equals(providerInfo.getCustomPrompt())
+                                                    && isLocalModel(providerInfo))
+                                            || (isNextGenModelProvider(providerInfo)
+                                                    && isNextGenModelFamily(modelId))
+                                            || isGLMModelFamily(modelId)
+                                            || isTrinityModelFamily(modelId));
+                                })
                         .componentOrder(GENERIC_COMPONENT_ORDER)
                         .tools(GENERIC_TOOLS)
                         .placeholders(placeholders)

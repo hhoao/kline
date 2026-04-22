@@ -70,13 +70,14 @@ public class XsVariantConfig {
                         .version(1)
                         .tags(Arrays.asList("local", "xs", "compact", "native_tools"))
                         .labels(labels)
-                        .matcher(context -> {
-                            var providerInfo = context.getProviderInfo();
-                            if (!isLocalModel(providerInfo)) {
-                                return false;
-                            }
-                            return "compact".equals(providerInfo.getCustomPrompt());
-                        })
+                        .matcher(
+                                context -> {
+                                    var providerInfo = context.getProviderInfo();
+                                    if (!isLocalModel(providerInfo)) {
+                                        return false;
+                                    }
+                                    return "compact".equals(providerInfo.getCustomPrompt());
+                                })
                         .componentOrder(XS_COMPONENT_ORDER)
                         .tools(XS_TOOLS)
                         .placeholders(placeholders)

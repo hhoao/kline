@@ -46,8 +46,7 @@ class ClineRulesTest {
         assertTrue(result.getInstructions().contains("Prefer Java implementations."));
         assertEquals(1, result.getActivatedConditionalRules().size());
         assertEquals(
-                "workspace:java-rule.md",
-                result.getActivatedConditionalRules().get(0).getName());
+                "workspace:java-rule.md", result.getActivatedConditionalRules().get(0).getName());
     }
 
     @Test

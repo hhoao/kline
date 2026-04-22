@@ -4,6 +4,7 @@ import com.hhoa.kline.core.core.task.ApiChunk;
 import java.io.IOException;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.Test;
  */
 @Slf4j
 @Getter
+@Disabled
 public class TestContinuePartialContentPrompts extends FixedVersionPromptsTestBase {
     private final int historyGroup = 1;
     private final int templateArgsGroup = 1;

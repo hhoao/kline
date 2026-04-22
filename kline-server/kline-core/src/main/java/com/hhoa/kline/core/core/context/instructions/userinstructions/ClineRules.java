@@ -75,8 +75,7 @@ public class ClineRules {
                                                 RuleHelpers.RuleSourcePrefix.GLOBAL));
                         if (result.getContent() != null && !result.getContent().isEmpty()) {
                             combinedContent = result.getContent();
-                            activatedConditionalRules.addAll(
-                                    result.getActivatedConditionalRules());
+                            activatedConditionalRules.addAll(result.getActivatedConditionalRules());
                         }
                     } catch (Exception e) {
                         log.error(
@@ -162,7 +161,10 @@ public class ClineRules {
                             activatedConditionalRules.addAll(result.getActivatedConditionalRules());
                         }
                     } catch (Exception e) {
-                        log.error("Failed to read .clinerules directory at {}", clineRulesFilePath, e);
+                        log.error(
+                                "Failed to read .clinerules directory at {}",
+                                clineRulesFilePath,
+                                e);
                     }
                 } else {
                     try {
@@ -183,7 +185,8 @@ public class ClineRules {
                                                     parsed.getData(),
                                                     evaluationContext != null
                                                             ? evaluationContext
-                                                            : new RuleConditionals.RuleEvaluationContext(
+                                                            : new RuleConditionals
+                                                                    .RuleEvaluationContext(
                                                                     List.of()));
                                     if (conditionalResult.isPassed()) {
                                         instructions =

@@ -726,7 +726,8 @@ public final class TaskV2ContextPrepareHandler {
         context.setLocalCursorRulesFileInstructions(cursorResult.getFileInstructions());
         context.setLocalCursorRulesDirInstructions(cursorResult.getDirInstructions());
         context.setLocalWindsurfRulesFileInstructions(
-                ExternalRules.getLocalWindsurfRules(cwd, externalToggles.getWindsurfLocalToggles()));
+                ExternalRules.getLocalWindsurfRules(
+                        cwd, externalToggles.getWindsurfLocalToggles()));
         context.setLocalAgentsRulesFileInstructions(
                 ExternalRules.getLocalAgentsRules(cwd, externalToggles.getAgentsLocalToggles()));
 
@@ -787,8 +788,7 @@ public final class TaskV2ContextPrepareHandler {
                                                 skill.getName(), skill.getDescription()))
                         .toList());
 
-        context.setEditorTabs(
-                new SystemPromptContext.EditorTabs(List.of(), List.of()));
+        context.setEditorTabs(new SystemPromptContext.EditorTabs(List.of(), List.of()));
 
         boolean nativeToolCallsEnabled = resolveNativeToolCallingEnabled(apiProviderInfo);
         context.setEnableNativeToolCalls(nativeToolCallsEnabled);

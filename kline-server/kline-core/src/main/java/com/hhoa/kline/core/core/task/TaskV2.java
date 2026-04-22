@@ -187,7 +187,8 @@ public class TaskV2 implements Recoverable<TaskState> {
         this.clineIgnoreController = new DefaultClineIgnoreController(this.cwd);
         this.fileContextTracker = new FileContextTracker(this.taskId, this.cwd, this.stateManager);
         this.modelContextTracker = new ModelContextTracker(this.taskId, this.stateManager);
-        this.environmentContextTracker = new EnvironmentContextTracker(this.taskId, this.stateManager);
+        this.environmentContextTracker =
+                new EnvironmentContextTracker(this.taskId, this.stateManager);
         this.telemetryService = new DefaultTelemetryService();
         this.messageParserFactory =
                 () -> new DefaultStreamingAssistantMessageParser(ClineTagConfigs.flatFormat());
@@ -256,9 +257,7 @@ public class TaskV2 implements Recoverable<TaskState> {
                     List<String> roots = new java.util.ArrayList<>();
                     if (workspaceManager != null) {
                         try {
-                            workspaceManager
-                                    .getRoots()
-                                    .forEach(r -> roots.add(r.getPath()));
+                            workspaceManager.getRoots().forEach(r -> roots.add(r.getPath()));
                         } catch (Exception e) {
                             log.debug("Failed to get workspace roots", e);
                         }
@@ -468,8 +467,8 @@ public class TaskV2 implements Recoverable<TaskState> {
         }
 
         // Wire hook state callbacks on DefaultExecutor
-        if (toolExecutor instanceof
-                com.hhoa.kline.core.core.task.tools.DefaultExecutor defaultExec) {
+        if (toolExecutor
+                instanceof com.hhoa.kline.core.core.task.tools.DefaultExecutor defaultExec) {
             defaultExec.setSetActiveHookExecution(this::setActiveHookExecution);
             defaultExec.setClearActiveHookExecution(this::clearActiveHookExecution);
         }
@@ -607,9 +606,7 @@ public class TaskV2 implements Recoverable<TaskState> {
     }
 
     /**
-     * 判断是否应该运行 TaskCancel hook。
-     * 只有在有活跃工作时才触发（流式处理中、等待首个 chunk、有后台命令等）。
-     * 如果只是显示恢复/完成按钮而没有实际工作，则不触发。
+     * 判断是否应该运行 TaskCancel hook。 只有在有活跃工作时才触发（流式处理中、等待首个 chunk、有后台命令等）。 如果只是显示恢复/完成按钮而没有实际工作，则不触发。
      */
     public boolean shouldRunTaskCancelHook() {
         lock.lock();

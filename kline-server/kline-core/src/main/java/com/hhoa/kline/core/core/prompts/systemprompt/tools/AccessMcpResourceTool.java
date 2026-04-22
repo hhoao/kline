@@ -12,8 +12,7 @@ import java.util.function.Function;
  *
  * @author hhoa
  */
-public class AccessMcpResourceTool extends BaseToolSpec
-{
+public class AccessMcpResourceTool extends BaseToolSpec {
 
     private static final String GENERIC_DESCRIPTION =
             "Request to access a resource provided by a connected MCP server. Resources represent data sources that can be used as context, such as files, API responses, or system information.";
@@ -24,8 +23,7 @@ public class AccessMcpResourceTool extends BaseToolSpec
     private static final Function<SystemPromptContext, Boolean> CONTEXT_REQUIREMENTS =
             (context) -> context.getMcpHub() != null;
 
-    public static ClineToolSpec create(ModelFamily modelFamily)
-    {
+    public static ClineToolSpec create(ModelFamily modelFamily) {
         boolean isNative =
                 modelFamily == ModelFamily.NATIVE_GPT_5
                         || modelFamily == ModelFamily.NATIVE_GPT_5_1

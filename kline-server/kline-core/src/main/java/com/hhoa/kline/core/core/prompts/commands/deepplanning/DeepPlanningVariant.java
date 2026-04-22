@@ -6,8 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 
 /**
- * Configuration for a deep-planning prompt variant.
- * 对应 TS deep-planning/types.ts DeepPlanningVariant
+ * Configuration for a deep-planning prompt variant. 对应 TS deep-planning/types.ts
+ * DeepPlanningVariant
  *
  * @author hhoa
  */

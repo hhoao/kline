@@ -109,7 +109,9 @@ public class UseSkillToolHandler implements ToolHandler {
 
         context.getTaskState().setConsecutiveMistakeCount(0);
         String skillDirectory =
-                skillContent.getPath().replaceAll("[/\\\\]SKILL\\.md$", "")
+                skillContent
+                        .getPath()
+                        .replaceAll("[/\\\\]SKILL\\.md$", "")
                         .replaceAll("SKILL\\.md$", "");
 
         return HandlerUtils.createToolExecuteResult(

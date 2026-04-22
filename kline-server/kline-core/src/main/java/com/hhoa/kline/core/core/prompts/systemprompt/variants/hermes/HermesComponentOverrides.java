@@ -17,14 +17,14 @@ public final class HermesComponentOverrides {
 
     private static final String HERMES_AGENT_ROLE_TEMPLATE =
             "You are a deep thinking AI, you may use extremely long chains of thought to deeply"
-                + " consider the problem and deliberate with yourself via systematic reasoning"
-                + " processes to help come to a correct solution prior to answering. You should"
-                + " enclose your thoughts and internal monologue inside <think> </think> tags, and"
-                + " then provide your solution or response to the problem. \n"
-                + "You are Cline, "
-                + "a highly skilled software engineer "
-                + "with extensive knowledge in many programming languages, frameworks, design"
-                + " patterns, and best practices. ";
+                    + " consider the problem and deliberate with yourself via systematic reasoning"
+                    + " processes to help come to a correct solution prior to answering. You should"
+                    + " enclose your thoughts and internal monologue inside <think> </think> tags, and"
+                    + " then provide your solution or response to the problem. \n"
+                    + "You are Cline, "
+                    + "a highly skilled software engineer "
+                    + "with extensive knowledge in many programming languages, frameworks, design"
+                    + " patterns, and best practices. ";
 
     private static final String HERMES_TOOL_USE_TEMPLATE =
             """
@@ -188,24 +188,24 @@ public final class HermesComponentOverrides {
         String askRule =
                 yoloMode
                         ? "Use tools and best judgment to complete the task without follow-up"
-                            + " questions, making reasonable assumptions from context."
+                                + " questions, making reasonable assumptions from context."
                         : "Ask questions only via ask_followup_question when details are required"
-                            + " to proceed; otherwise prefer using tools. Example: if a file may be"
-                            + " on the Desktop, use list_files to find it rather than asking the"
-                            + " user.";
+                                + " to proceed; otherwise prefer using tools. Example: if a file may be"
+                                + " on the Desktop, use list_files to find it rather than asking the"
+                                + " user.";
 
         String vagueRule =
                 yoloMode
                         ? ""
                         : "\n- If the request is vague, use ask_followup_question to clarify. If"
-                            + " intent can be inferred from context/tools, proceed without"
-                            + " unnecessary questions.";
+                                + " intent can be inferred from context/tools, proceed without"
+                                + " unnecessary questions.";
 
         String outputRule =
                 yoloMode
                         ? ""
                         : " If you must see output, use ask_followup_question to request a pasted"
-                            + " log.";
+                                + " log.";
 
         return """
                 RULES
@@ -240,7 +240,8 @@ public final class HermesComponentOverrides {
                 SystemPromptSection.OBJECTIVE,
                 ConfigOverride.create().template(HERMES_OBJECTIVE_TEMPLATE),
                 SystemPromptSection.RULES,
-                ConfigOverride.create().templateFunction(HermesComponentOverrides::hermesRulesTemplate),
+                ConfigOverride.create()
+                        .templateFunction(HermesComponentOverrides::hermesRulesTemplate),
                 SystemPromptSection.TASK_PROGRESS,
                 ConfigOverride.create().template(HERMES_TASK_PROGRESS_TEMPLATE),
                 SystemPromptSection.MCP,

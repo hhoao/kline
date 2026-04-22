@@ -36,17 +36,15 @@ public class HandlerUtils {
     }
 
     /**
-     * 从 ToolUse 块中获取路径参数，支持 path 和 absolutePath 两种参数名。
-     * 优先使用 path，回退到 absolutePath（供 NATIVE_GPT_5/NATIVE_NEXT_GEN 变体使用）。
+     * 从 ToolUse 块中获取路径参数，支持 path 和 absolutePath 两种参数名。 优先使用 path，回退到 absolutePath（供
+     * NATIVE_GPT_5/NATIVE_NEXT_GEN 变体使用）。
      *
      * @param block ToolUse 块
      * @return 路径值，如果都不存在则返回 null
      */
-    public static String getPathParam(ToolUse block)
-    {
+    public static String getPathParam(ToolUse block) {
         String path = getStringParam(block, "path");
-        if (path != null)
-        {
+        if (path != null) {
             return path;
         }
         return getStringParam(block, "absolutePath");

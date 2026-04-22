@@ -12,8 +12,7 @@ import java.util.List;
  *
  * @author hhoa
  */
-public class PlanModeRespondTool extends BaseToolSpec
-{
+public class PlanModeRespondTool extends BaseToolSpec {
 
     private static final String GENERIC_DESCRIPTION =
             "Respond to the user's inquiry in an effort to plan a solution to the user's task. This tool should ONLY be used when you have already explored the relevant files and are ready to present a concrete plan. DO NOT use this tool to announce what files you're going to read - just read them first. This tool is only available in PLAN MODE. The environment_details will specify the current mode; if it is not PLAN_MODE then you should not use this tool.\n"
@@ -23,17 +22,14 @@ public class PlanModeRespondTool extends BaseToolSpec
             "Respond with a plan that outlines a solution to the user's request. This tool should ONLY be used when you have already explored the relevant files and are ready to present a concrete plan. Only use this tool after you have explored relevant files and collected sufficient context to create a detailed, accurate plan. This tool is only available in PLAN MODE, as indicated by the environment_details.\n"
                     + "If it becomes apparent that additional exploration is required while the plan_mode_respond response is being generated, the optional needs_more_exploration parameter can be toggled to enable further research. This allows you to acknowledge that more exploration is required before the final plan_mode_respond is generated, and signals that your next message will use exploration tools instead.";
 
-    public static ClineToolSpec create(ModelFamily modelFamily, SystemPromptContext context)
-    {
+    public static ClineToolSpec create(ModelFamily modelFamily, SystemPromptContext context) {
         if (modelFamily == ModelFamily.NATIVE_GPT_5
                 || modelFamily == ModelFamily.NATIVE_GPT_5_1
-                || modelFamily == ModelFamily.NATIVE_NEXT_GEN)
-        {
+                || modelFamily == ModelFamily.NATIVE_NEXT_GEN) {
             return createNativeGpt5Variant(modelFamily);
         }
 
-        if (modelFamily == ModelFamily.GEMINI_3)
-        {
+        if (modelFamily == ModelFamily.GEMINI_3) {
             return createGemini3Variant(context);
         }
 
@@ -41,8 +37,7 @@ public class PlanModeRespondTool extends BaseToolSpec
     }
 
     private static ClineToolSpec createGenericVariant(
-            ModelFamily modelFamily, SystemPromptContext context)
-    {
+            ModelFamily modelFamily, SystemPromptContext context) {
         List<ClineToolSpec.ClineToolSpecParameter> parameters = new ArrayList<>();
         parameters.add(
                 createParameter(
@@ -60,8 +55,7 @@ public class PlanModeRespondTool extends BaseToolSpec
 
         if (context != null
                 && context.getFocusChainSettings() != null
-                && context.getFocusChainSettings().isEnabled())
-        {
+                && context.getFocusChainSettings().isEnabled()) {
             parameters.add(
                     createParameterWithDependency(
                             "task_progress",
@@ -81,8 +75,7 @@ public class PlanModeRespondTool extends BaseToolSpec
                 .build();
     }
 
-    private static ClineToolSpec createNativeGpt5Variant(ModelFamily modelFamily)
-    {
+    private static ClineToolSpec createNativeGpt5Variant(ModelFamily modelFamily) {
         return ClineToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.PLAN_MODE.getValue())
@@ -103,8 +96,7 @@ public class PlanModeRespondTool extends BaseToolSpec
                 .build();
     }
 
-    private static ClineToolSpec createGemini3Variant(SystemPromptContext context)
-    {
+    private static ClineToolSpec createGemini3Variant(SystemPromptContext context) {
         List<ClineToolSpec.ClineToolSpecParameter> parameters = new ArrayList<>();
         parameters.add(
                 createParameter(
@@ -122,8 +114,7 @@ public class PlanModeRespondTool extends BaseToolSpec
 
         if (context != null
                 && context.getFocusChainSettings() != null
-                && context.getFocusChainSettings().isEnabled())
-        {
+                && context.getFocusChainSettings().isEnabled()) {
             parameters.add(
                     createParameterWithDependency(
                             "task_progress",

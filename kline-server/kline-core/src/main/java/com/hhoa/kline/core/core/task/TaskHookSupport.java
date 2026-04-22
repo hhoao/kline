@@ -82,9 +82,7 @@ public class TaskHookSupport {
                         .taskId(taskId)
                         .workspaceRoots(workspaceRoots.get())
                         .taskStart(
-                                HookData.TaskStartData.builder()
-                                        .taskMetadata(taskMetadata)
-                                        .build())
+                                HookData.TaskStartData.builder().taskMetadata(taskMetadata).build())
                         .model(getModelContext())
                         .build();
 
@@ -103,11 +101,9 @@ public class TaskHookSupport {
         taskMetadata.put("ulid", ulid);
 
         Map<String, String> previousState = new HashMap<>();
-        previousState.put(
-                "lastMessageTs", lastMessageTs != null ? lastMessageTs.toString() : "");
+        previousState.put("lastMessageTs", lastMessageTs != null ? lastMessageTs.toString() : "");
         previousState.put("messageCount", String.valueOf(messageCount));
-        previousState.put(
-                "conversationHistoryDeleted", String.valueOf(conversationHistoryDeleted));
+        previousState.put("conversationHistoryDeleted", String.valueOf(conversationHistoryDeleted));
 
         HookInput hookInput =
                 HookInput.builder()
@@ -211,9 +207,7 @@ public class TaskHookSupport {
                 });
     }
 
-    /**
-     * 统一的 hook 取消处理。确保状态始终在中止前保存，无论是用户点击取消还是 hook 返回 cancel:true。
-     */
+    /** 统一的 hook 取消处理。确保状态始终在中止前保存，无论是用户点击取消还是 hook 返回 cancel:true。 */
     public void handleHookCancellation(String hookName, boolean wasCancelled) {
         try {
             messageStateHandler.saveClineMessagesAndUpdateHistory();

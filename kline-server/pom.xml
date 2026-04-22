@@ -25,19 +25,19 @@
         </developer>
     </developers>
 
-    <scm>
-        <connection>scm:git:https://github.com/hhoao/kline.git</connection>
-        <developerConnection>scm:git:ssh://git@github.com/hhoao/kline.git</developerConnection>
-        <url>https://github.com/hhoao/kline</url>
-        <tag>HEAD</tag>
-    </scm>
-
     <modules>
         <module>kline-common</module>
         <module>kline-core</module>
         <module>kline-plugins</module>
         <module>kline-web</module>
     </modules>
+
+    <scm>
+        <connection>scm:git:https://github.com/hhoao/kline.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/hhoao/kline.git</developerConnection>
+        <tag>HEAD</tag>
+        <url>https://github.com/hhoao/kline</url>
+    </scm>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
@@ -624,7 +624,6 @@
                 <artifactId>spotless-maven-plugin</artifactId>
                 <version>3.2.1</version>
                 <configuration>
-                    <checkSkip>true</checkSkip>
                     <java>
                         <formatAnnotations/>
                         <googleJavaFormat>
@@ -780,10 +779,10 @@
                         <executions>
                             <execution>
                                 <id>sign-artifacts</id>
-                                <phase>verify</phase>
                                 <goals>
                                     <goal>sign</goal>
                                 </goals>
+                                <phase>verify</phase>
                             </execution>
                         </executions>
                     </plugin>

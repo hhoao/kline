@@ -80,14 +80,16 @@ public class Gpt5VariantConfig {
                         .version(1)
                         .tags(Arrays.asList("gpt-5", "stable"))
                         .labels(labels)
-                        .matcher(context -> {
-                            var providerInfo = context.getProviderInfo();
-                            String modelId = getModelId(context);
-                            return isGPT5ModelFamily(modelId)
-                                    && !modelId.toLowerCase().contains("chat")
-                                    && isNextGenModelProvider(providerInfo)
-                                    && !Boolean.TRUE.equals(context.getEnableNativeToolCalls());
-                        })
+                        .matcher(
+                                context -> {
+                                    var providerInfo = context.getProviderInfo();
+                                    String modelId = getModelId(context);
+                                    return isGPT5ModelFamily(modelId)
+                                            && !modelId.toLowerCase().contains("chat")
+                                            && isNextGenModelProvider(providerInfo)
+                                            && !Boolean.TRUE.equals(
+                                                    context.getEnableNativeToolCalls());
+                                })
                         .componentOrder(GPT5_COMPONENT_ORDER)
                         .tools(GPT5_TOOLS)
                         .placeholders(placeholders)

@@ -316,9 +316,7 @@ public class FileContextTracker {
         return new ArrayList<>(editedFiles);
     }
 
-    /**
-     * 在本地状态中存储待处理的文件上下文警告，以便在任务重新初始化时保持。
-     */
+    /** 在本地状态中存储待处理的文件上下文警告，以便在任务重新初始化时保持。 */
     public void storePendingFileContextWarning(List<String> files) {
         try {
             var localState = stateManager.getLocalState();
@@ -384,7 +382,8 @@ public class FileContextTracker {
                                     .collect(java.util.stream.Collectors.toSet());
 
             int before = localState.getPendingFileContextWarnings().size();
-            localState.getPendingFileContextWarnings()
+            localState
+                    .getPendingFileContextWarnings()
                     .entrySet()
                     .removeIf(entry -> !existingTaskIds.contains(entry.getKey()));
             int removed = before - localState.getPendingFileContextWarnings().size();

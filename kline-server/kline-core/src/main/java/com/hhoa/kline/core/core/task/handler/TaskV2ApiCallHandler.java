@@ -79,7 +79,6 @@ public final class TaskV2ApiCallHandler {
     /** Optional presentation scheduler callback for coalescing UI updates during streaming. */
     private java.util.function.Consumer<PresentationPriority> schedulePresentation;
 
-
     public TaskV2ApiCallHandler(
             ResponseFormatter responseFormatter,
             StateManager stateManager,
@@ -402,7 +401,8 @@ public final class TaskV2ApiCallHandler {
 
             StreamChunkCoordinator coordinator =
                     new StreamChunkCoordinator(
-                            chunkFlux, usageChunk -> getUsage(usageChunk, didReceiveUsageChunk, apiReqInfo));
+                            chunkFlux,
+                            usageChunk -> getUsage(usageChunk, didReceiveUsageChunk, apiReqInfo));
             try {
                 ApiChunk chunk;
                 while ((chunk = coordinator.nextChunk()) != null) {
@@ -771,9 +771,7 @@ public final class TaskV2ApiCallHandler {
 
                     // Map call_id → function_id for proper ToolResultBlockParam
                     if (chunk.callId() != null && chunk.toolId() != null) {
-                        taskState
-                                .getToolUseIdMap()
-                                .put(chunk.callId(), chunk.toolId());
+                        taskState.getToolUseIdMap().put(chunk.callId(), chunk.toolId());
                     }
 
                     // Flush presentation immediately on tool transitions

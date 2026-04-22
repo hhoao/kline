@@ -3,9 +3,8 @@ package com.hhoa.kline.core.core.prompts.commands.deepplanning;
 import static com.hhoa.kline.core.core.prompts.systemprompt.ModelFamilyMatchers.isGemini2dot5ModelFamily;
 
 /**
- * Google Gemini 2.5 variant for deep-planning prompt.
- * Enhanced research instructions for Gemini 2.5 models.
- * 对应 TS deep-planning/variants/gemini.ts
+ * Google Gemini 2.5 variant for deep-planning prompt. Enhanced research instructions for Gemini 2.5
+ * models. 对应 TS deep-planning/variants/gemini.ts
  *
  * @author hhoa
  */
@@ -39,15 +38,16 @@ public final class GeminiDeepPlanningVariant {
                 .description("Deep-planning variant optimized for Google Gemini 2.5 models")
                 .family("gemini")
                 .version(1)
-                .matcher(context -> {
-                    if (context == null
-                            || context.getProviderInfo() == null
-                            || context.getProviderInfo().getModel() == null) {
-                        return false;
-                    }
-                    String modelId = context.getProviderInfo().getModel().getId();
-                    return modelId != null && isGemini2dot5ModelFamily(modelId);
-                })
+                .matcher(
+                        context -> {
+                            if (context == null
+                                    || context.getProviderInfo() == null
+                                    || context.getProviderInfo().getModel() == null) {
+                                return false;
+                            }
+                            String modelId = context.getProviderInfo().getModel().getId();
+                            return modelId != null && isGemini2dot5ModelFamily(modelId);
+                        })
                 .template(DeepPlanningTemplates.generateFourStepTemplate(RESEARCH_INSTRUCTIONS))
                 .build();
     }

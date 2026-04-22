@@ -178,10 +178,7 @@ public class PromptRegistry {
         return Optional.ofNullable(variants.get(id));
     }
 
-    /**
-     * 根据上下文获取匹配的变体。
-     * 对应 TS PromptRegistry.getVariant(context)
-     */
+    /** 根据上下文获取匹配的变体。 对应 TS PromptRegistry.getVariant(context) */
     public PromptVariant getVariant(SystemPromptContext context) {
         load();
         ModelFamily modelFamily = detectModelFamily(context);
@@ -206,10 +203,7 @@ public class PromptRegistry {
         return variants.get(modelId);
     }
 
-    /**
-     * 通过遍历所有已注册变体的 matcher 函数来检测模型家族。
-     * 对应 TS PromptRegistry.getModelFamily() 的 matcher-based 方法。
-     */
+    /** 通过遍历所有已注册变体的 matcher 函数来检测模型家族。 对应 TS PromptRegistry.getModelFamily() 的 matcher-based 方法。 */
     private ModelFamily detectModelFamily(SystemPromptContext context) {
         // 遍历所有变体，找到第一个匹配的（排除 GENERIC，它作为兜底）
         for (Map.Entry<String, PromptVariant> entry : variants.entrySet()) {

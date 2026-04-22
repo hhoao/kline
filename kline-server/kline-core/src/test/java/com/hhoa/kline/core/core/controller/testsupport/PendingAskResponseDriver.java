@@ -1,20 +1,17 @@
 package com.hhoa.kline.core.core.controller.testsupport;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
+
 import com.hhoa.kline.core.core.controller.TaskManager;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineAskResponse;
 import com.hhoa.kline.core.core.task.TaskStatus;
 import com.hhoa.kline.core.core.task.TaskV2;
-
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
-
-/**
- * 在任务异步执行时轮询 {@link PendingAskToken}，按 {@link ClineAsk} 类型自动提交 Webview 侧应答。
- */
+/** 在任务异步执行时轮询 {@link PendingAskToken}，按 {@link ClineAsk} 类型自动提交 Webview 侧应答。 */
 public final class PendingAskResponseDriver {
 
     private PendingAskResponseDriver() {}
@@ -47,9 +44,7 @@ public final class PendingAskResponseDriver {
                 ClineAsk askType = entry.getValue().getAskType();
                 if (askType == ClineAsk.FOLLOWUP) {
                     int i = followupIndex.getAndIncrement();
-                    assertThat(i)
-                            .as("FOLLOWUP 次数超过提供的回复条数")
-                            .isLessThan(followupTexts.size());
+                    assertThat(i).as("FOLLOWUP 次数超过提供的回复条数").isLessThan(followupTexts.size());
                     taskManager.handleWebviewAskResponse(
                             taskId,
                             pendingId,

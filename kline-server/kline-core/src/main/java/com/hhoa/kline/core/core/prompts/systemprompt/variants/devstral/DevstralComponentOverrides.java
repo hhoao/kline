@@ -5,7 +5,8 @@ import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptSection;
 import java.util.Map;
 
 /**
- * Devstral-specific component override templates. Provides optimized prompt text for Devstral model family.
+ * Devstral-specific component override templates. Provides optimized prompt text for Devstral model
+ * family.
  *
  * @author hhoa
  */

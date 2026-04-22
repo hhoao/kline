@@ -192,7 +192,6 @@ public final class NextGenComponentOverrides {
     public static Map<SystemPromptSection, ConfigOverride> getOverrides() {
         return Map.of(
                 SystemPromptSection.RULES,
-                ConfigOverride.create()
-                        .templateFunction(NextGenComponentOverrides::rulesTemplate));
+                ConfigOverride.create().templateFunction(NextGenComponentOverrides::rulesTemplate));
     }
 }

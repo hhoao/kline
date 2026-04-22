@@ -1,9 +1,8 @@
 package com.hhoa.kline.core.core.prompts.commands.deepplanning;
 
 /**
- * Generic fallback variant for deep-planning prompt.
- * Used when no specific model family matcher applies.
- * 对应 TS deep-planning/variants/generic.ts
+ * Generic fallback variant for deep-planning prompt. Used when no specific model family matcher
+ * applies. 对应 TS deep-planning/variants/generic.ts
  *
  * @author hhoa
  */
@@ -21,7 +20,8 @@ public final class GenericDeepPlanningVariant {
     public static DeepPlanningVariant create() {
         return DeepPlanningVariant.builder()
                 .id("generic")
-                .description("Generic fallback variant for deep-planning prompt, used for all models")
+                .description(
+                        "Generic fallback variant for deep-planning prompt, used for all models")
                 .family("generic")
                 .version(1)
                 .matcher(context -> true)

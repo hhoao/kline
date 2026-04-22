@@ -10,8 +10,7 @@ import java.util.List;
  *
  * @author hhoa
  */
-public class WriteToFileTool extends BaseToolSpec
-{
+public class WriteToFileTool extends BaseToolSpec {
 
     private static final String GENERIC_DESCRIPTION =
             "Request to write content to a file at the specified path. If the file exists, it will be overwritten with the provided content. If the file doesn't exist, it will be created. This tool will automatically create any directories needed to write the file.";
@@ -19,20 +18,17 @@ public class WriteToFileTool extends BaseToolSpec
     private static final String NATIVE_DESCRIPTION =
             "[IMPORTANT: Always output the absolutePath first] Request to write content to a file at the specified path. If the file exists, it will be overwritten with the provided content. If the file doesn't exist, it will be created. This tool will automatically create any directories needed to write the file.";
 
-    public static ClineToolSpec create(ModelFamily modelFamily)
-    {
+    public static ClineToolSpec create(ModelFamily modelFamily) {
         if (modelFamily == ModelFamily.NATIVE_GPT_5
                 || modelFamily == ModelFamily.NATIVE_GPT_5_1
-                || modelFamily == ModelFamily.NATIVE_NEXT_GEN)
-        {
+                || modelFamily == ModelFamily.NATIVE_NEXT_GEN) {
             return createNativeVariant(modelFamily);
         }
 
         return createGenericVariant(modelFamily);
     }
 
-    private static ClineToolSpec createGenericVariant(ModelFamily modelFamily)
-    {
+    private static ClineToolSpec createGenericVariant(ModelFamily modelFamily) {
         return ClineToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.FILE_NEW.getValue())
@@ -54,8 +50,7 @@ public class WriteToFileTool extends BaseToolSpec
                 .build();
     }
 
-    private static ClineToolSpec createNativeVariant(ModelFamily modelFamily)
-    {
+    private static ClineToolSpec createNativeVariant(ModelFamily modelFamily) {
         return ClineToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.FILE_NEW.getValue())

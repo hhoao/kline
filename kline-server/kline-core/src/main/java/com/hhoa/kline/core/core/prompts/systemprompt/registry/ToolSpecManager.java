@@ -174,30 +174,28 @@ public class ToolSpecManager {
         return resolved;
     }
 
-    /**
-     * 获取经过上下文过滤的已启用工具列表。
-     * 对应 TS ClineToolSet.getEnabledTools()
-     */
+    /** 获取经过上下文过滤的已启用工具列表。 对应 TS ClineToolSet.getEnabledTools() */
     public static List<ClineToolSpec> getEnabledTools(
             ModelFamily variant, SystemPromptContext context) {
         List<ClineToolSpec> allTools = getToolSpecs(variant, context);
         return allTools.stream()
-                .filter(tool -> {
-                    if (tool.getContextRequirements() != null) {
-                        try {
-                            return Boolean.TRUE.equals(tool.getContextRequirements().apply(context));
-                        } catch (Exception e) {
-                            return false;
-                        }
-                    }
-                    return true;
-                })
+                .filter(
+                        tool -> {
+                            if (tool.getContextRequirements() != null) {
+                                try {
+                                    return Boolean.TRUE.equals(
+                                            tool.getContextRequirements().apply(context));
+                                } catch (Exception e) {
+                                    return false;
+                                }
+                            }
+                            return true;
+                        })
                 .toList();
     }
 
     /**
-     * 获取已启用工具的原生工具定义（用于 API 调用）。
-     * 对应 TS ClineToolSet.getNativeTools()
+     * 获取已启用工具的原生工具定义（用于 API 调用）。 对应 TS ClineToolSet.getNativeTools()
      *
      * @param variant 模型家族
      * @param context 系统提示上下文
@@ -212,8 +210,9 @@ public class ToolSpecManager {
         List<Map<String, Object>> result = new ArrayList<>();
         for (ClineToolSpec tool : enabledTools) {
             try {
-                result.add(converter.apply(
-                        new ClineToolSpecConverter.ToolConversionInput(tool, context)));
+                result.add(
+                        converter.apply(
+                                new ClineToolSpecConverter.ToolConversionInput(tool, context)));
             } catch (Exception e) {
                 // 跳过不满足上下文要求的工具
             }

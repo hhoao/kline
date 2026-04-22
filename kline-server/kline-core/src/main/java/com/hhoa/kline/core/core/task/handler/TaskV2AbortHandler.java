@@ -150,10 +150,7 @@ public final class TaskV2AbortHandler {
                     log.info("[Task {}] Task lock released", taskId);
                 } catch (Exception e) {
                     log.error(
-                            "[Task {}] Failed to release task lock: {}",
-                            taskId,
-                            e.getMessage(),
-                            e);
+                            "[Task {}] Failed to release task lock: {}", taskId, e.getMessage(), e);
                 }
             }
         }

@@ -12,8 +12,7 @@ import java.util.function.Function;
  *
  * @author hhoa
  */
-public class AskFollowupQuestionTool extends BaseToolSpec
-{
+public class AskFollowupQuestionTool extends BaseToolSpec {
 
     private static final String GENERIC_DESCRIPTION =
             "Ask the user a question to gather additional information needed to complete the task. This tool should be used when you encounter ambiguities, need clarification, or require more details to proceed effectively. It allows for interactive problem-solving by enabling direct communication with the user. Use this tool judiciously to maintain a balance between gathering necessary information and avoiding excessive back-and-forth.";
@@ -24,20 +23,17 @@ public class AskFollowupQuestionTool extends BaseToolSpec
     private static final Function<SystemPromptContext, Boolean> CONTEXT_REQUIREMENTS =
             (context) -> !Boolean.TRUE.equals(context.getYoloModeToggled());
 
-    public static ClineToolSpec create(ModelFamily modelFamily)
-    {
+    public static ClineToolSpec create(ModelFamily modelFamily) {
         if (modelFamily == ModelFamily.NATIVE_GPT_5
                 || modelFamily == ModelFamily.NATIVE_GPT_5_1
-                || modelFamily == ModelFamily.NATIVE_NEXT_GEN)
-        {
+                || modelFamily == ModelFamily.NATIVE_NEXT_GEN) {
             return createNativeVariant(modelFamily);
         }
 
         return createGenericVariant(modelFamily);
     }
 
-    private static ClineToolSpec createGenericVariant(ModelFamily modelFamily)
-    {
+    private static ClineToolSpec createGenericVariant(ModelFamily modelFamily) {
         return ClineToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.ASK.getValue())
@@ -60,8 +56,7 @@ public class AskFollowupQuestionTool extends BaseToolSpec
                 .build();
     }
 
-    private static ClineToolSpec createNativeVariant(ModelFamily modelFamily)
-    {
+    private static ClineToolSpec createNativeVariant(ModelFamily modelFamily) {
         return ClineToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.ASK.getValue())

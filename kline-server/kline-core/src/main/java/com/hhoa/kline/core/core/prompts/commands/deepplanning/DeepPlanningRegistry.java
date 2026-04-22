@@ -8,9 +8,8 @@ import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Singleton registry for managing deep-planning prompt variants.
- * Selects appropriate variant based on model family detection.
- * 对应 TS deep-planning/registry.ts
+ * Singleton registry for managing deep-planning prompt variants. Selects appropriate variant based
+ * on model family detection. 对应 TS deep-planning/registry.ts
  *
  * @author hhoa
  */
@@ -53,9 +52,8 @@ public class DeepPlanningRegistry {
     }
 
     /**
-     * Get the appropriate variant based on the system prompt context.
-     * Uses matcher functions to determine which variant to use.
-     * Falls back to generic variant if no match or on error.
+     * Get the appropriate variant based on the system prompt context. Uses matcher functions to
+     * determine which variant to use. Falls back to generic variant if no match or on error.
      */
     public DeepPlanningVariant get(SystemPromptContext context) {
         try {
@@ -70,7 +68,9 @@ public class DeepPlanningRegistry {
             }
             return genericVariant;
         } catch (Exception e) {
-            log.warn("Error selecting deep-planning variant, falling back to generic: {}", e.getMessage());
+            log.warn(
+                    "Error selecting deep-planning variant, falling back to generic: {}",
+                    e.getMessage());
             return genericVariant;
         }
     }

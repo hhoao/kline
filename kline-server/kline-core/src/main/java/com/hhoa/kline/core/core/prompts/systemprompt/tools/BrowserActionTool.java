@@ -12,8 +12,7 @@ import java.util.function.Function;
  *
  * @author hhoa
  */
-public class BrowserActionTool extends BaseToolSpec
-{
+public class BrowserActionTool extends BaseToolSpec {
 
     private static final String DESCRIPTION =
             "Request to interact with a Puppeteer-controlled browser. Every action, except `close`, will be responded to with a screenshot of the browser's current state, along with any new console logs. You may only perform one browser action per message, and wait for the user's response including a screenshot and logs to determine the next action.\n"
@@ -25,18 +24,15 @@ public class BrowserActionTool extends BaseToolSpec
     private static final Function<SystemPromptContext, Boolean> CONTEXT_REQUIREMENTS =
             (context) -> Boolean.TRUE.equals(context.getSupportsBrowserUse());
 
-    public static ClineToolSpec create(ModelFamily modelFamily)
-    {
-        if (modelFamily == ModelFamily.NATIVE_NEXT_GEN)
-        {
+    public static ClineToolSpec create(ModelFamily modelFamily) {
+        if (modelFamily == ModelFamily.NATIVE_NEXT_GEN) {
             return createNativeNextGenVariant();
         }
 
         return createGenericVariant(modelFamily);
     }
 
-    private static ClineToolSpec createGenericVariant(ModelFamily modelFamily)
-    {
+    private static ClineToolSpec createGenericVariant(ModelFamily modelFamily) {
         return ClineToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.BROWSER.getValue())
@@ -83,8 +79,7 @@ public class BrowserActionTool extends BaseToolSpec
                 .build();
     }
 
-    private static ClineToolSpec createNativeNextGenVariant()
-    {
+    private static ClineToolSpec createNativeNextGenVariant() {
         return ClineToolSpec.builder()
                 .variant(ModelFamily.NATIVE_NEXT_GEN)
                 .id(ClineDefaultTool.BROWSER.getValue())

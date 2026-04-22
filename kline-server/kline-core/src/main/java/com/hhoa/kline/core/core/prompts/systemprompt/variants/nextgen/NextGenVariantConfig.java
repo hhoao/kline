@@ -83,17 +83,22 @@ public class NextGenVariantConfig {
                         .version(1)
                         .tags(Arrays.asList("next-gen", "advanced", "production"))
                         .labels(labels)
-                        .matcher(context -> {
-                            var providerInfo = context.getProviderInfo();
-                            String modelId = getModelId(context);
-                            if (isNextGenModelFamily(modelId) && !Boolean.TRUE.equals(context.getEnableNativeToolCalls())) {
-                                return true;
-                            }
-                            return !(("compact".equals(providerInfo.getCustomPrompt()) && isLocalModel(providerInfo))
-                                    || isNextGenModelProvider(providerInfo))
-                                    && isNextGenModelFamily(modelId)
-                                    && !(isGPT5ModelFamily(modelId) && !modelId.toLowerCase().contains("chat"));
-                        })
+                        .matcher(
+                                context -> {
+                                    var providerInfo = context.getProviderInfo();
+                                    String modelId = getModelId(context);
+                                    if (isNextGenModelFamily(modelId)
+                                            && !Boolean.TRUE.equals(
+                                                    context.getEnableNativeToolCalls())) {
+                                        return true;
+                                    }
+                                    return !(("compact".equals(providerInfo.getCustomPrompt())
+                                                            && isLocalModel(providerInfo))
+                                                    || isNextGenModelProvider(providerInfo))
+                                            && isNextGenModelFamily(modelId)
+                                            && !(isGPT5ModelFamily(modelId)
+                                                    && !modelId.toLowerCase().contains("chat"));
+                                })
                         .componentOrder(NEXT_GEN_COMPONENT_ORDER)
                         .tools(NEXT_GEN_TOOLS)
                         .placeholders(placeholders)

@@ -1,5 +1,8 @@
 package com.hhoa.kline.core.core.controller.testsupport;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
+
 import com.hhoa.kline.core.core.api.TaskContextHolder;
 import com.hhoa.kline.core.core.assistant.MessageParam;
 import com.hhoa.kline.core.core.assistant.MessageRole;
@@ -16,22 +19,18 @@ import com.hhoa.kline.core.subscription.DefaultSubscriptionManager;
 import com.hhoa.kline.core.subscription.SubscriptionManager;
 import com.hhoa.kline.core.subscription.message.PartialMessage;
 import com.hhoa.kline.core.subscription.message.StateMessage;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 import reactor.core.Disposable;
 
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
-
 /**
- * 本地任务集成测试基类：固定 {@link TaskContextHolder}、订阅 {@link PartialMessage} 并合并流式分片、
- * 提供常用断言与 {@link TaskV2} 等待工具。
+ * 本地任务集成测试基类：固定 {@link TaskContextHolder}、订阅 {@link PartialMessage} 并合并流式分片、 提供常用断言与 {@link TaskV2}
+ * 等待工具。
  *
  * <p>与 {@link FixedTaskContext} 的用户 id 一致，默认向 {@link DefaultSubscriptionManager} 用户 {@value
  * #DEFAULT_SUBSCRIPTION_USER_ID} 建立订阅。
@@ -48,8 +47,8 @@ public abstract class AbstractLocalTaskIntegrationTest {
     protected final List<PartialMessage> partialMessages = new ArrayList<>();
 
     /**
-     * 按「逻辑消息」合并 increment：{@code isUpdatingPreviousPartial == false} 表示新气泡开始，此前缓冲内容作为一整条加入本列表并清空；同一条内的增量继续
-     * append。
+     * 按「逻辑消息」合并 increment：{@code isUpdatingPreviousPartial == false}
+     * 表示新气泡开始，此前缓冲内容作为一整条加入本列表并清空；同一条内的增量继续 append。
      */
     protected final List<String> mergedIncrementSeries = new ArrayList<>();
 
@@ -58,8 +57,7 @@ public abstract class AbstractLocalTaskIntegrationTest {
     /** {@link StateMessage} 推送次数，用于粗粒度验证任务侧是否在推进状态。 */
     protected final AtomicInteger statePushCount = new AtomicInteger();
 
-    @TempDir
-    protected Path baseDir;
+    @TempDir protected Path baseDir;
 
     protected SystemPromptService systemPromptService;
 
@@ -97,7 +95,8 @@ public abstract class AbstractLocalTaskIntegrationTest {
                 task.getMessageStateHandler().getApiConversationHistory().stream()
                         .filter(p -> p.getRole() == MessageRole.USER)
                         .findFirst()
-                        .orElseThrow(() -> new AssertionError("api conversation has no USER message"));
+                        .orElseThrow(
+                                () -> new AssertionError("api conversation has no USER message"));
         assertThat(extractTaskInnerText(plainText(firstUser))).isEqualTo(expectedTaskText);
     }
 
@@ -186,7 +185,8 @@ public abstract class AbstractLocalTaskIntegrationTest {
     }
 
     @SuppressWarnings("BusyWait")
-    protected final void awaitTaskComplete(TaskV2 task, long timeoutMs) throws InterruptedException {
+    protected final void awaitTaskComplete(TaskV2 task, long timeoutMs)
+            throws InterruptedException {
         long deadline = System.currentTimeMillis() + timeoutMs;
         while (System.currentTimeMillis() < deadline) {
             TaskStatus s = task.getState();

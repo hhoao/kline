@@ -38,9 +38,7 @@ public enum ModelFamily {
         return value;
     }
 
-    /**
-     * 判断模型 ID 是否属于 GPT-5 家族
-     */
+    /** 判断模型 ID 是否属于 GPT-5 家族 */
     public static boolean isGPT5ModelFamily(String modelId) {
         if (modelId == null) {
             return false;
@@ -49,9 +47,7 @@ public enum ModelFamily {
         return id.contains("gpt-5") || id.contains("gpt5");
     }
 
-    /**
-     * 判断模型 ID 是否属于 GPT OSS 家族
-     */
+    /** 判断模型 ID 是否属于 GPT OSS 家族 */
     public static boolean isGptOssModelFamily(String modelId) {
         if (modelId == null) {
             return false;

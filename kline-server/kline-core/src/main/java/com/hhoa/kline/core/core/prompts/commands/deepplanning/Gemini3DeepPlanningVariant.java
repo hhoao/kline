@@ -3,10 +3,9 @@ package com.hhoa.kline.core.core.prompts.commands.deepplanning;
 import static com.hhoa.kline.core.core.prompts.systemprompt.ModelFamilyMatchers.isGemini3ModelFamily;
 
 /**
- * Gemini 3 variant for deep-planning prompt.
- * Uses 5-step process with separate read and terminal investigation phases.
- * Template is dynamically generated based on focus chain and native tool call settings.
- * 对应 TS deep-planning/variants/gemini3.ts
+ * Gemini 3 variant for deep-planning prompt. Uses 5-step process with separate read and terminal
+ * investigation phases. Template is dynamically generated based on focus chain and native tool call
+ * settings. 对应 TS deep-planning/variants/gemini3.ts
  *
  * @author hhoa
  */
@@ -20,15 +19,16 @@ public final class Gemini3DeepPlanningVariant {
                 .description("Deep-planning variant optimized for Gemini 3 models")
                 .family("gemini-3")
                 .version(1)
-                .matcher(context -> {
-                    if (context == null
-                            || context.getProviderInfo() == null
-                            || context.getProviderInfo().getModel() == null) {
-                        return false;
-                    }
-                    String modelId = context.getProviderInfo().getModel().getId();
-                    return modelId != null && isGemini3ModelFamily(modelId);
-                })
+                .matcher(
+                        context -> {
+                            if (context == null
+                                    || context.getProviderInfo() == null
+                                    || context.getProviderInfo().getModel() == null) {
+                                return false;
+                            }
+                            String modelId = context.getProviderInfo().getModel().getId();
+                            return modelId != null && isGemini3ModelFamily(modelId);
+                        })
                 .template("") // Template is dynamically generated
                 .build();
     }
@@ -39,21 +39,26 @@ public final class Gemini3DeepPlanningVariant {
      * @param focusChainEnabled Whether focus chain (task_progress) is enabled
      * @param enableNativeToolCalls Whether native tool calling is enabled
      */
-    public static String generateTemplate(boolean focusChainEnabled, boolean enableNativeToolCalls) {
-        String focusChainTracker = focusChainEnabled
-                ? "You should track these five steps in your task_progress parameter, and update it only when steps are completed.\n"
-                : "";
+    public static String generateTemplate(
+            boolean focusChainEnabled, boolean enableNativeToolCalls) {
+        String focusChainTracker =
+                focusChainEnabled
+                        ? "You should track these five steps in your task_progress parameter, and update it only when steps are completed.\n"
+                        : "";
 
-        String implementationOrderExtra = focusChainEnabled
-                ? "A task_progress list of steps that will need to be completed during the implementation\n"
-                : "";
+        String implementationOrderExtra =
+                focusChainEnabled
+                        ? "A task_progress list of steps that will need to be completed during the implementation\n"
+                        : "";
 
-        String step5TaskProgress = focusChainEnabled
-                ? "The task must include a <task_progress> list that breaks down the implementation into trackable steps."
-                : "";
+        String step5TaskProgress =
+                focusChainEnabled
+                        ? "The task must include a <task_progress> list that breaks down the implementation into trackable steps."
+                        : "";
 
-        String taskProgressFormat = focusChainEnabled
-                ? """
+        String taskProgressFormat =
+                focusChainEnabled
+                        ? """
                 **Task Progress Format:**
                 You absolutely MUST include the task_progress contents in context when creating the new task. When providing it, do not wrap it in XML tags- instead provide it like this:
 
@@ -66,10 +71,11 @@ public final class Gemini3DeepPlanningVariant {
                 **Markdown Implementation Plan Path:**
                 You also MUST include the path to the markdown file you have created in your new task prompt. You should do this as follows:
                   Refer to @path/to/file/markdown.md for a complete breakdown of the task requirements and steps. You should periodically read this file again."""
-                : "";
+                        : "";
 
-        String newTaskInstructions = enableNativeToolCalls
-                ? """
+        String newTaskInstructions =
+                enableNativeToolCalls
+                        ? """
                 **new_task Tool Definition:**
 
                 When you are ready to create the implementation task, you must call the new_task tool with the following structure:
@@ -83,7 +89,7 @@ public final class Gemini3DeepPlanningVariant {
 
                 The context parameter should include all five sections as described above.
                 """
-                : """
+                        : """
                 **new_task Tool Definition:**
 
                 When you are ready to create the implementation task, you must call the new_task tool with the following structure:
@@ -138,7 +144,8 @@ public final class Gemini3DeepPlanningVariant {
                 + "until you have executed and interpreted the results of several search commands, then use the context "
                 + "you have gathered to inform more complex chained commands.\n\n"
                 + "Here are some example commands, remember to adjust them as instructed previously:\n"
-                + DeepPlanningTemplates.BASH_INVESTIGATION_COMMANDS + "\n\n"
+                + DeepPlanningTemplates.BASH_INVESTIGATION_COMMANDS
+                + "\n\n"
                 + "## STEP 3: Discussion and Questions\n\n"
                 + "Ask the user brief, targeted questions that will influence your implementation plan. "
                 + "Keep your questions concise and conversational. Ask only essential questions needed to create an accurate plan.\n\n"
@@ -157,16 +164,20 @@ public final class Gemini3DeepPlanningVariant {
                 + "Your implementation plan must be saved as implementation_plan.md, and *must* be structured as follows:\n\n"
                 + "<example_implementation_plan>\n"
                 + DeepPlanningTemplates.PLAN_DOCUMENT_STRUCTURE
-                + implementationOrderExtra + "\n"
+                + implementationOrderExtra
+                + "\n"
                 + "</example_implementation_plan>\n\n"
                 + "## STEP 5: Create Implementation new_task\n\n"
-                + "Use the new_task command to create a task for implementing the plan. " + step5TaskProgress + "\n\n"
+                + "Use the new_task command to create a task for implementing the plan. "
+                + step5TaskProgress
+                + "\n\n"
                 + "### Task Creation Requirements\n\n"
                 + "<IMPORTANT>\n"
                 + "**Standalone Product:**\n"
                 + "Your new task should be self-contained and reference the plan document rather than "
                 + "requiring additional codebase investigation. Include these specific instructions in the task description:\n\n"
-                + taskProgressFormat + "\n"
+                + taskProgressFormat
+                + "\n"
                 + "</IMPORTANT>\n\n"
                 + newTaskInstructions
                 + "### Mode Switching\n\n"

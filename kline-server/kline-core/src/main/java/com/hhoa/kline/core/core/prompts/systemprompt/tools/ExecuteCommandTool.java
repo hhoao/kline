@@ -13,8 +13,7 @@ import java.util.function.Function;
  *
  * @author hhoa
  */
-public class ExecuteCommandTool extends BaseToolSpec
-{
+public class ExecuteCommandTool extends BaseToolSpec {
 
     private static final String GENERIC_DESCRIPTION =
             "Request to execute a CLI command on the system. Use this when you need to perform system operations or run specific commands to accomplish any step in the user's task. You must tailor your command to the user's system and provide a clear explanation of what the command does. For command chaining, use the appropriate chaining syntax for the user's shell. Prefer to execute complex CLI commands over creating executable scripts, as they are more flexible and easier to run. Commands will be executed in the current working directory: {{CWD}}{{MULTI_ROOT_HINT}}";
@@ -25,25 +24,21 @@ public class ExecuteCommandTool extends BaseToolSpec
     private static final String GEMINI_3_DESCRIPTION =
             "Request to execute a CLI command on the system. Use this when you need to perform system operations or run specific commands to accomplish any step in the user's task. When chaining commands, use the shell operator && (not the HTML entity &amp;&amp;). If using search/grep commands, be careful to not use vague search terms that may return thousands of results. When in PLAN MODE, you may use the execute_command tool, but only in a non-destructive manner and in a way that does not alter any files.";
 
-    public static ClineToolSpec create(ModelFamily modelFamily)
-    {
+    public static ClineToolSpec create(ModelFamily modelFamily) {
         if (modelFamily == ModelFamily.NATIVE_GPT_5
                 || modelFamily == ModelFamily.NATIVE_GPT_5_1
-                || modelFamily == ModelFamily.NATIVE_NEXT_GEN)
-        {
+                || modelFamily == ModelFamily.NATIVE_NEXT_GEN) {
             return createNativeGpt5Variant(modelFamily);
         }
 
-        if (modelFamily == ModelFamily.GEMINI_3)
-        {
+        if (modelFamily == ModelFamily.GEMINI_3) {
             return createGemini3Variant();
         }
 
         return createGenericVariant(modelFamily);
     }
 
-    private static ClineToolSpec createGenericVariant(ModelFamily modelFamily)
-    {
+    private static ClineToolSpec createGenericVariant(ModelFamily modelFamily) {
         List<ClineToolSpec.ClineToolSpecParameter> parameters = new ArrayList<>();
         parameters.add(
                 createParameter(
@@ -82,8 +77,7 @@ public class ExecuteCommandTool extends BaseToolSpec
                 .build();
     }
 
-    private static ClineToolSpec createNativeGpt5Variant(ModelFamily modelFamily)
-    {
+    private static ClineToolSpec createNativeGpt5Variant(ModelFamily modelFamily) {
         return ClineToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.BASH.getValue())
@@ -105,8 +99,7 @@ public class ExecuteCommandTool extends BaseToolSpec
                 .build();
     }
 
-    private static ClineToolSpec createGemini3Variant()
-    {
+    private static ClineToolSpec createGemini3Variant() {
         return ClineToolSpec.builder()
                 .variant(ModelFamily.GEMINI_3)
                 .id(ClineDefaultTool.BASH.getValue())

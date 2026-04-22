@@ -35,8 +35,7 @@ public class RulesComponent implements SystemPromptComponent {
                 Boolean.TRUE.equals(context.getSupportsBrowserUse()) ? getBrowserRules() : "";
         String browserWaitRules =
                 Boolean.TRUE.equals(context.getSupportsBrowserUse()) ? getBrowserWaitRules() : "";
-        String cliRules =
-                Boolean.TRUE.equals(context.getIsCliEnvironment()) ? getCliRules() : "";
+        String cliRules = Boolean.TRUE.equals(context.getIsCliEnvironment()) ? getCliRules() : "";
 
         Map<String, String> placeholders = new HashMap<>();
         placeholders.put(

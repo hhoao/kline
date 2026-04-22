@@ -1,8 +1,8 @@
 package com.hhoa.kline.core.core.prompts.commands.deepplanning;
 
 /**
- * Shared template fragments for deep-planning variants.
- * Contains reusable sections used across multiple variants.
+ * Shared template fragments for deep-planning variants. Contains reusable sections used across
+ * multiple variants.
  *
  * @author hhoa
  */
@@ -148,9 +148,7 @@ final class DeepPlanningTemplates {
             Below is the user's input from when they indicated that they wanted to create this comprehensive implementation plan.
             </explicit_instructions>""";
 
-    /**
-     * Generates the new_task tool instructions based on whether native tool calling is enabled.
-     */
+    /** Generates the new_task tool instructions based on whether native tool calling is enabled. */
     static String generateNewTaskInstructions(boolean enableNativeToolCalls) {
         if (enableNativeToolCalls) {
             return """
@@ -188,6 +186,7 @@ final class DeepPlanningTemplates {
 
     /**
      * Generates a standard 4-step template used by generic, anthropic variants.
+     *
      * @param researchInstructions The variant-specific research instructions for Step 1
      */
     static String generateFourStepTemplate(String researchInstructions) {
@@ -204,13 +203,15 @@ final class DeepPlanningTemplates {
                 + "Perform your research without commentary or narration. Execute commands and read files "
                 + "without explaining what you're about to do. Only speak up if you have specific questions for the user.\n"
                 + "</important>\n\n"
-                + researchInstructions + "\n\n"
+                + researchInstructions
+                + "\n\n"
                 + "### Essential Terminal Commands\n"
                 + "First, determine the language(s) used in the codebase, then execute these commands to build "
                 + "your understanding. You must tailor them to the codebase and ensure the output is not overly verbose. "
                 + "For example, you should exclude dependency folders such as node_modules, venv or php vendor, etc. "
                 + "These are only examples, the exact commands will differ depending on the codebase.\n"
-                + BASH_INVESTIGATION_COMMANDS + "\n\n"
+                + BASH_INVESTIGATION_COMMANDS
+                + "\n\n"
                 + "## STEP 2: Discussion and Questions\n\n"
                 + "Ask the user brief, targeted questions that will influence your implementation plan. "
                 + "Keep your questions concise and conversational. Ask only essential questions needed to create an accurate plan.\n\n"
@@ -225,7 +226,8 @@ final class DeepPlanningTemplates {
                 + "The document must follow this exact format with clearly marked sections:\n\n"
                 + "### Document Structure Requirements\n\n"
                 + "Your implementation plan must be saved as implementation_plan.md, and *must* be structured as follows:\n"
-                + PLAN_DOCUMENT_STRUCTURE + "\n\n"
+                + PLAN_DOCUMENT_STRUCTURE
+                + "\n\n"
                 + "## STEP 4: Create Implementation Task\n\n"
                 + "Use the new_task command to create a task for implementing the plan. "
                 + "The task must include a <task_progress> list that breaks down the implementation into trackable steps.\n\n"
@@ -236,7 +238,8 @@ final class DeepPlanningTemplates {
                 + "The implementation agent should use these commands to read specific sections of the implementation plan. "
                 + "You should adapt these examples to conform to the structure of the .md file you created, "
                 + "and explicitly provide them when creating the new task:\n"
-                + BASH_PLAN_NAVIGATION_COMMANDS + "\n\n"
+                + BASH_PLAN_NAVIGATION_COMMANDS
+                + "\n\n"
                 + "**Task Progress Format:**\n"
                 + "<IMPORTANT>\n"
                 + "You absolutely must include the task_progress contents in context when creating the new task. "

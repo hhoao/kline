@@ -181,10 +181,7 @@ public final class TaskV2SayAskHandler {
                     && type != ClineAsk.RESUME_TASK
                     && type != ClineAsk.RESUME_COMPLETED_TASK) {
                 hookSupport.executeNotificationHook(
-                        "user_attention",
-                        type.getValue(),
-                        text != null ? text : "",
-                        true);
+                        "user_attention", type.getValue(), text != null ? text : "", true);
             }
         }
         return result;

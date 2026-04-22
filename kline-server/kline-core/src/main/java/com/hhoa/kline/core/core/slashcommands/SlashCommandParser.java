@@ -91,8 +91,7 @@ public class SlashCommandParser {
             TelemetryService telemetryService) {
 
         Map<String, String> commandReplacements =
-                buildCommandReplacements(
-                        focusChainSettings, providerInfo, enableNativeToolCalls);
+                buildCommandReplacements(focusChainSettings, providerInfo, enableNativeToolCalls);
 
         for (TagPattern tagPattern : tagPatterns) {
             Matcher matcher = tagPattern.getRegex().matcher(text);

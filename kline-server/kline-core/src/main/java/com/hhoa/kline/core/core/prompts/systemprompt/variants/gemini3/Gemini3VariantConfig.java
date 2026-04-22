@@ -83,16 +83,17 @@ public class Gemini3VariantConfig {
                         .version(1)
                         .tags(Arrays.asList("gemini 3.0", "stable", "native_tools"))
                         .labels(labels)
-                        .matcher(context -> {
-                            if (!Boolean.TRUE.equals(context.getEnableNativeToolCalls())) {
-                                return false;
-                            }
-                            var providerInfo = context.getProviderInfo();
-                            if (!isNextGenModelProvider(providerInfo)) {
-                                return false;
-                            }
-                            return isGemini3ModelFamily(getModelId(context));
-                        })
+                        .matcher(
+                                context -> {
+                                    if (!Boolean.TRUE.equals(context.getEnableNativeToolCalls())) {
+                                        return false;
+                                    }
+                                    var providerInfo = context.getProviderInfo();
+                                    if (!isNextGenModelProvider(providerInfo)) {
+                                        return false;
+                                    }
+                                    return isGemini3ModelFamily(getModelId(context));
+                                })
                         .componentOrder(COMPONENT_ORDER)
                         .tools(TOOLS)
                         .placeholders(placeholders)

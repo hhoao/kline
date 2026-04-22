@@ -67,7 +67,8 @@ class SkillDiscoveryTest {
 
         List<SkillMetadata> available =
                 SkillDiscovery.getAvailableSkills(
-                        SkillDiscovery.discoverSkills(tempDir.toString(), globalSkillsDir.toString()));
+                        SkillDiscovery.discoverSkills(
+                                tempDir.toString(), globalSkillsDir.toString()));
 
         SkillContent content = SkillDiscovery.getSkillContent("formatter", available);
         assertNotNull(content);
@@ -91,7 +92,8 @@ class SkillDiscoveryTest {
 
         List<SkillMetadata> available =
                 SkillDiscovery.getAvailableSkills(
-                        SkillDiscovery.discoverSkills(tempDir.toString(), globalSkillsDir.toString()));
+                        SkillDiscovery.discoverSkills(
+                                tempDir.toString(), globalSkillsDir.toString()));
 
         assertEquals(0, available.size());
         assertNull(SkillDiscovery.getSkillContent("broken", available));

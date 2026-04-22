@@ -49,9 +49,10 @@ public class SystemInfoComponent implements SystemPromptComponent {
         String workspaceTitle;
         String workingDirInfo;
 
-        boolean isMultiRoot = Boolean.TRUE.equals(context.getIsMultiRootEnabled())
-                && context.getWorkspaceRoots() != null
-                && context.getWorkspaceRoots().size() > 1;
+        boolean isMultiRoot =
+                Boolean.TRUE.equals(context.getIsMultiRootEnabled())
+                        && context.getWorkspaceRoots() != null
+                        && context.getWorkspaceRoots().size() > 1;
 
         if (isMultiRoot) {
             workspaceTitle = "Workspace Roots";

@@ -80,17 +80,19 @@ public class NativeNextGenVariantConfig {
                         .version(1)
                         .tags(Arrays.asList("advanced", "production", "native_tools"))
                         .labels(labels)
-                        .matcher(context -> {
-                            if (!Boolean.TRUE.equals(context.getEnableNativeToolCalls())) {
-                                return false;
-                            }
-                            var providerInfo = context.getProviderInfo();
-                            if (!isNextGenModelProvider(providerInfo)) {
-                                return false;
-                            }
-                            String modelId = getModelId(context).toLowerCase();
-                            return !isGPT5ModelFamily(modelId) && isNextGenModelFamily(modelId);
-                        })
+                        .matcher(
+                                context -> {
+                                    if (!Boolean.TRUE.equals(context.getEnableNativeToolCalls())) {
+                                        return false;
+                                    }
+                                    var providerInfo = context.getProviderInfo();
+                                    if (!isNextGenModelProvider(providerInfo)) {
+                                        return false;
+                                    }
+                                    String modelId = getModelId(context).toLowerCase();
+                                    return !isGPT5ModelFamily(modelId)
+                                            && isNextGenModelFamily(modelId);
+                                })
                         .componentOrder(COMPONENT_ORDER)
                         .tools(TOOLS)
                         .placeholders(placeholders)

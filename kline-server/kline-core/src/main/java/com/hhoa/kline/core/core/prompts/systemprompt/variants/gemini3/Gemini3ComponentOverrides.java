@@ -153,9 +153,9 @@ public final class Gemini3ComponentOverrides {
                 yoloMode
                         ? ""
                         : " If one of the values for a required parameter is missing, ask the user"
-                            + " to provide the missing parameters using the ask_followup_question"
-                            + " tool (use your tools to gather information when possible to avoid"
-                            + " unnecessary questions).";
+                                + " to provide the missing parameters using the ask_followup_question"
+                                + " tool (use your tools to gather information when possible to avoid"
+                                + " unnecessary questions).";
 
         return "OBJECTIVE\n\n"
                 + "You accomplish a given task iteratively, breaking it down into clear steps and"
@@ -422,8 +422,7 @@ public final class Gemini3ComponentOverrides {
         overrides.put(
                 SystemPromptSection.TASK_PROGRESS,
                 ConfigOverride.create()
-                        .templateFunction(
-                                Gemini3ComponentOverrides::gemini3TaskProgressTemplate));
+                        .templateFunction(Gemini3ComponentOverrides::gemini3TaskProgressTemplate));
         return overrides;
     }
 }

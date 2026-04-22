@@ -9,11 +9,23 @@ import java.util.Set;
  */
 public final class ModelFamilyMatchers {
 
-    private static final Set<String> NEXT_GEN_PROVIDERS = Set.of(
-            "cline", "anthropic", "bedrock", "gemini", "vertex",
-            "openrouter", "openai", "minimax", "openai-native",
-            "openai-compatible", "openai-codex", "baseten",
-            "vercel-ai-gateway", "deepseek", "oca");
+    private static final Set<String> NEXT_GEN_PROVIDERS =
+            Set.of(
+                    "cline",
+                    "anthropic",
+                    "bedrock",
+                    "gemini",
+                    "vertex",
+                    "openrouter",
+                    "openai",
+                    "minimax",
+                    "openai-native",
+                    "openai-compatible",
+                    "openai-codex",
+                    "baseten",
+                    "vercel-ai-gateway",
+                    "deepseek",
+                    "oca");
 
     private static final Set<String> LOCAL_PROVIDERS = Set.of("lmstudio", "ollama");
 
@@ -158,9 +170,8 @@ public final class ModelFamilyMatchers {
             return true;
         }
         // Check if it contains Claude model markers
-        boolean isClaude = modelId.contains("sonnet")
-                || modelId.contains("opus")
-                || modelId.contains("haiku");
+        boolean isClaude =
+                modelId.contains("sonnet") || modelId.contains("opus") || modelId.contains("haiku");
         if (!isClaude) {
             return false;
         }
@@ -202,9 +213,7 @@ public final class ModelFamilyMatchers {
     public static boolean isAnthropicModelId(String id) {
         if (id == null) return false;
         String modelId = normalize(id);
-        return modelId.contains("sonnet")
-                || modelId.contains("opus")
-                || modelId.contains("haiku");
+        return modelId.contains("sonnet") || modelId.contains("opus") || modelId.contains("haiku");
     }
 
     /** 获取模型 ID（安全处理 null） */

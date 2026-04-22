@@ -14,8 +14,7 @@ import java.util.function.Function;
  *
  * @author hhoa
  */
-public class ReplaceInFileTool extends BaseToolSpec
-{
+public class ReplaceInFileTool extends BaseToolSpec {
 
     private static final String GENERIC_DESCRIPTION =
             "Request to replace sections of content in an existing file using SEARCH/REPLACE blocks that define exact changes to specific parts of the file. This tool should be used when you need to make targeted changes to specific parts of a file.";
@@ -70,61 +69,49 @@ public class ReplaceInFileTool extends BaseToolSpec
                      ]
                    +++++++ REPLACE""";
 
-    /**
-     * 动态 diff instruction：当编辑器中有打开的 .ipynb 文件时，追加 notebook 指令。
-     */
+    /** 动态 diff instruction：当编辑器中有打开的 .ipynb 文件时，追加 notebook 指令。 */
     private static final Function<SystemPromptContext, String> DIFF_INSTRUCTION_FN =
             context -> {
-                if (shouldIncludeNotebookInstructions(context))
-                {
+                if (shouldIncludeNotebookInstructions(context)) {
                     return BASE_DIFF_INSTRUCTIONS + NOTEBOOK_INSTRUCTIONS;
                 }
                 return BASE_DIFF_INSTRUCTIONS;
             };
 
-    private static boolean shouldIncludeNotebookInstructions(SystemPromptContext context)
-    {
-        if (context == null || context.getEditorTabs() == null)
-        {
+    private static boolean shouldIncludeNotebookInstructions(SystemPromptContext context) {
+        if (context == null || context.getEditorTabs() == null) {
             return false;
         }
         List<String> paths = getOpenOrVisibleTabPaths(context);
         return paths.stream().anyMatch(p -> p.endsWith(".ipynb"));
     }
 
-    private static List<String> getOpenOrVisibleTabPaths(SystemPromptContext context)
-    {
+    private static List<String> getOpenOrVisibleTabPaths(SystemPromptContext context) {
         SystemPromptContext.EditorTabs tabs = context.getEditorTabs();
-        if (tabs == null)
-        {
+        if (tabs == null) {
             return Collections.emptyList();
         }
         List<String> result = new ArrayList<>();
-        if (tabs.getOpen() != null)
-        {
+        if (tabs.getOpen() != null) {
             result.addAll(tabs.getOpen());
         }
-        if (tabs.getVisible() != null)
-        {
+        if (tabs.getVisible() != null) {
             result.addAll(tabs.getVisible());
         }
         return result;
     }
 
-    public static ClineToolSpec create(ModelFamily modelFamily)
-    {
+    public static ClineToolSpec create(ModelFamily modelFamily) {
         if (modelFamily == ModelFamily.NATIVE_GPT_5
                 || modelFamily == ModelFamily.NATIVE_GPT_5_1
-                || modelFamily == ModelFamily.NATIVE_NEXT_GEN)
-        {
+                || modelFamily == ModelFamily.NATIVE_NEXT_GEN) {
             return createNativeVariant(modelFamily);
         }
 
         return createGenericVariant(modelFamily);
     }
 
-    private static ClineToolSpec createGenericVariant(ModelFamily modelFamily)
-    {
+    private static ClineToolSpec createGenericVariant(ModelFamily modelFamily) {
         return ClineToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.FILE_EDIT.getValue())
@@ -146,8 +133,7 @@ public class ReplaceInFileTool extends BaseToolSpec
                 .build();
     }
 
-    private static ClineToolSpec createNativeVariant(ModelFamily modelFamily)
-    {
+    private static ClineToolSpec createNativeVariant(ModelFamily modelFamily) {
         return ClineToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.FILE_EDIT.getValue())
@@ -161,10 +147,7 @@ public class ReplaceInFileTool extends BaseToolSpec
                                         "The absolute path to the file to write to.",
                                         null),
                                 createParameterWithInstructionFn(
-                                        "diff",
-                                        true,
-                                        DIFF_INSTRUCTION_FN,
-                                        null),
+                                        "diff", true, DIFF_INSTRUCTION_FN, null),
                                 createTaskProgressParameter()))
                 .build();
     }

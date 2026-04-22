@@ -10,8 +10,7 @@ import java.util.List;
  *
  * @author hhoa
  */
-public class WebSearchTool extends BaseToolSpec
-{
+public class WebSearchTool extends BaseToolSpec {
 
     private static final String GENERIC_DESCRIPTION =
             "Performs a web search and returns relevant results\n"
@@ -30,8 +29,7 @@ public class WebSearchTool extends BaseToolSpec
                     + "IMPORTANT: If an MCP-provided web search tool is available, prefer using that tool "
                     + "instead of this one, as it may have fewer restrictions.";
 
-    public static ClineToolSpec create(ModelFamily modelFamily)
-    {
+    public static ClineToolSpec create(ModelFamily modelFamily) {
         boolean isNative =
                 modelFamily == ModelFamily.NATIVE_GPT_5
                         || modelFamily == ModelFamily.NATIVE_NEXT_GEN;
@@ -39,15 +37,10 @@ public class WebSearchTool extends BaseToolSpec
         String description = isNative ? CONCISE_DESCRIPTION : GENERIC_DESCRIPTION;
 
         List<ClineToolSpec.ClineToolSpecParameter> parameters;
-        if (isNative)
-        {
+        if (isNative) {
             parameters =
                     List.of(
-                            createParameter(
-                                    "query",
-                                    true,
-                                    "The search query to use",
-                                    null),
+                            createParameter("query", true, "The search query to use", null),
                             createParameter(
                                     "allowed_domains",
                                     false,
@@ -59,9 +52,7 @@ public class WebSearchTool extends BaseToolSpec
                                     "JSON array of domains to exclude from results",
                                     null),
                             createTaskProgressParameter());
-        }
-        else
-        {
+        } else {
             parameters =
                     List.of(
                             createParameter(

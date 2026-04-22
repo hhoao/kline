@@ -10,8 +10,7 @@ import java.util.List;
  *
  * @author hhoa
  */
-public class ApplyPatchTool extends BaseToolSpec
-{
+public class ApplyPatchTool extends BaseToolSpec {
 
     private static final String DESCRIPTION =
             """
@@ -85,12 +84,10 @@ public class ApplyPatchTool extends BaseToolSpec
             *** End Patch
             EOF""";
 
-    public static ClineToolSpec create(ModelFamily modelFamily)
-    {
+    public static ClineToolSpec create(ModelFamily modelFamily) {
         if (modelFamily != ModelFamily.NATIVE_GPT_5
                 && modelFamily != ModelFamily.NATIVE_GPT_5_1
-                && modelFamily != ModelFamily.GPT_5)
-        {
+                && modelFamily != ModelFamily.GPT_5) {
             return null;
         }
 
@@ -102,8 +99,7 @@ public class ApplyPatchTool extends BaseToolSpec
                 .contextRequirements(
                         context -> {
                             if (context.getProviderInfo() == null
-                                    || context.getProviderInfo().getModel() == null)
-                            {
+                                    || context.getProviderInfo().getModel() == null) {
                                 return false;
                             }
                             String modelId = context.getProviderInfo().getModel().getId();

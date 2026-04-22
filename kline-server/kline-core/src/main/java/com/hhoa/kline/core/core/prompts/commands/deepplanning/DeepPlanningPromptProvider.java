@@ -3,9 +3,9 @@ package com.hhoa.kline.core.core.prompts.commands.deepplanning;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
 
 /**
- * Entry point for deep-planning prompt generation.
- * Selects the appropriate variant and generates the prompt with focus chain and native tool call settings.
- * 对应 TS deep-planning/index.ts getDeepPlanningPrompt()
+ * Entry point for deep-planning prompt generation. Selects the appropriate variant and generates
+ * the prompt with focus chain and native tool call settings. 对应 TS deep-planning/index.ts
+ * getDeepPlanningPrompt()
  *
  * @author hhoa
  */
@@ -17,7 +17,8 @@ public final class DeepPlanningPromptProvider {
      * Generates the deep-planning slash command response with model-family-aware variant selection.
      *
      * @param focusChainEnabled Whether focus chain is enabled
-     * @param providerInfo Provider info for model family detection (as SystemPromptContext.ApiProviderInfo)
+     * @param providerInfo Provider info for model family detection (as
+     *     SystemPromptContext.ApiProviderInfo)
      * @param enableNativeToolCalls Whether native tool calling is enabled
      * @return The deep-planning prompt string with appropriate variant applied
      */

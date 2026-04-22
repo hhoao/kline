@@ -89,16 +89,10 @@ public class ClineToolSpec {
         private String description;
         private Function<SystemPromptContext, Boolean> contextRequirements;
 
-        /**
-         * 参数类型，默认为 "string"。
-         * 支持: "string", "boolean", "integer", "array", "object"
-         */
+        /** 参数类型，默认为 "string"。 支持: "string", "boolean", "integer", "array", "object" */
         private String type;
 
-        /**
-         * 动态 instruction 函数，优先级高于静态 instruction。
-         * 当不为 null 时，使用此函数根据上下文生成 instruction。
-         */
+        /** 动态 instruction 函数，优先级高于静态 instruction。 当不为 null 时，使用此函数根据上下文生成 instruction。 */
         private Function<SystemPromptContext, String> instructionFn;
 
         /** array 类型的元素 schema */
