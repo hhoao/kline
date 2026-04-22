@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>io.github.hhoao</groupId>
-        <artifactId>parent</artifactId>
+        <artifactId>kline-parent</artifactId>
         <version>${revision}</version>
     </parent>
 
