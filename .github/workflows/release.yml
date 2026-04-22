@@ -1,0 +1,70 @@
+name: Kline Core Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: Release version from kline-server/pom.xml, for example 1.0.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kline-core-release
+  cancel-in-progress: false
+
+jobs:
+  publish-to-maven-central:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate release version and tag
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -euo pipefail
+          if [[ "${RELEASE_VERSION}" == *"-SNAPSHOT" ]]; then
+            echo "Release version must not be a SNAPSHOT: ${RELEASE_VERSION}"
+            exit 1
+          fi
+
+          POM_VERSION="$(grep -oPm1 '(?<=<revision>)[^<]+' kline-server/pom.xml)"
+          if [[ "${POM_VERSION}" != "${RELEASE_VERSION}" ]]; then
+            echo "release_version (${RELEASE_VERSION}) does not match kline-server/pom.xml revision (${POM_VERSION})"
+            exit 1
+          fi
+
+          if ! git rev-parse "v${RELEASE_VERSION}" >/dev/null 2>&1; then
+            echo "Required git tag v${RELEASE_VERSION} was not found"
+            exit 1
+          fi
+
+      - name: Set up Java 21, Maven credentials, and GPG
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          server-id: central
+          server-username: MAVEN_CENTRAL_USERNAME
+          server-password: MAVEN_CENTRAL_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+
+      - name: Publish kline-common and kline-core
+        working-directory: kline-server
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.CENTRAL_PORTAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PORTAL_PASSWORD }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "Publishing release ${RELEASE_VERSION}"
+          mvn -B -ntp -pl kline-common,kline-core -am -Prelease-to-central deploy

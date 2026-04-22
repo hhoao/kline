@@ -1,10 +1,36 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>com.hhoa.kline</groupId>
+    <groupId>io.github.hhoao</groupId>
     <artifactId>parent</artifactId>
     <version>${revision}</version>
     <packaging>pom</packaging>
+    <name>Kline Parent</name>
+    <description>Kline parent build for publishing reusable core modules to Maven Central.</description>
+    <url>https://github.com/hhoao/kline</url>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>hhoao</id>
+            <name>hhoao</name>
+            <url>https://github.com/hhoao</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/hhoao/kline.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/hhoao/kline.git</developerConnection>
+        <url>https://github.com/hhoao/kline</url>
+        <tag>HEAD</tag>
+    </scm>
 
     <modules>
         <module>kline-common</module>
@@ -17,7 +43,7 @@
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <revision>1.0.0-SNAPSHOT</revision>
+        <revision>1.0.0</revision>
     </properties>
 
     <dependencyManagement>
@@ -203,37 +229,37 @@
                 <version>5.5.0</version>
             </dependency>
             <dependency>
-                <groupId>com.hhoa.kline</groupId>
+                <groupId>io.github.hhoao</groupId>
                 <artifactId>kline-common</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
-                <groupId>com.hhoa.kline</groupId>
+                <groupId>io.github.hhoao</groupId>
                 <artifactId>kline-core</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
-                <groupId>com.hhoa.kline</groupId>
+                <groupId>io.github.hhoao</groupId>
                 <artifactId>kline-plugins</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
-                <groupId>com.hhoa.kline</groupId>
+                <groupId>io.github.hhoao</groupId>
                 <artifactId>kline-web</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
-                <groupId>com.hhoa.kline</groupId>
+                <groupId>io.github.hhoao</groupId>
                 <artifactId>kline-web-common</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
-                <groupId>com.hhoa.kline</groupId>
+                <groupId>io.github.hhoao</groupId>
                 <artifactId>kline-web-server</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
-                <groupId>com.hhoa.kline</groupId>
+                <groupId>io.github.hhoao</groupId>
                 <artifactId>kline-plugins-jdbc</artifactId>
                 <version>${revision}</version>
             </dependency>
@@ -644,6 +670,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
                 <configuration>
                     <annotationProcessorPaths>
                         <path>
@@ -672,6 +699,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
                 <configuration>
                     <argLine>--add-opens java.base/java.util.stream=ALL-UNNAMED
                         --add-opens java.base/java.lang=ALL-UNNAMED
@@ -708,4 +736,70 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>release-to-central</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>3.3.1</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>3.11.2</version>
+                        <configuration>
+                            <doclint>none</doclint>
+                            <failOnError>false</failOnError>
+                            <source>${maven.compiler.source}</source>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>3.2.7</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.9.0</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>true</autoPublish>
+                            <waitUntil>published</waitUntil>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

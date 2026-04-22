@@ -1,0 +1,30 @@
+name: Kline Core CI
+
+on:
+  push:
+    paths:
+      - ".github/workflows/**"
+      - "kline-server/**"
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "kline-server/**"
+
+jobs:
+  verify-core:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Verify kline-common and kline-core
+        working-directory: kline-server
+        run: mvn -B -ntp -pl kline-common,kline-core -am verify
