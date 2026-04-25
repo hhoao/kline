@@ -1,9 +1,12 @@
 package com.hhoa.kline.core.core.model.http;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -17,6 +20,8 @@ import org.junit.jupiter.api.Test;
 import reactor.test.StepVerifier;
 
 class OpenAiCompatibleHttpChatClientTest {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     private HttpServer server;
 
     @AfterEach
@@ -51,26 +56,46 @@ class OpenAiCompatibleHttpChatClientTest {
                         + "\"usage\":{\"prompt_tokens\":2,\"completion_tokens\":3}}",
                 response.raw());
         assertEquals("Bearer test-key", authorization.get());
-        assertTrue(requestBody.get().contains("\"stream\":false"));
+        JsonNode body = OBJECT_MAPPER.readTree(requestBody.get());
+        assertFalse(body.path("stream").asBoolean());
+        assertTrue(body.path("stream_options").isMissingNode());
+    }
+
+    @Test
+    void completesRequestWhenBaseUrlAlreadyIncludesV1() throws IOException {
+        startServer(
+                exchange ->
+                        sendJson(
+                                exchange,
+                                200,
+                                "{\"choices\":[{\"message\":{\"content\":\"hello\"}}]}"));
+
+        HttpChatResponse response =
+                new OpenAiCompatibleHttpChatClient().complete(request(baseUrl() + "/v1"));
+
+        assertEquals("hello", response.text());
     }
 
     @Test
     void streamsSseChunks() throws IOException {
+        AtomicReference<String> requestBody = new AtomicReference<>();
         startServer(
-                exchange ->
-                        sendSse(
-                                exchange,
-                                200,
-                                """
-                                data: {"choices":[{"delta":{"content":"你"}}]}
+                exchange -> {
+                    requestBody.set(readBody(exchange));
+                    sendSse(
+                            exchange,
+                            200,
+                            """
+                            data: {"choices":[{"delta":{"content":"你"}}]}
 
-                                data: {"choices":[{"delta":{"content":"好"}}]}
+                            data: {"choices":[{"delta":{"content":"好"}}]}
 
-                                data: {"usage":{"prompt_tokens":4,"completion_tokens":5},"choices":[]}
+                            data: {"usage":{"prompt_tokens":4,"completion_tokens":5},"choices":[]}
 
-                                data: [DONE]
+                            data: [DONE]
 
-                                """));
+                            """);
+                });
 
         StepVerifier.create(new OpenAiCompatibleHttpChatClient().stream(request()))
                 .assertNext(
@@ -91,6 +116,10 @@ class OpenAiCompatibleHttpChatClientTest {
                         })
                 .assertNext(chunk -> assertEquals(HttpChatChunk.Type.DONE, chunk.type()))
                 .verifyComplete();
+
+        JsonNode body = OBJECT_MAPPER.readTree(requestBody.get());
+        assertTrue(body.path("stream").asBoolean());
+        assertTrue(body.path("stream_options").path("include_usage").asBoolean());
     }
 
     @Test
@@ -156,8 +185,12 @@ class OpenAiCompatibleHttpChatClientTest {
     }
 
     private HttpChatRequest request() {
+        return request(baseUrl());
+    }
+
+    private HttpChatRequest request(String baseUrl) {
         return new HttpChatRequest(
-                baseUrl(),
+                baseUrl,
                 "test-key",
                 "test-model",
                 List.of(new HttpChatMessage("user", "hello")),

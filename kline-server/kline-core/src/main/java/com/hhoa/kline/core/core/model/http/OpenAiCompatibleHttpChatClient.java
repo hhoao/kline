@@ -118,7 +118,7 @@ public class OpenAiCompatibleHttpChatClient implements HttpChatClient {
             throws JsonProcessingException {
         HttpRequest.Builder builder =
                 HttpRequest.newBuilder()
-                        .uri(URI.create(request.baseUrl() + "/v1/chat/completions"))
+                        .uri(chatCompletionsUri(request.baseUrl()))
                         .header("Authorization", "Bearer " + request.apiKey())
                         .header("Content-Type", "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString(requestJson(request, stream)));
@@ -139,6 +139,10 @@ public class OpenAiCompatibleHttpChatClient implements HttpChatClient {
             messageNode.put("content", message.content());
         }
         root.put("stream", stream);
+        if (stream) {
+            ObjectNode streamOptions = root.putObject("stream_options");
+            streamOptions.put("include_usage", true);
+        }
         if (request.temperature() != null) {
             root.put("temperature", request.temperature());
         }
@@ -146,6 +150,21 @@ public class OpenAiCompatibleHttpChatClient implements HttpChatClient {
             root.put("max_tokens", request.maxTokens());
         }
         return objectMapper.writeValueAsString(root);
+    }
+
+    private URI chatCompletionsUri(String baseUrl) {
+        String apiRoot = stripTrailingSlashes(baseUrl);
+        String completionsPath =
+                apiRoot.endsWith("/v1") ? "/chat/completions" : "/v1/chat/completions";
+        return URI.create(apiRoot + completionsPath);
+    }
+
+    private String stripTrailingSlashes(String value) {
+        int end = value.length();
+        while (end > 0 && value.charAt(end - 1) == '/') {
+            end--;
+        }
+        return value.substring(0, end);
     }
 
     private List<HttpChatChunk> parseSseEvent(String payload) {
