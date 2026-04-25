@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -88,6 +89,30 @@ class HttpChatRequestTest {
                         List.of(new HttpChatMessage("user", "Hello")));
 
         assertEquals("https://api.example.com", request.baseUrl());
+    }
+
+    @Test
+    void allTrailingSlashesAreRemovedFromBaseUrl() {
+        HttpChatRequest request =
+                request(
+                        "https://api.example.com///",
+                        "api-key",
+                        "model",
+                        List.of(new HttpChatMessage("user", "Hello")));
+
+        assertEquals("https://api.example.com", request.baseUrl());
+    }
+
+    @Test
+    void messagesAreDefensivelyCopied() {
+        List<HttpChatMessage> messages = new ArrayList<>();
+        messages.add(new HttpChatMessage("user", "Hello"));
+
+        HttpChatRequest request = request("https://api.example.com", "api-key", "model", messages);
+        messages.add(new HttpChatMessage("assistant", "Hi"));
+
+        assertEquals(1, request.messages().size());
+        assertEquals(new HttpChatMessage("user", "Hello"), request.messages().get(0));
     }
 
     private HttpChatRequest request(
