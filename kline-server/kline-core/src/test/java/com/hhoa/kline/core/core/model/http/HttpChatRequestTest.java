@@ -25,6 +25,21 @@ class HttpChatRequestTest {
     }
 
     @Test
+    void slashOnlyBaseUrlThrows() {
+        IllegalArgumentException exception =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () ->
+                                request(
+                                        "///",
+                                        "api-key",
+                                        "model",
+                                        List.of(new HttpChatMessage("user", "Hello"))));
+
+        assertEquals("baseUrl must not be blank", exception.getMessage());
+    }
+
+    @Test
     void blankApiKeyThrows() {
         IllegalArgumentException exception =
                 assertThrows(

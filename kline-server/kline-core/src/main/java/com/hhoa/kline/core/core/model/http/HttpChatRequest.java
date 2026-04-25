@@ -26,6 +26,9 @@ public record HttpChatRequest(
         }
 
         baseUrl = removeTrailingSlashes(baseUrl);
+        if (baseUrl.isBlank()) {
+            throw new IllegalArgumentException("baseUrl must not be blank");
+        }
         messages = List.copyOf(messages);
     }
 
