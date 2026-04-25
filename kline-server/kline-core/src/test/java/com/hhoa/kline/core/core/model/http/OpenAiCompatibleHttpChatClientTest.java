@@ -94,6 +94,33 @@ class OpenAiCompatibleHttpChatClientTest {
     }
 
     @Test
+    void streamsSseEventWithMultipleDataFields() throws IOException {
+        startServer(
+                exchange ->
+                        sendSse(
+                                exchange,
+                                200,
+                                """
+                                : heartbeat
+                                event: ignored
+                                data: {"choices":[{"delta":
+                                data: {"content":"split"}}]}
+
+                                data: [DONE]
+
+                                """));
+
+        StepVerifier.create(new OpenAiCompatibleHttpChatClient().stream(request()))
+                .assertNext(
+                        chunk -> {
+                            assertEquals(HttpChatChunk.Type.TEXT, chunk.type());
+                            assertEquals("split", chunk.text());
+                        })
+                .assertNext(chunk -> assertEquals(HttpChatChunk.Type.DONE, chunk.type()))
+                .verifyComplete();
+    }
+
+    @Test
     void failsOnNonSuccessStatus() throws IOException {
         startServer(exchange -> sendJson(exchange, 401, "{\"error\":\"bad key\"}"));
 
@@ -104,6 +131,19 @@ class OpenAiCompatibleHttpChatClientTest {
 
         assertEquals(401, exception.statusCode());
         assertEquals("{\"error\":\"bad key\"}", exception.responseBody());
+    }
+
+    @Test
+    void failsOnMalformedNonStreamingResponseShape() throws IOException {
+        startServer(exchange -> sendJson(exchange, 200, "{\"choices\":[{\"message\":{}}]}"));
+
+        IllegalStateException exception =
+                assertThrows(
+                        IllegalStateException.class,
+                        () -> new OpenAiCompatibleHttpChatClient().complete(request()));
+
+        assertTrue(exception.getMessage().contains("choices[0].message.content"));
+        assertTrue(exception.getMessage().contains("{\"choices\":[{\"message\":{}}]}"));
     }
 
     @Test

@@ -17,6 +17,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.publisher.SynchronousSink;
+import reactor.core.scheduler.Schedulers;
 
 public class OpenAiCompatibleHttpChatClient implements HttpChatClient {
     private static final ObjectMapper DEFAULT_OBJECT_MAPPER = new ObjectMapper();
@@ -35,6 +38,17 @@ public class OpenAiCompatibleHttpChatClient implements HttpChatClient {
 
     @Override
     public HttpChatResponse complete(HttpChatRequest request) {
+        return Mono.fromCallable(() -> completeBlocking(request))
+                .subscribeOn(Schedulers.boundedElastic())
+                .block();
+    }
+
+    @Override
+    public Flux<HttpChatChunk> stream(HttpChatRequest request) {
+        return Flux.defer(() -> streamBlocking(request)).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    private HttpChatResponse completeBlocking(HttpChatRequest request) {
         try {
             HttpResponse<String> response =
                     httpClient.send(
@@ -46,8 +60,14 @@ public class OpenAiCompatibleHttpChatClient implements HttpChatClient {
             }
             JsonNode root = objectMapper.readTree(body);
             JsonNode usage = root.path("usage");
+            JsonNode content = root.path("choices").path(0).path("message").path("content");
+            if (!content.isTextual()) {
+                throw new IllegalStateException(
+                        "Malformed chat completion response: missing choices[0].message.content in body: "
+                                + body);
+            }
             return new HttpChatResponse(
-                    root.path("choices").path(0).path("message").path("content").asText(),
+                    content.asText(),
                     optionalInt(usage.path("prompt_tokens")),
                     optionalInt(usage.path("completion_tokens")),
                     body);
@@ -59,62 +79,39 @@ public class OpenAiCompatibleHttpChatClient implements HttpChatClient {
         }
     }
 
-    @Override
-    public Flux<HttpChatChunk> stream(HttpChatRequest request) {
-        return Flux.defer(
-                () -> {
-                    HttpResponse<InputStream> response;
-                    try {
-                        response =
-                                httpClient.send(
-                                        httpRequest(request, true),
-                                        HttpResponse.BodyHandlers.ofInputStream());
-                    } catch (IOException e) {
-                        return Flux.error(
-                                new IllegalStateException("HTTP model request failed", e));
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        return Flux.error(
-                                new IllegalStateException("HTTP model request interrupted", e));
-                    }
+    private Flux<HttpChatChunk> streamBlocking(HttpChatRequest request) {
+        HttpResponse<InputStream> response;
+        try {
+            response =
+                    httpClient.send(
+                            httpRequest(request, true), HttpResponse.BodyHandlers.ofInputStream());
+        } catch (IOException e) {
+            return Flux.error(new IllegalStateException("HTTP model request failed", e));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Flux.error(new IllegalStateException("HTTP model request interrupted", e));
+        }
 
-                    InputStream body = response.body();
-                    if (!isSuccess(response.statusCode())) {
-                        try (body) {
-                            return Flux.error(
-                                    new HttpChatException(
-                                            response.statusCode(),
-                                            new String(
-                                                    body.readAllBytes(), StandardCharsets.UTF_8)));
-                        } catch (IOException e) {
-                            return Flux.error(
-                                    new IllegalStateException("HTTP model request failed", e));
-                        }
-                    }
+        InputStream body = response.body();
+        if (!isSuccess(response.statusCode())) {
+            try (body) {
+                return Flux.error(
+                        new HttpChatException(
+                                response.statusCode(),
+                                new String(body.readAllBytes(), StandardCharsets.UTF_8)));
+            } catch (IOException e) {
+                return Flux.error(new IllegalStateException("HTTP model request failed", e));
+            }
+        }
 
-                    return Flux.using(
-                            () ->
-                                    new BufferedReader(
-                                            new InputStreamReader(body, StandardCharsets.UTF_8)),
-                            reader ->
-                                    Flux.fromStream(reader.lines())
-                                            .<HttpChatChunk>handle(
-                                                    (line, sink) -> {
-                                                        try {
-                                                            for (HttpChatChunk chunk :
-                                                                    parseSseLine(line)) {
-                                                                sink.next(chunk);
-                                                            }
-                                                        } catch (RuntimeException e) {
-                                                            sink.error(e);
-                                                        }
-                                                    })
-                                            .takeUntil(
-                                                    chunk ->
-                                                            chunk.type()
-                                                                    == HttpChatChunk.Type.DONE),
-                            this::close);
-                });
+        return Flux.using(
+                () -> new BufferedReader(new InputStreamReader(body, StandardCharsets.UTF_8)),
+                reader ->
+                        Flux.<HttpChatChunk, SseEventReader>generate(
+                                        () -> new SseEventReader(reader),
+                                        (state, sink) -> state.emitNext(sink))
+                                .takeUntil(chunk -> chunk.type() == HttpChatChunk.Type.DONE),
+                this::close);
     }
 
     private HttpRequest httpRequest(HttpChatRequest request, boolean stream)
@@ -151,15 +148,12 @@ public class OpenAiCompatibleHttpChatClient implements HttpChatClient {
         return objectMapper.writeValueAsString(root);
     }
 
-    private List<HttpChatChunk> parseSseLine(String line) {
-        if (line == null || line.isBlank() || !line.startsWith("data:")) {
+    private List<HttpChatChunk> parseSseEvent(String payload) {
+        if (payload == null || payload.isBlank()) {
             return List.of();
         }
 
-        String raw = line.substring("data:".length()).trim();
-        if (raw.isEmpty()) {
-            return List.of();
-        }
+        String raw = payload.trim();
         if ("[DONE]".equals(raw)) {
             return List.of(HttpChatChunk.done());
         }
@@ -206,6 +200,64 @@ public class OpenAiCompatibleHttpChatClient implements HttpChatClient {
             reader.close();
         } catch (IOException ignored) {
             // Closing during cancellation should not mask the terminal signal.
+        }
+    }
+
+    private class SseEventReader {
+        private final BufferedReader reader;
+        private final List<HttpChatChunk> pendingChunks = new ArrayList<>();
+
+        private SseEventReader(BufferedReader reader) {
+            this.reader = reader;
+        }
+
+        private SseEventReader emitNext(SynchronousSink<HttpChatChunk> sink) {
+            try {
+                while (pendingChunks.isEmpty()) {
+                    String payload = readEventPayload();
+                    if (payload == null) {
+                        sink.complete();
+                        return this;
+                    }
+                    pendingChunks.addAll(parseSseEvent(payload));
+                }
+
+                sink.next(pendingChunks.remove(0));
+                return this;
+            } catch (IOException e) {
+                sink.error(new IllegalStateException("HTTP model request failed", e));
+                return this;
+            } catch (RuntimeException e) {
+                sink.error(e);
+                return this;
+            }
+        }
+
+        private String readEventPayload() throws IOException {
+            List<String> dataLines = new ArrayList<>();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.isEmpty()) {
+                    if (!dataLines.isEmpty()) {
+                        return String.join("\n", dataLines);
+                    }
+                    continue;
+                }
+                if (!line.startsWith("data:")) {
+                    continue;
+                }
+
+                String data = line.substring("data:".length());
+                if (data.startsWith(" ")) {
+                    data = data.substring(1);
+                }
+                dataLines.add(data);
+            }
+
+            if (!dataLines.isEmpty()) {
+                return String.join("\n", dataLines);
+            }
+            return null;
         }
     }
 }
