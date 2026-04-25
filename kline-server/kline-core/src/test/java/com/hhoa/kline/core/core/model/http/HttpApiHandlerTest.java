@@ -3,6 +3,7 @@ package com.hhoa.kline.core.core.model.http;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.hhoa.kline.core.core.assistant.AssistantMessage;
+import com.hhoa.kline.core.core.assistant.ImageContentBlock;
 import com.hhoa.kline.core.core.assistant.TextContentBlock;
 import com.hhoa.kline.core.core.assistant.UserMessage;
 import com.hhoa.kline.core.core.task.ApiChunk;
@@ -67,6 +68,38 @@ class HttpApiHandlerTest {
         assertEquals("test-model", handler.getModelId());
         assertEquals("openai-compatible-http", handler.getProviderId());
         assertEquals(null, handler.getLastRequestId());
+    }
+
+    @Test
+    void defaultsProviderWhenBlank() {
+        HttpApiHandler handler = new HttpApiHandler(options(" "));
+
+        assertEquals("openai-compatible-http", handler.getProviderId());
+    }
+
+    @Test
+    void filtersAndJoinsTextContent() {
+        FakeHttpChatClient fakeClient = new FakeHttpChatClient(Flux.empty());
+        HttpApiHandler handler = new HttpApiHandler(options(null), fakeClient);
+
+        handler.createMessageStream(
+                        null,
+                        List.of(
+                                UserMessage.builder()
+                                        .content(
+                                                List.of(
+                                                        new TextContentBlock("first"),
+                                                        new ImageContentBlock(
+                                                                "image", "base64", "image/png"),
+                                                        new TextContentBlock(" "),
+                                                        new TextContentBlock("second")))
+                                        .build(),
+                                assistant(" ")))
+                .blockLast();
+
+        assertEquals(
+                List.of(new HttpChatMessage("user", "first\nsecond")),
+                fakeClient.lastRequest().messages());
     }
 
     private HttpApiHandler.Options options(String providerId) {

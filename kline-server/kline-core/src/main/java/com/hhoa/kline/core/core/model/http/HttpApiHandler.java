@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 import reactor.core.publisher.Flux;
 
 public class HttpApiHandler implements ApiHandler {
@@ -100,9 +101,8 @@ public class HttpApiHandler implements ApiHandler {
                         .map(TextContentBlock.class::cast)
                         .map(TextContentBlock::getText)
                         .filter(value -> value != null && !value.isBlank())
-                        .reduce((left, right) -> left + "\n" + right)
-                        .orElse(null);
-        if (text == null) {
+                        .collect(Collectors.joining("\n"));
+        if (text.isEmpty()) {
             return null;
         }
         return new HttpChatMessage(role, text);
