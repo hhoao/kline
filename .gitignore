@@ -42,3 +42,4 @@ build/
 **/application-dev.yml
 
 docs/superpowers/
+.worktrees/
