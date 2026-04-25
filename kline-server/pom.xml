@@ -28,7 +28,6 @@
     <modules>
         <module>kline-common</module>
         <module>kline-core</module>
-        <module>kline-langchain4j</module>
         <module>kline-plugins</module>
         <module>kline-web</module>
     </modules>
@@ -41,7 +40,6 @@
     </scm>
 
     <properties>
-        <langchain4j.version>1.13.0</langchain4j.version>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -55,16 +53,6 @@
                 <groupId>com.mysql</groupId>
                 <artifactId>mysql-connector-j</artifactId>
                 <version>9.1.0</version>
-            </dependency>
-            <dependency>
-                <groupId>dev.langchain4j</groupId>
-                <artifactId>langchain4j</artifactId>
-                <version>${langchain4j.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>dev.langchain4j</groupId>
-                <artifactId>langchain4j-open-ai</artifactId>
-                <version>${langchain4j.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.projectreactor</groupId>
