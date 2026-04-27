@@ -58,6 +58,13 @@ public class WebSearchToolHandler implements StateFullToolHandler {
     }
 
     @Override
+    public boolean isConcurrencySafe(ToolUse block, ToolContext context) {
+        return context != null
+                && context.getCallbacks() != null
+                && Boolean.TRUE.equals(context.getCallbacks().shouldAutoApproveTool(getName()));
+    }
+
+    @Override
     public void handlePartialBlock(ToolUse block, UIHelpers ui) {
         String query = HandlerUtils.getStringParam(block, "query");
         String message = buildMessage(query);

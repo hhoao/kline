@@ -74,6 +74,15 @@ public class ListCodeDefinitionNamesToolHandler implements StateFullToolHandler 
     }
 
     @Override
+    public boolean isConcurrencySafe(ToolUse block, ToolContext context) {
+        String path = HandlerUtils.getStringParam(block, "path");
+        return context != null
+                && context.getCallbacks() != null
+                && Boolean.TRUE.equals(
+                        context.getCallbacks().shouldAutoApproveToolWithPath(getName(), path));
+    }
+
+    @Override
     public void handlePartialBlock(ToolUse block, UIHelpers ui) {
         String relPath = HandlerUtils.getStringParam(block, "path");
         ToolContext config = ui.getContext();

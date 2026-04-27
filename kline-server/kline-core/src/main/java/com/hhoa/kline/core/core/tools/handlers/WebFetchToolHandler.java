@@ -57,6 +57,13 @@ public class WebFetchToolHandler implements StateFullToolHandler {
     }
 
     @Override
+    public boolean isConcurrencySafe(ToolUse block, ToolContext context) {
+        return context != null
+                && context.getCallbacks() != null
+                && Boolean.TRUE.equals(context.getCallbacks().shouldAutoApproveTool(getName()));
+    }
+
+    @Override
     public void handlePartialBlock(ToolUse block, UIHelpers ui) {
         String url = HandlerUtils.getStringParam(block, "url");
         Map<String, Object> messageProps = new HashMap<>();

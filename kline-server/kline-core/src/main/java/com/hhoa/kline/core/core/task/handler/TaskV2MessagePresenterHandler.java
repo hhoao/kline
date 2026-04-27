@@ -35,6 +35,7 @@ import com.hhoa.kline.core.core.task.ProviderInfo;
 import com.hhoa.kline.core.core.task.TaskState;
 import com.hhoa.kline.core.core.task.focuschain.FocusChainManager;
 import com.hhoa.kline.core.core.tools.AutoApprove;
+import com.hhoa.kline.core.core.tools.ToolExecutionBatchCoordinator;
 import com.hhoa.kline.core.core.tools.ToolExecutor;
 import com.hhoa.kline.core.core.tools.types.PendingAskToken;
 import com.hhoa.kline.core.core.tools.types.PendingAskToken.ToolUsePendingAskToken;
@@ -72,6 +73,7 @@ public final class TaskV2MessagePresenterHandler {
     private final ClineIgnoreController clineIgnoreController;
     private final FileContextTracker fileContextTracker;
     private final ToolExecutor toolExecutor;
+    private final ToolExecutionBatchCoordinator toolExecutionBatchCoordinator;
     private final TaskV2SayAskHandler sayAskHandler;
     private final MessageStateHandler messageStateHandler;
     private final Supplier<ProviderInfo> getCurrentProviderInfo;
@@ -122,6 +124,8 @@ public final class TaskV2MessagePresenterHandler {
         this.clineIgnoreController = clineIgnoreController;
         this.fileContextTracker = fileContextTracker;
         this.toolExecutor = toolExecutor;
+        this.toolExecutionBatchCoordinator =
+                toolExecutor != null ? new ToolExecutionBatchCoordinator(toolExecutor) : null;
         this.sayAskHandler = sayAskHandler;
         this.messageStateHandler = messageStateHandler;
         this.getCurrentProviderInfo = getCurrentProviderInfo;
@@ -404,23 +408,15 @@ public final class TaskV2MessagePresenterHandler {
                 processTextContent(textContent);
             } else if (block instanceof ToolUse toolUse) {
                 if (!taskState.isDidAlreadyUseTool()) {
-                    String toolUseId = UUID.randomUUID().toString();
-                    toolUse.setId(toolUseId);
-                    ToolState toolState = toolExecutor.getOrCreateToolState(toolUse.getName());
-                    taskState.getToolStates().put(toolUseId, toolState);
-                    ToolContext cfg = buildToolContext(toolState);
-                    ToolExecuteResult execResult = toolExecutor.executeTool(toolUse, cfg);
-                    if (execResult
-                            instanceof ToolExecuteResult.PendingAsk(PendingAskToken pendingToken)) {
-                        taskState
-                                .getPendingAskTokens()
-                                .put(pendingToken.getPendingId(), pendingToken);
-                    } else if (execResult
-                            instanceof ToolExecuteResult.Immediate(List<UserContentBlock> blocks)) {
-                        pushToolResult(
-                                blocks,
-                                toolExecutor.getHandler(toolUse.getName()).getDescription(toolUse));
+                    ToolBatchPresentationResult batchResult =
+                            presentToolBatchIfAvailable(currentIndex, currentAssistantContent);
+                    if (batchResult.processed()) {
+                        if (batchResult.paused()) {
+                            return;
+                        }
+                        continue;
                     }
+                    presentSingleToolUse(toolUse);
                 }
             }
 
@@ -433,6 +429,90 @@ public final class TaskV2MessagePresenterHandler {
             }
 
             taskState.setCurrentStreamingContentIndex(currentIndex + 1);
+        }
+    }
+
+    private ToolBatchPresentationResult presentToolBatchIfAvailable(
+            int currentIndex, List<AssistantMessageContent> currentAssistantContent) {
+        if (toolExecutionBatchCoordinator == null || !taskState.isUseNativeToolCalls()) {
+            return ToolBatchPresentationResult.notProcessed();
+        }
+
+        List<ToolUse> toolUses = collectFinalizedToolUses(currentIndex, currentAssistantContent);
+        if (toolUses.size() < 2) {
+            return ToolBatchPresentationResult.notProcessed();
+        }
+
+        ToolExecutionBatchCoordinator.BatchResult batchResult =
+                toolExecutionBatchCoordinator.execute(toolUses, this::prepareToolUseContext);
+
+        boolean pushedToolResult = false;
+        boolean paused = false;
+        for (ToolExecutionBatchCoordinator.ExecutionResult execution : batchResult.completed()) {
+            if (execution.result() instanceof ToolExecuteResult.PendingAsk(PendingAskToken token)) {
+                taskState.getPendingAskTokens().put(token.getPendingId(), token);
+                paused = true;
+                break;
+            }
+            if (execution.result()
+                    instanceof ToolExecuteResult.Immediate(List<UserContentBlock> blocks)) {
+                ToolResultUtils.pushToolResult(
+                        blocks,
+                        taskState.getNextUserMessageContent(),
+                        execution.toolDescription(),
+                        null);
+                pushedToolResult = true;
+            }
+        }
+
+        if (pushedToolResult) {
+            taskState.setDidAlreadyUseTool(true);
+        }
+        taskState.setCurrentStreamingContentIndex(currentIndex + batchResult.completed().size());
+        if (!paused
+                && taskState.getCurrentStreamingContentIndex() >= currentAssistantContent.size()
+                && taskState.isDidCompleteReadingStream()) {
+            taskState.setUserMessageContentReady(true);
+        }
+        return new ToolBatchPresentationResult(true, paused);
+    }
+
+    private List<ToolUse> collectFinalizedToolUses(
+            int currentIndex, List<AssistantMessageContent> currentAssistantContent) {
+        List<ToolUse> toolUses = new ArrayList<>();
+        for (int i = currentIndex; i < currentAssistantContent.size(); i++) {
+            AssistantMessageContent content = currentAssistantContent.get(i);
+            if (!(content instanceof ToolUse toolUse) || toolUse.isPartial()) {
+                break;
+            }
+            toolUses.add(toolUse);
+        }
+        return toolUses;
+    }
+
+    private ToolContext prepareToolUseContext(ToolUse toolUse) {
+        String toolUseId = UUID.randomUUID().toString();
+        toolUse.setId(toolUseId);
+        ToolState toolState = toolExecutor.getOrCreateToolState(toolUse.getName());
+        taskState.getToolStates().put(toolUseId, toolState);
+        return buildToolContext(toolState);
+    }
+
+    private void presentSingleToolUse(ToolUse toolUse) {
+        ToolContext cfg = prepareToolUseContext(toolUse);
+        ToolExecuteResult execResult = toolExecutor.executeTool(toolUse, cfg);
+        if (execResult instanceof ToolExecuteResult.PendingAsk(PendingAskToken pendingToken)) {
+            taskState.getPendingAskTokens().put(pendingToken.getPendingId(), pendingToken);
+        } else if (execResult
+                instanceof ToolExecuteResult.Immediate(List<UserContentBlock> blocks)) {
+            pushToolResult(
+                    blocks, toolExecutor.getHandler(toolUse.getName()).getDescription(toolUse));
+        }
+    }
+
+    private record ToolBatchPresentationResult(boolean processed, boolean paused) {
+        private static ToolBatchPresentationResult notProcessed() {
+            return new ToolBatchPresentationResult(false, false);
         }
     }
 

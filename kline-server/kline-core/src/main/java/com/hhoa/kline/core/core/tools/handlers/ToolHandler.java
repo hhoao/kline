@@ -16,6 +16,10 @@ public interface ToolHandler {
 
     ToolExecuteResult execute(ToolContext context, ToolUse block);
 
+    default boolean isConcurrencySafe(ToolUse block, ToolContext context) {
+        return false;
+    }
+
     /** 返回该工具在 systemprompt/tools 中的规范，用于执行前做必选/可选参数校验；无规范可返回 null。 */
     ClineToolSpec getClineToolSpec();
 }
