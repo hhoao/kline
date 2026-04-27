@@ -125,7 +125,7 @@ class TaskV2MessagePresenterHandlerTest {
         handler.checkAndPresentAssistantMessage(true);
 
         List<AssistantMessageContent> assistantMessageContent =
-                taskState.getAssistantMessageContent();
+                taskState.getPresentationState().getAssistantMessageContent();
         assertEquals(1, assistantMessageContent.size());
         assertInstanceOf(TextContent.class, assistantMessageContent.getFirst());
         assertEquals("bye", ((TextContent) assistantMessageContent.getFirst()).getContent());

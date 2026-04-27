@@ -3,7 +3,6 @@ package com.hhoa.kline.core.core.tools.handlers;
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.services.ripgrep.RipgrepService;
 import com.hhoa.kline.core.core.services.telemetry.TelemetryService;
@@ -12,6 +11,7 @@ import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.TaskUtils;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.core.tools.specs.SearchFilesTool;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
@@ -92,7 +92,7 @@ public class SearchFilesToolHandler implements StateFullToolHandler {
     }
 
     @Override
-    public ClineToolSpec getClineToolSpec() {
+    public ToolSpec getToolSpec() {
         return SearchFilesTool.create(ModelFamily.GENERIC);
     }
 
@@ -260,15 +260,19 @@ public class SearchFilesToolHandler implements StateFullToolHandler {
 
         if (relDirPath == null || relDirPath.trim().isEmpty()) {
             context.getTaskState()
+                    .getApiTurnState()
                     .setConsecutiveMistakeCount(
-                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+                            context.getTaskState().getApiTurnState().getConsecutiveMistakeCount()
+                                    + 1);
             return HandlerUtils.createToolExecuteResult(
                     formatResponse.missingToolParameterError("path"));
         }
         if (regex == null || regex.trim().isEmpty()) {
             context.getTaskState()
+                    .getApiTurnState()
                     .setConsecutiveMistakeCount(
-                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+                            context.getTaskState().getApiTurnState().getConsecutiveMistakeCount()
+                                    + 1);
             return HandlerUtils.createToolExecuteResult(
                     formatResponse.missingToolParameterError("regex"));
         }
@@ -284,8 +288,10 @@ public class SearchFilesToolHandler implements StateFullToolHandler {
             searchPaths = determineSearchPaths(context, parsedPath, workspaceHint, relDirPath);
         } catch (Exception e) {
             context.getTaskState()
+                    .getApiTurnState()
                     .setConsecutiveMistakeCount(
-                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+                            context.getTaskState().getApiTurnState().getConsecutiveMistakeCount()
+                                    + 1);
             return HandlerUtils.createToolExecuteResult(
                     formatResponse.toolError("Error resolving search path: " + e.getMessage()));
         }
@@ -347,11 +353,13 @@ public class SearchFilesToolHandler implements StateFullToolHandler {
         // Reset or increment consecutiveMistakeCount based on search success
         boolean anySucceeded = searchResults.stream().anyMatch(r -> r.success);
         if (anySucceeded) {
-            context.getTaskState().setConsecutiveMistakeCount(0);
+            context.getTaskState().getApiTurnState().setConsecutiveMistakeCount(0);
         } else {
             context.getTaskState()
+                    .getApiTurnState()
                     .setConsecutiveMistakeCount(
-                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+                            context.getTaskState().getApiTurnState().getConsecutiveMistakeCount()
+                                    + 1);
         }
 
         if (context.getWorkspaceManager() != null

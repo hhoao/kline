@@ -1,7 +1,7 @@
 package com.hhoa.kline.core.core.tools.specs;
 
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.List;
 
@@ -18,7 +18,7 @@ public class WriteToFileTool extends BaseToolSpec {
     private static final String NATIVE_DESCRIPTION =
             "[IMPORTANT: Always output the absolutePath first] Request to write content to a file at the specified path. If the file exists, it will be overwritten with the provided content. If the file doesn't exist, it will be created. This tool will automatically create any directories needed to write the file.";
 
-    public static ClineToolSpec create(ModelFamily modelFamily) {
+    public static ToolSpec create(ModelFamily modelFamily) {
         if (modelFamily == ModelFamily.NATIVE_GPT_5
                 || modelFamily == ModelFamily.NATIVE_GPT_5_1
                 || modelFamily == ModelFamily.NATIVE_NEXT_GEN) {
@@ -28,8 +28,8 @@ public class WriteToFileTool extends BaseToolSpec {
         return createGenericVariant(modelFamily);
     }
 
-    private static ClineToolSpec createGenericVariant(ModelFamily modelFamily) {
-        return ClineToolSpec.builder()
+    private static ToolSpec createGenericVariant(ModelFamily modelFamily) {
+        return ToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.FILE_NEW.getValue())
                 .name(ClineDefaultTool.FILE_NEW.getValue())
@@ -50,8 +50,8 @@ public class WriteToFileTool extends BaseToolSpec {
                 .build();
     }
 
-    private static ClineToolSpec createNativeVariant(ModelFamily modelFamily) {
-        return ClineToolSpec.builder()
+    private static ToolSpec createNativeVariant(ModelFamily modelFamily) {
+        return ToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.FILE_NEW.getValue())
                 .name(ClineDefaultTool.FILE_NEW.getValue())

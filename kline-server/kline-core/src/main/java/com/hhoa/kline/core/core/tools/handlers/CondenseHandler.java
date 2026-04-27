@@ -7,10 +7,11 @@ import com.hhoa.kline.core.core.context.management.KeepStrategy;
 import com.hhoa.kline.core.core.integrations.misc.ExtractText;
 import com.hhoa.kline.core.core.integrations.notifications.NotificationType;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
+import com.hhoa.kline.core.core.tools.ToolParameterSpec;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
@@ -49,12 +50,12 @@ public class CondenseHandler implements StateFullToolHandler {
     }
 
     @Override
-    public ClineToolSpec getClineToolSpec() {
-        return ClineToolSpec.builder()
+    public ToolSpec getToolSpec() {
+        return ToolSpec.builder()
                 .name(ClineAsk.CONDENSE.getValue())
                 .parameters(
                         List.of(
-                                ClineToolSpec.ClineToolSpecParameter.builder()
+                                ToolParameterSpec.builder()
                                         .name("context")
                                         .required(true)
                                         .instruction("")

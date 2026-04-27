@@ -136,8 +136,8 @@ public final class TaskV2StartTaskHandler {
                     versionSupplier != null ? versionSupplier.get() : "unknown");
         }
 
-        taskState.setCurrentUserContent(userContent);
-        taskState.setCurrentIncludeFileDetails(true);
+        taskState.getApiTurnState().setCurrentUserContent(userContent);
+        taskState.getApiTurnState().setCurrentIncludeFileDetails(true);
         return true;
     }
 }

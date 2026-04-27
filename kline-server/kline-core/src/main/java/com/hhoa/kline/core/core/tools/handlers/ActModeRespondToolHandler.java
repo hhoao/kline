@@ -2,10 +2,10 @@ package com.hhoa.kline.core.core.tools.handlers;
 
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.shared.storage.types.Mode;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.core.tools.specs.ActModeRespondTool;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
@@ -32,7 +32,7 @@ public class ActModeRespondToolHandler implements ToolHandler {
     }
 
     @Override
-    public ClineToolSpec getClineToolSpec() {
+    public ToolSpec getToolSpec() {
         return ActModeRespondTool.create(ModelFamily.NATIVE_GPT_5);
     }
 
@@ -52,8 +52,10 @@ public class ActModeRespondToolHandler implements ToolHandler {
         // Only available in ACT mode
         if (!Mode.ACT.equals(context.getMode())) {
             context.getTaskState()
+                    .getApiTurnState()
                     .setConsecutiveMistakeCount(
-                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+                            context.getTaskState().getApiTurnState().getConsecutiveMistakeCount()
+                                    + 1);
             String modeName =
                     context.getMode() != null
                             ? context.getMode().getValue().toUpperCase()
@@ -66,7 +68,7 @@ public class ActModeRespondToolHandler implements ToolHandler {
                                     + " MODE. Please use the appropriate tool for your current mode."));
         }
 
-        context.getTaskState().setConsecutiveMistakeCount(0);
+        context.getTaskState().getApiTurnState().setConsecutiveMistakeCount(0);
 
         context.getCallbacks().say(ClineSay.TEXT, response, null, null, false, null);
 

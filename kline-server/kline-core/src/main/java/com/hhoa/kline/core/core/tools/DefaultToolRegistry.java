@@ -1,6 +1,5 @@
 package com.hhoa.kline.core.core.tools;
 
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.tools.handlers.AccessMcpResourceHandler;
 import com.hhoa.kline.core.core.tools.handlers.ActModeRespondToolHandler;
 import com.hhoa.kline.core.core.tools.handlers.ApplyPatchHandler;
@@ -96,21 +95,21 @@ public class DefaultToolRegistry implements ToolRegistry {
     }
 
     /** 动态子代理在提示里使用单参数 {@code prompt}，执行前校验必须与之一致（见 Cline 动态工具规格）。 */
-    private static ClineToolSpec executorSpecForDynamicSubagentTool(String toolName) {
+    private static ToolSpec executorSpecForDynamicSubagentTool(String toolName) {
         AgentConfigLoader loader = AgentConfigLoader.getInstance();
         String norm = loader.getNormalizedAgentNameForTool(toolName);
         AgentBaseConfig cfg = norm != null ? loader.getAllCachedConfigs().get(norm) : null;
         if (cfg == null) {
             return null;
         }
-        ClineToolSpec.ClineToolSpecParameter promptParam =
-                ClineToolSpec.ClineToolSpecParameter.builder()
+        ToolParameterSpec promptParam =
+                ToolParameterSpec.builder()
                         .name("prompt")
                         .required(true)
                         .instruction(
                                 "Helpful instruction for the task that the subagent will perform.")
                         .build();
-        return ClineToolSpec.builder()
+        return ToolSpec.builder()
                 .id(ClineDefaultTool.USE_SUBAGENTS.getValue())
                 .name(toolName)
                 .description(

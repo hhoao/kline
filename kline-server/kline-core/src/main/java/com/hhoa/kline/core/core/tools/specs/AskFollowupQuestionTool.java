@@ -1,8 +1,8 @@
 package com.hhoa.kline.core.core.tools.specs;
 
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.List;
 import java.util.function.Function;
@@ -23,7 +23,7 @@ public class AskFollowupQuestionTool extends BaseToolSpec {
     private static final Function<SystemPromptContext, Boolean> CONTEXT_REQUIREMENTS =
             (context) -> !Boolean.TRUE.equals(context.getYoloModeToggled());
 
-    public static ClineToolSpec create(ModelFamily modelFamily) {
+    public static ToolSpec create(ModelFamily modelFamily) {
         if (modelFamily == ModelFamily.NATIVE_GPT_5
                 || modelFamily == ModelFamily.NATIVE_GPT_5_1
                 || modelFamily == ModelFamily.NATIVE_NEXT_GEN) {
@@ -33,8 +33,8 @@ public class AskFollowupQuestionTool extends BaseToolSpec {
         return createGenericVariant(modelFamily);
     }
 
-    private static ClineToolSpec createGenericVariant(ModelFamily modelFamily) {
-        return ClineToolSpec.builder()
+    private static ToolSpec createGenericVariant(ModelFamily modelFamily) {
+        return ToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.ASK.getValue())
                 .name(ClineDefaultTool.ASK.getValue())
@@ -56,8 +56,8 @@ public class AskFollowupQuestionTool extends BaseToolSpec {
                 .build();
     }
 
-    private static ClineToolSpec createNativeVariant(ModelFamily modelFamily) {
-        return ClineToolSpec.builder()
+    private static ToolSpec createNativeVariant(ModelFamily modelFamily) {
+        return ToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.ASK.getValue())
                 .name(ClineDefaultTool.ASK.getValue())

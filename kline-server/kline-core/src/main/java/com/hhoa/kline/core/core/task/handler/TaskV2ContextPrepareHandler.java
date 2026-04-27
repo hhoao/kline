@@ -155,12 +155,12 @@ public final class TaskV2ContextPrepareHandler {
         }
 
         int maxConsecutiveMistakes = stateManager.getSettings().getMaxConsecutiveMistakes();
-        if (taskState.getConsecutiveMistakeCount() >= maxConsecutiveMistakes) {
+        if (taskState.getApiTurnState().getConsecutiveMistakeCount() >= maxConsecutiveMistakes) {
             // In yolo mode, don't wait for user input - fail the task
             if (stateManager.getSettings().isYoloModeToggled()) {
                 String errorMessage =
                         "[YOLO MODE] Task failed: Too many consecutive mistakes ("
-                                + taskState.getConsecutiveMistakeCount()
+                                + taskState.getApiTurnState().getConsecutiveMistakeCount()
                                 + "). "
                                 + "The model may not be capable enough for this task. Consider using a more capable model.";
                 sayAskHandler.say(ClineSay.ERROR, errorMessage);
@@ -179,8 +179,8 @@ public final class TaskV2ContextPrepareHandler {
             return new PrepareContextResult.MaxMistakeLimitReached(mistakeMessage);
         }
 
-        List<UserContentBlock> userContent = taskState.getCurrentUserContent();
-        boolean includeFileDetails = taskState.isCurrentIncludeFileDetails();
+        List<UserContentBlock> userContent = taskState.getApiTurnState().getCurrentUserContent();
+        boolean includeFileDetails = taskState.getApiTurnState().isCurrentIncludeFileDetails();
         if (userContent == null) {
             userContent = new ArrayList<>();
         }
@@ -207,7 +207,7 @@ public final class TaskV2ContextPrepareHandler {
                 break;
             }
         }
-        taskState.setCurrentPreviousApiReqIndex(previousApiReqIndex);
+        taskState.getApiTurnState().setCurrentPreviousApiReqIndex(previousApiReqIndex);
 
         final boolean isFirstRequest =
                 clineMessagesForIndex.stream()
@@ -441,7 +441,7 @@ public final class TaskV2ContextPrepareHandler {
                 log.error("Error in postStateToWebview callback: {}", e.getMessage(), e);
             }
         }
-        taskState.setNextUserMessageContent(processedContent);
+        taskState.getPresentationState().setNextUserMessageContent(processedContent);
 
         return new PrepareContextResult.Success();
     }
@@ -792,8 +792,10 @@ public final class TaskV2ContextPrepareHandler {
 
         boolean nativeToolCallsEnabled = resolveNativeToolCallingEnabled(apiProviderInfo);
         context.setEnableNativeToolCalls(nativeToolCallsEnabled);
-        context.setEnableParallelToolCalling(
-                ModelFamilyMatchers.isParallelToolCallingEnabled(false, apiProviderInfo));
+        boolean parallelToolCallingEnabled =
+                ModelFamilyMatchers.isParallelToolCallingEnabled(false, apiProviderInfo);
+        context.setEnableParallelToolCalling(parallelToolCallingEnabled);
+        taskState.getToolExecutionState().setEnableParallelToolCalling(parallelToolCallingEnabled);
 
         if (globalState != null && globalState.getTerminalExecutionMode() != null) {
             context.setTerminalExecutionMode(

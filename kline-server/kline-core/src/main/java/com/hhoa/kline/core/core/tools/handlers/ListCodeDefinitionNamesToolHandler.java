@@ -5,13 +5,13 @@ import static com.google.common.io.Files.getFileExtension;
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.TaskUtils;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.core.tools.specs.ListCodeDefinitionNamesTool;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
@@ -69,7 +69,7 @@ public class ListCodeDefinitionNamesToolHandler implements StateFullToolHandler 
     }
 
     @Override
-    public ClineToolSpec getClineToolSpec() {
+    public ToolSpec getToolSpec() {
         return ListCodeDefinitionNamesTool.create(ModelFamily.GENERIC);
     }
 
@@ -133,8 +133,10 @@ public class ListCodeDefinitionNamesToolHandler implements StateFullToolHandler 
             result = parseCodeDefinitions(Paths.get(absolutePath), context);
         } catch (Exception e) {
             context.getTaskState()
+                    .getApiTurnState()
                     .setConsecutiveMistakeCount(
-                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+                            context.getTaskState().getApiTurnState().getConsecutiveMistakeCount()
+                                    + 1);
             String errorMessage = e.getMessage() != null ? e.getMessage() : String.valueOf(e);
             return HandlerUtils.createToolExecuteResult(
                     formatResponse.toolError("Error listing code definitions: " + errorMessage));
@@ -148,14 +150,16 @@ public class ListCodeDefinitionNamesToolHandler implements StateFullToolHandler 
                         || result.contains("The specified path is not a directory");
         if (isErrorResult) {
             context.getTaskState()
+                    .getApiTurnState()
                     .setConsecutiveMistakeCount(
-                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+                            context.getTaskState().getApiTurnState().getConsecutiveMistakeCount()
+                                    + 1);
             return HandlerUtils.createToolExecuteResult(formatResponse.toolError(result));
         }
 
         // Only reset after a successful operation so repeated failures
         // accumulate toward the yolo-mode mistake limit.
-        context.getTaskState().setConsecutiveMistakeCount(0);
+        context.getTaskState().getApiTurnState().setConsecutiveMistakeCount(0);
 
         Map<String, Object> completeMessageMap = new HashMap<>();
         completeMessageMap.put("tool", "listCodeDefinitionNames");

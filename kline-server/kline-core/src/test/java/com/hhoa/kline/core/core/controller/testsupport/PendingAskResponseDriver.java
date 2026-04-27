@@ -37,7 +37,7 @@ public final class PendingAskResponseDriver {
             if (s == TaskStatus.ABORT) {
                 fail("expected TASK_COMPLETE, got ABORT");
             }
-            var pending = task.getTaskState().getPendingAskTokens();
+            var pending = task.getTaskState().getToolExecutionState().getPendingAskTokens();
             if (!pending.isEmpty()) {
                 var entry = pending.entrySet().iterator().next();
                 String pendingId = entry.getKey();

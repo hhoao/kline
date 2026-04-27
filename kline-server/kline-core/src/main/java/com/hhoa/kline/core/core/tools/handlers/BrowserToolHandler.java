@@ -2,10 +2,10 @@ package com.hhoa.kline.core.core.tools.handlers;
 
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
@@ -53,7 +53,7 @@ public class BrowserToolHandler implements StateFullToolHandler {
     }
 
     @Override
-    public ClineToolSpec getClineToolSpec() {
+    public ToolSpec getToolSpec() {
         return null;
     }
 
@@ -102,8 +102,10 @@ public class BrowserToolHandler implements StateFullToolHandler {
 
         if (!VALID_ACTIONS.contains(action)) {
             context.getTaskState()
+                    .getApiTurnState()
                     .setConsecutiveMistakeCount(
-                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+                            context.getTaskState().getApiTurnState().getConsecutiveMistakeCount()
+                                    + 1);
             return new ToolExecuteResult.Immediate(
                     HandlerUtils.createTextBlocks(
                             context.getCallbacks()
@@ -113,14 +115,18 @@ public class BrowserToolHandler implements StateFullToolHandler {
         if ("launch".equals(action)) {
             if (url == null || url.isEmpty()) {
                 context.getTaskState()
+                        .getApiTurnState()
                         .setConsecutiveMistakeCount(
-                                context.getTaskState().getConsecutiveMistakeCount() + 1);
+                                context.getTaskState()
+                                                .getApiTurnState()
+                                                .getConsecutiveMistakeCount()
+                                        + 1);
                 return new ToolExecuteResult.Immediate(
                         HandlerUtils.createTextBlocks(
                                 context.getCallbacks()
                                         .sayAndCreateMissingParamError(getName(), "url")));
             }
-            context.getTaskState().setConsecutiveMistakeCount(0);
+            context.getTaskState().getApiTurnState().setConsecutiveMistakeCount(0);
 
             // 检查自动审批
             Boolean autoApprove = context.getCallbacks().shouldAutoApproveTool(block.getName());
@@ -150,8 +156,10 @@ public class BrowserToolHandler implements StateFullToolHandler {
         // 非 launch 操作
         if ("click".equals(action) && (coordinate == null || coordinate.isEmpty())) {
             context.getTaskState()
+                    .getApiTurnState()
                     .setConsecutiveMistakeCount(
-                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+                            context.getTaskState().getApiTurnState().getConsecutiveMistakeCount()
+                                    + 1);
             return new ToolExecuteResult.Immediate(
                     HandlerUtils.createTextBlocks(
                             context.getCallbacks()
@@ -159,15 +167,17 @@ public class BrowserToolHandler implements StateFullToolHandler {
         }
         if ("type".equals(action) && (text == null || text.isEmpty())) {
             context.getTaskState()
+                    .getApiTurnState()
                     .setConsecutiveMistakeCount(
-                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+                            context.getTaskState().getApiTurnState().getConsecutiveMistakeCount()
+                                    + 1);
             return new ToolExecuteResult.Immediate(
                     HandlerUtils.createTextBlocks(
                             context.getCallbacks()
                                     .sayAndCreateMissingParamError(getName(), "text")));
         }
 
-        context.getTaskState().setConsecutiveMistakeCount(0);
+        context.getTaskState().getApiTurnState().setConsecutiveMistakeCount(0);
 
         String message =
                 "{\"action\":\""

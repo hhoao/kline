@@ -5,6 +5,7 @@ import com.hhoa.kline.core.core.context.tracking.FileContextTracker;
 import com.hhoa.kline.core.core.ignore.ClineIgnoreController;
 import com.hhoa.kline.core.core.integrations.editor.DiffViewProvider;
 import com.hhoa.kline.core.core.integrations.notifications.NotificationService;
+import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
 import com.hhoa.kline.core.core.services.mcp.IMcpHub;
 import com.hhoa.kline.core.core.services.telemetry.TelemetryService;
 import com.hhoa.kline.core.core.shared.AutoApprovalSettings;
@@ -69,6 +70,8 @@ public class ToolContext {
     private ToolState toolState;
 
     private AutoApprove autoApprover;
+
+    private SystemPromptContext systemPromptContext;
 
     public interface Api {
         Model getModel();

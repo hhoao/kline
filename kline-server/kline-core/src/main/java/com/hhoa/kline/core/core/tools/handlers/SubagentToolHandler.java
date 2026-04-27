@@ -3,11 +3,11 @@ package com.hhoa.kline.core.core.tools.handlers;
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.core.tools.specs.SubagentTool;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
@@ -58,7 +58,7 @@ public class SubagentToolHandler implements StateFullToolHandler {
     }
 
     @Override
-    public ClineToolSpec getClineToolSpec() {
+    public ToolSpec getToolSpec() {
         return SubagentTool.create(ModelFamily.GENERIC);
     }
 
@@ -85,8 +85,10 @@ public class SubagentToolHandler implements StateFullToolHandler {
 
         if (prompts.isEmpty()) {
             context.getTaskState()
+                    .getApiTurnState()
                     .setConsecutiveMistakeCount(
-                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+                            context.getTaskState().getApiTurnState().getConsecutiveMistakeCount()
+                                    + 1);
             return HandlerUtils.createToolExecuteResult(
                     formatResponse.toolError(
                             "Missing required parameter: provide 'prompt' or at least 'prompt_1'."));
@@ -94,8 +96,10 @@ public class SubagentToolHandler implements StateFullToolHandler {
 
         if (prompts.size() > MAX_SUBAGENT_PROMPTS) {
             context.getTaskState()
+                    .getApiTurnState()
                     .setConsecutiveMistakeCount(
-                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+                            context.getTaskState().getApiTurnState().getConsecutiveMistakeCount()
+                                    + 1);
             return HandlerUtils.createToolExecuteResult(
                     formatResponse.toolError(
                             "Too many subagent prompts provided ("

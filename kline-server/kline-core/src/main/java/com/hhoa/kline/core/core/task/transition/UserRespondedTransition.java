@@ -23,11 +23,17 @@ public class UserRespondedTransition implements SingleArcTransition<TaskV2, Task
         AskResult askResult = responded.getAskResult();
 
         PendingAskToken pendingAskToken =
-                taskState.getPendingAskTokens().get(responded.getPendingId());
+                taskState
+                        .getToolExecutionState()
+                        .getPendingAskTokens()
+                        .get(responded.getPendingId());
         if (pendingAskToken == null) {
             taskState.getPendingUserResponses().offer(askResult);
         } else {
-            taskState.getPendingAskTokens().remove(responded.getPendingId());
+            taskState
+                    .getToolExecutionState()
+                    .getPendingAskTokens()
+                    .remove(responded.getPendingId());
             ClineAsk askType = pendingAskToken.getAskType();
 
             switch (askType) {
@@ -53,7 +59,7 @@ public class UserRespondedTransition implements SingleArcTransition<TaskV2, Task
     }
 
     private void handleMistakeLimitReached(TaskV2 operand, AskResult askResult) {
-        operand.getTaskState().setConsecutiveMistakeCount(0);
+        operand.getTaskState().getApiTurnState().setConsecutiveMistakeCount(0);
         if (askResult.getResponse() == ClineAskResponse.YES_BUTTON_CLICKED) {
             operand.handle(new PrepareContextEvent(operand.getTaskId()));
         } else if (askResult.getResponse() == ClineAskResponse.NO_BUTTON_CLICKED) {

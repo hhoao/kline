@@ -1,8 +1,8 @@
 package com.hhoa.kline.core.core.tools.specs;
 
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.List;
 import java.util.function.Function;
@@ -14,12 +14,12 @@ import java.util.function.Function;
  */
 public class UseMcpToolTool extends BaseToolSpec {
 
-    public static ClineToolSpec create(ModelFamily modelFamily) {
+    public static ToolSpec create(ModelFamily modelFamily) {
         // 只有在 mcpHub 存在时才显示此工具
         Function<SystemPromptContext, Boolean> contextRequirements =
                 (context) -> context.getMcpHub() != null;
 
-        return ClineToolSpec.builder()
+        return ToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.MCP_USE.getValue())
                 .name(ClineDefaultTool.MCP_USE.getValue())

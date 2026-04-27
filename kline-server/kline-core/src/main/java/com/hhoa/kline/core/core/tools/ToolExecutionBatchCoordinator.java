@@ -1,5 +1,6 @@
 package com.hhoa.kline.core.core.tools;
 
+import com.hhoa.kline.core.core.assistant.TextContentBlock;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.tools.handlers.ToolHandler;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
@@ -7,6 +8,8 @@ import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Function;
 
 /**
@@ -16,10 +19,18 @@ import java.util.function.Function;
  * ordered execution. Results are returned in input order.
  */
 public class ToolExecutionBatchCoordinator {
+    private static final int DEFAULT_MAX_CONCURRENCY = 10;
+
     private final ToolExecutor toolExecutor;
+    private final int maxConcurrency;
 
     public ToolExecutionBatchCoordinator(ToolExecutor toolExecutor) {
+        this(toolExecutor, DEFAULT_MAX_CONCURRENCY);
+    }
+
+    public ToolExecutionBatchCoordinator(ToolExecutor toolExecutor, int maxConcurrency) {
         this.toolExecutor = toolExecutor;
+        this.maxConcurrency = Math.max(1, maxConcurrency);
     }
 
     public BatchResult execute(
@@ -62,12 +73,13 @@ public class ToolExecutionBatchCoordinator {
                 index++;
             }
             List<ExecutionResult> results = executeConcurrentRun(safeRun);
-            completed.addAll(results);
-            if (results.stream()
-                    .anyMatch(result -> result.result() instanceof ToolExecuteResult.PendingAsk)) {
+            int pendingIndex = indexOfPendingAsk(results);
+            if (pendingIndex >= 0) {
+                completed.addAll(results.subList(0, pendingIndex + 1));
                 hasPendingAsk = true;
                 break;
             }
+            completed.addAll(results);
         }
 
         return new BatchResult(completed, hasPendingAsk);
@@ -83,21 +95,51 @@ public class ToolExecutionBatchCoordinator {
     }
 
     private List<ExecutionResult> executeConcurrentRun(List<PreparedTool> tools) {
+        int poolSize = Math.min(maxConcurrency, tools.size());
+        ExecutorService executor = Executors.newFixedThreadPool(poolSize);
         List<CompletableFuture<ExecutionResult>> futures =
                 tools.stream()
-                        .map(tool -> CompletableFuture.supplyAsync(() -> executePrepared(tool)))
+                        .map(
+                                tool ->
+                                        CompletableFuture.supplyAsync(
+                                                () -> executePrepared(tool), executor))
                         .toList();
 
-        List<ExecutionResult> results = new ArrayList<>();
-        for (CompletableFuture<ExecutionResult> future : futures) {
-            results.add(future.join());
+        try {
+            List<ExecutionResult> results = new ArrayList<>();
+            for (CompletableFuture<ExecutionResult> future : futures) {
+                results.add(future.join());
+            }
+            return results;
+        } finally {
+            executor.shutdownNow();
         }
-        return results;
     }
 
     private ExecutionResult executePrepared(PreparedTool prepared) {
-        ToolExecuteResult result = toolExecutor.executeTool(prepared.toolUse(), prepared.context());
+        ToolExecuteResult result;
+        try {
+            result = toolExecutor.executeTool(prepared.toolUse(), prepared.context());
+        } catch (RuntimeException error) {
+            result =
+                    new ToolExecuteResult.Immediate(
+                            List.of(
+                                    new TextContentBlock(
+                                            "Error executing "
+                                                    + prepared.toolUse().getName()
+                                                    + ": "
+                                                    + error.getMessage())));
+        }
         return new ExecutionResult(prepared.toolUse(), result, prepared.description());
+    }
+
+    private int indexOfPendingAsk(List<ExecutionResult> results) {
+        for (int i = 0; i < results.size(); i++) {
+            if (results.get(i).result() instanceof ToolExecuteResult.PendingAsk) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private record PreparedTool(

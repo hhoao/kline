@@ -22,7 +22,7 @@ public class ApiCallingTransition implements SingleArcTransition<TaskV2, TaskEve
         CompletableFuture.runAsync(
                         () -> {
                             ApiRequestResult result = operand.getApiCallHandler().doCallApi();
-                            operand.getTaskState().setApiRequestResult(result);
+                            operand.getTaskState().getApiTurnState().setApiRequestResult(result);
 
                             if (result.getExistState() instanceof ExistState.Abort) {
                                 operand.handle(new AbortTaskEvent(operand.getTaskId()));

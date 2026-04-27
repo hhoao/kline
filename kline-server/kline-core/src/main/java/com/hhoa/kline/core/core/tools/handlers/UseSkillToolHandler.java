@@ -5,10 +5,10 @@ import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.context.instructions.userinstructions.SkillContent;
 import com.hhoa.kline.core.core.context.instructions.userinstructions.SkillDiscovery;
 import com.hhoa.kline.core.core.context.instructions.userinstructions.SkillMetadata;
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.storage.GlobalFileNames;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.core.tools.specs.UseSkillTool;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
@@ -36,7 +36,7 @@ public class UseSkillToolHandler implements ToolHandler {
     }
 
     @Override
-    public ClineToolSpec getClineToolSpec() {
+    public ToolSpec getToolSpec() {
         return UseSkillTool.create(ModelFamily.GENERIC);
     }
 
@@ -54,8 +54,10 @@ public class UseSkillToolHandler implements ToolHandler {
         String skillName = HandlerUtils.getStringParam(block, "skill_name");
         if (skillName == null || skillName.isBlank()) {
             context.getTaskState()
+                    .getApiTurnState()
                     .setConsecutiveMistakeCount(
-                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+                            context.getTaskState().getApiTurnState().getConsecutiveMistakeCount()
+                                    + 1);
             return HandlerUtils.createToolExecuteResult(
                     "Error: Missing required parameter 'skill_name'. Please provide the name of the skill to activate.");
         }
@@ -107,7 +109,7 @@ public class UseSkillToolHandler implements ToolHandler {
                             + (availableNames.isBlank() ? "none" : availableNames));
         }
 
-        context.getTaskState().setConsecutiveMistakeCount(0);
+        context.getTaskState().getApiTurnState().setConsecutiveMistakeCount(0);
         String skillDirectory =
                 skillContent
                         .getPath()

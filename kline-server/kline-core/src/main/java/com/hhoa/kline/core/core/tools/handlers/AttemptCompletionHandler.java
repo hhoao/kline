@@ -7,7 +7,6 @@ import com.hhoa.kline.core.core.assistant.UserContentBlock;
 import com.hhoa.kline.core.core.integrations.misc.ExtractText;
 import com.hhoa.kline.core.core.integrations.notifications.NotificationType;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineAskResponse;
@@ -15,6 +14,7 @@ import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.ClineMessage;
 import com.hhoa.kline.core.core.task.MessageUtils;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.core.tools.specs.AttemptCompletionTool;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
@@ -71,7 +71,7 @@ public class AttemptCompletionHandler implements StateFullToolHandler {
     }
 
     @Override
-    public ClineToolSpec getClineToolSpec() {
+    public ToolSpec getToolSpec() {
         return AttemptCompletionTool.create(ModelFamily.GENERIC);
     }
 
@@ -185,13 +185,13 @@ public class AttemptCompletionHandler implements StateFullToolHandler {
 
         List<UserContentBlock> cmdResult;
         if (!approved) {
-            context.getTaskState().setDidRejectTool(true);
+            context.getTaskState().getToolExecutionState().setDidRejectTool(true);
             cmdResult = HandlerUtils.createTextBlocks(formatResponse.toolDenied());
         } else {
             ToolContext.ExecuteResult exec =
                     context.getCallbacks().executeCommandTool(state.getCommand(), null);
             if (exec.userRejected) {
-                context.getTaskState().setDidRejectTool(true);
+                context.getTaskState().getToolExecutionState().setDidRejectTool(true);
             }
             cmdResult = HandlerUtils.createTextBlocks(exec.result);
         }

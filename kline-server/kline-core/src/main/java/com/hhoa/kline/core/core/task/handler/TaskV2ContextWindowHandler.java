@@ -62,6 +62,6 @@ public final class TaskV2ContextWindowHandler {
 
         messageStateHandler.saveClineMessagesAndUpdateHistory();
 
-        taskState.setDidAutomaticallyRetryFailedApiRequest(true);
+        taskState.getApiTurnState().setDidAutomaticallyRetryFailedApiRequest(true);
     }
 }

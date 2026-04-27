@@ -4,13 +4,14 @@ import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.integrations.misc.ExtractText;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.shared.api.ApiProvider;
 import com.hhoa.kline.core.core.shared.storage.types.Mode;
 import com.hhoa.kline.core.core.task.AskResult;
+import com.hhoa.kline.core.core.tools.ToolParameterSpec;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
@@ -63,36 +64,36 @@ public class ReportBugHandler implements StateFullToolHandler {
     }
 
     @Override
-    public ClineToolSpec getClineToolSpec() {
-        return ClineToolSpec.builder()
+    public ToolSpec getToolSpec() {
+        return ToolSpec.builder()
                 .name(ClineAsk.REPORT_BUG.getValue())
                 .parameters(
                         List.of(
-                                ClineToolSpec.ClineToolSpecParameter.builder()
+                                ToolParameterSpec.builder()
                                         .name("title")
                                         .required(true)
                                         .instruction("")
                                         .usage("")
                                         .build(),
-                                ClineToolSpec.ClineToolSpecParameter.builder()
+                                ToolParameterSpec.builder()
                                         .name("what_happened")
                                         .required(true)
                                         .instruction("")
                                         .usage("")
                                         .build(),
-                                ClineToolSpec.ClineToolSpecParameter.builder()
+                                ToolParameterSpec.builder()
                                         .name("steps_to_reproduce")
                                         .required(true)
                                         .instruction("")
                                         .usage("")
                                         .build(),
-                                ClineToolSpec.ClineToolSpecParameter.builder()
+                                ToolParameterSpec.builder()
                                         .name("api_request_output")
                                         .required(true)
                                         .instruction("")
                                         .usage("")
                                         .build(),
-                                ClineToolSpec.ClineToolSpecParameter.builder()
+                                ToolParameterSpec.builder()
                                         .name("additional_context")
                                         .required(true)
                                         .instruction("")

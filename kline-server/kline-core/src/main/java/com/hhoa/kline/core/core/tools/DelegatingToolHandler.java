@@ -1,7 +1,6 @@
 package com.hhoa.kline.core.core.tools;
 
 import com.hhoa.kline.core.core.assistant.ToolUse;
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.tools.handlers.ToolHandler;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
@@ -12,13 +11,13 @@ public final class DelegatingToolHandler implements ToolHandler {
 
     private final String name;
     private final ToolHandler delegate;
-    private final ClineToolSpec specOverride;
+    private final ToolSpec specOverride;
 
     public DelegatingToolHandler(String name, ToolHandler delegate) {
         this(name, delegate, null);
     }
 
-    public DelegatingToolHandler(String name, ToolHandler delegate, ClineToolSpec specOverride) {
+    public DelegatingToolHandler(String name, ToolHandler delegate, ToolSpec specOverride) {
         this.name = name;
         this.delegate = delegate;
         this.specOverride = specOverride;
@@ -45,7 +44,7 @@ public final class DelegatingToolHandler implements ToolHandler {
     }
 
     @Override
-    public ClineToolSpec getClineToolSpec() {
-        return specOverride != null ? specOverride : delegate.getClineToolSpec();
+    public ToolSpec getToolSpec() {
+        return specOverride != null ? specOverride : delegate.getToolSpec();
     }
 }

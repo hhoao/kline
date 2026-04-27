@@ -4,12 +4,13 @@ import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.integrations.misc.ExtractText;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.shared.storage.types.Mode;
 import com.hhoa.kline.core.core.task.AskResult;
+import com.hhoa.kline.core.core.tools.ToolParameterSpec;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
@@ -53,12 +54,12 @@ public class PlanModeRespondHandler implements StateFullToolHandler {
     }
 
     @Override
-    public ClineToolSpec getClineToolSpec() {
-        return ClineToolSpec.builder()
+    public ToolSpec getToolSpec() {
+        return ToolSpec.builder()
                 .name(ClineAsk.PLAN_MODE_RESPOND.getValue())
                 .parameters(
                         List.of(
-                                ClineToolSpec.ClineToolSpecParameter.builder()
+                                ToolParameterSpec.builder()
                                         .name("response")
                                         .required(true)
                                         .instruction("")
@@ -90,12 +91,14 @@ public class PlanModeRespondHandler implements StateFullToolHandler {
         // Validate required parameters
         if (response == null || response.trim().isEmpty()) {
             context.getTaskState()
+                    .getApiTurnState()
                     .setConsecutiveMistakeCount(
-                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+                            context.getTaskState().getApiTurnState().getConsecutiveMistakeCount()
+                                    + 1);
             return HandlerUtils.createToolExecuteResult(
                     new ResponseFormatter().missingToolParameterError("response"));
         }
-        context.getTaskState().setConsecutiveMistakeCount(0);
+        context.getTaskState().getApiTurnState().setConsecutiveMistakeCount(0);
 
         if (needsMoreExploration) {
             return HandlerUtils.createToolExecuteResult(

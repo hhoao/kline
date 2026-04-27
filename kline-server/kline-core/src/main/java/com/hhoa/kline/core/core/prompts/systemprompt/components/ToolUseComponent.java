@@ -1,6 +1,5 @@
 package com.hhoa.kline.core.core.prompts.systemprompt.components;
 
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.PromptVariant;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptComponent;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
@@ -8,6 +7,8 @@ import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptSection;
 import com.hhoa.kline.core.core.prompts.systemprompt.registry.PromptBuilder;
 import com.hhoa.kline.core.core.prompts.systemprompt.templates.TemplateEngine;
 import com.hhoa.kline.core.core.shared.proto.cline.Viewport;
+import com.hhoa.kline.core.core.tools.ToolParameterSpec;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -361,7 +362,7 @@ public class ToolUseComponent implements SystemPromptComponent {
      * @return 工具描述字符串，如果工具应被跳过则返回 null
      */
     private String buildToolDescription(
-            ClineToolSpec spec, SystemPromptContext context, List<String> allToolIds) {
+            ToolSpec spec, SystemPromptContext context, List<String> allToolIds) {
         boolean hasDesc = spec.getDescription() != null && !spec.getDescription().isBlank();
         boolean hasParams = spec.getParameters() != null && !spec.getParameters().isEmpty();
         if (!hasDesc && !hasParams) {
@@ -383,7 +384,7 @@ public class ToolUseComponent implements SystemPromptComponent {
         StringBuilder sb = new StringBuilder();
         sb.append("## ").append(spec.getId()).append('\n');
 
-        List<ClineToolSpec.ClineToolSpecParameter> filteredParams =
+        List<ToolParameterSpec> filteredParams =
                 filterParameters(spec.getParameters(), context, allToolIds);
 
         List<String> descriptionLines = new ArrayList<>();
@@ -440,8 +441,8 @@ public class ToolUseComponent implements SystemPromptComponent {
      * @param allToolIds 所有工具 ID 列表
      * @return 过滤后的参数列表
      */
-    private List<ClineToolSpec.ClineToolSpecParameter> filterParameters(
-            List<ClineToolSpec.ClineToolSpecParameter> parameters,
+    private List<ToolParameterSpec> filterParameters(
+            List<ToolParameterSpec> parameters,
             SystemPromptContext context,
             List<String> allToolIds) {
         if (parameters == null || parameters.isEmpty()) {

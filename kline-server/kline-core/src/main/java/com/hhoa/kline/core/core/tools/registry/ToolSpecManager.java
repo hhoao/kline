@@ -1,9 +1,9 @@
 package com.hhoa.kline.core.core.tools.registry;
 
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpecConverter;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
+import com.hhoa.kline.core.core.tools.ToolSpec;
+import com.hhoa.kline.core.core.tools.ToolSpecConverter;
 import com.hhoa.kline.core.core.tools.specs.AccessMcpResourceTool;
 import com.hhoa.kline.core.core.tools.specs.ActModeRespondTool;
 import com.hhoa.kline.core.core.tools.specs.ApplyPatchTool;
@@ -41,10 +41,10 @@ import java.util.function.Function;
 
 public class ToolSpecManager {
 
-    private static final Map<ModelFamily, Set<ClineToolSpec>> VARIANTS = new ConcurrentHashMap<>();
+    private static final Map<ModelFamily, Set<ToolSpec>> VARIANTS = new ConcurrentHashMap<>();
     private static final String PLAN_MODE_RESPOND_ID = ClineDefaultTool.PLAN_MODE.getValue();
 
-    private static final List<Function<ModelFamily, ClineToolSpec>> STATIC_TOOL_SUPPLIERS =
+    private static final List<Function<ModelFamily, ToolSpec>> STATIC_TOOL_SUPPLIERS =
             List.of(
                     AccessMcpResourceTool::create,
                     ActModeRespondTool::create,
@@ -72,9 +72,9 @@ public class ToolSpecManager {
 
     static {
         for (ModelFamily family : ModelFamily.values()) {
-            Set<ClineToolSpec> set = VARIANTS.computeIfAbsent(family, k -> new LinkedHashSet<>());
+            Set<ToolSpec> set = VARIANTS.computeIfAbsent(family, k -> new LinkedHashSet<>());
             for (var supplier : STATIC_TOOL_SUPPLIERS) {
-                ClineToolSpec spec = supplier.apply(family);
+                ToolSpec spec = supplier.apply(family);
                 if (spec == null) {
                     continue;
                 }
@@ -86,10 +86,10 @@ public class ToolSpecManager {
         }
     }
 
-    public static ClineToolSpec register(ClineToolSpec config) {
+    public static ToolSpec register(ToolSpec config) {
         ModelFamily variant =
                 config.getVariant() != null ? config.getVariant() : ModelFamily.GENERIC;
-        Set<ClineToolSpec> existing = VARIANTS.computeIfAbsent(variant, k -> new LinkedHashSet<>());
+        Set<ToolSpec> existing = VARIANTS.computeIfAbsent(variant, k -> new LinkedHashSet<>());
         if (existing.stream()
                 .noneMatch(t -> t.getId() != null && t.getId().equals(config.getId()))) {
             existing.add(config);
@@ -97,19 +97,17 @@ public class ToolSpecManager {
         return config;
     }
 
-    public static List<ClineToolSpec> getTools(ModelFamily variant) {
-        Set<ClineToolSpec> toolsSet = VARIANTS.get(variant);
-        Set<ClineToolSpec> defaultSet = VARIANTS.get(ModelFamily.GENERIC);
-        Set<ClineToolSpec> source =
-                (toolsSet != null && !toolsSet.isEmpty()) ? toolsSet : defaultSet;
+    public static List<ToolSpec> getTools(ModelFamily variant) {
+        Set<ToolSpec> toolsSet = VARIANTS.get(variant);
+        Set<ToolSpec> defaultSet = VARIANTS.get(ModelFamily.GENERIC);
+        Set<ToolSpec> source = (toolsSet != null && !toolsSet.isEmpty()) ? toolsSet : defaultSet;
         return source != null ? new ArrayList<>(source) : List.of();
     }
 
-    public static List<ClineToolSpec> getToolSpecs(
-            ModelFamily variant, SystemPromptContext context) {
-        List<ClineToolSpec> list = new ArrayList<>(getTools(variant));
+    public static List<ToolSpec> getToolSpecs(ModelFamily variant, SystemPromptContext context) {
+        List<ToolSpec> list = new ArrayList<>(getTools(variant));
         list.removeIf(spec -> PLAN_MODE_RESPOND_ID.equals(spec.getId()));
-        ClineToolSpec planModeSpec = PlanModeRespondTool.create(variant, context);
+        ToolSpec planModeSpec = PlanModeRespondTool.create(variant, context);
         if (planModeSpec != null) {
             list.add(planModeSpec);
         }
@@ -121,8 +119,8 @@ public class ToolSpecManager {
         return new ArrayList<>(VARIANTS.keySet().stream().map(Enum::name).toList());
     }
 
-    public static ClineToolSpec getToolByName(String toolName, ModelFamily variant) {
-        List<ClineToolSpec> tools = getTools(variant);
+    public static ToolSpec getToolByName(String toolName, ModelFamily variant) {
+        List<ToolSpec> tools = getTools(variant);
         if (tools.isEmpty()) {
             return null;
         }
@@ -132,18 +130,18 @@ public class ToolSpecManager {
                 .orElse(null);
     }
 
-    public static ClineToolSpec getToolByNameWithFallback(String toolName, ModelFamily variant) {
-        ClineToolSpec exact = getToolByName(toolName, variant);
+    public static ToolSpec getToolByNameWithFallback(String toolName, ModelFamily variant) {
+        ToolSpec exact = getToolByName(toolName, variant);
         if (exact != null) {
             return exact;
         }
-        ClineToolSpec generic = getToolByName(toolName, ModelFamily.GENERIC);
+        ToolSpec generic = getToolByName(toolName, ModelFamily.GENERIC);
         if (generic != null) {
             return generic;
         }
         for (ModelFamily family : EnumSet.allOf(ModelFamily.class)) {
             if (family != variant && family != ModelFamily.GENERIC) {
-                ClineToolSpec found = getToolByName(toolName, family);
+                ToolSpec found = getToolByName(toolName, family);
                 if (found != null) {
                     return found;
                 }
@@ -152,16 +150,16 @@ public class ToolSpecManager {
         return null;
     }
 
-    public static List<ClineToolSpec> getToolsForVariantWithFallback(
+    public static List<ToolSpec> getToolsForVariantWithFallback(
             ModelFamily variant, List<String> requestedIds) {
         return getToolsForVariantWithFallback(variant, requestedIds, null);
     }
 
-    public static List<ClineToolSpec> getToolsForVariantWithFallback(
+    public static List<ToolSpec> getToolsForVariantWithFallback(
             ModelFamily variant, List<String> requestedIds, SystemPromptContext context) {
-        List<ClineToolSpec> resolved = new ArrayList<>();
+        List<ToolSpec> resolved = new ArrayList<>();
         for (String id : requestedIds) {
-            ClineToolSpec tool;
+            ToolSpec tool;
             if (PLAN_MODE_RESPOND_ID.equals(id) && context != null) {
                 tool = PlanModeRespondTool.create(variant, context);
             } else {
@@ -175,9 +173,8 @@ public class ToolSpecManager {
     }
 
     /** 获取经过上下文过滤的已启用工具列表。 对应 TS ClineToolSet.getEnabledTools() */
-    public static List<ClineToolSpec> getEnabledTools(
-            ModelFamily variant, SystemPromptContext context) {
-        List<ClineToolSpec> allTools = getToolSpecs(variant, context);
+    public static List<ToolSpec> getEnabledTools(ModelFamily variant, SystemPromptContext context) {
+        List<ToolSpec> allTools = getToolSpecs(variant, context);
         return allTools.stream()
                 .filter(
                         tool -> {
@@ -199,20 +196,19 @@ public class ToolSpecManager {
      *
      * @param variant 模型家族
      * @param context 系统提示上下文
-     * @param converter 工具转换函数，将 ClineToolSpec 转为提供商格式的 Map
+     * @param converter 工具转换函数，将 ToolSpec 转为提供商格式的 Map
      * @return 原生工具定义列表
      */
     public static List<Map<String, Object>> getNativeTools(
             ModelFamily variant,
             SystemPromptContext context,
-            Function<ClineToolSpecConverter.ToolConversionInput, Map<String, Object>> converter) {
-        List<ClineToolSpec> enabledTools = getEnabledTools(variant, context);
+            Function<ToolSpecConverter.ToolConversionInput, Map<String, Object>> converter) {
+        List<ToolSpec> enabledTools = getEnabledTools(variant, context);
         List<Map<String, Object>> result = new ArrayList<>();
-        for (ClineToolSpec tool : enabledTools) {
+        for (ToolSpec tool : enabledTools) {
             try {
                 result.add(
-                        converter.apply(
-                                new ClineToolSpecConverter.ToolConversionInput(tool, context)));
+                        converter.apply(new ToolSpecConverter.ToolConversionInput(tool, context)));
             } catch (Exception e) {
                 // 跳过不满足上下文要求的工具
             }

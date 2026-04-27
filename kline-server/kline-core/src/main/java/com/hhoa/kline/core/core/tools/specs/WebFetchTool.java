@@ -1,7 +1,8 @@
 package com.hhoa.kline.core.core.tools.specs;
 
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
+import com.hhoa.kline.core.core.tools.ToolParameterSpec;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.List;
 
@@ -28,14 +29,14 @@ public class WebFetchTool extends BaseToolSpec {
                     + "IMPORTANT: If an MCP-provided web fetch tool is available, prefer using that tool "
                     + "instead of this one, as it may have fewer restrictions.";
 
-    public static ClineToolSpec create(ModelFamily modelFamily) {
+    public static ToolSpec create(ModelFamily modelFamily) {
         boolean isNative =
                 modelFamily == ModelFamily.NATIVE_GPT_5
                         || modelFamily == ModelFamily.NATIVE_NEXT_GEN;
 
         String description = isNative ? CONCISE_DESCRIPTION : GENERIC_DESCRIPTION;
 
-        List<ClineToolSpec.ClineToolSpecParameter> parameters;
+        List<ToolParameterSpec> parameters;
         if (isNative) {
             parameters =
                     List.of(
@@ -62,7 +63,7 @@ public class WebFetchTool extends BaseToolSpec {
                             createTaskProgressParameter());
         }
 
-        return ClineToolSpec.builder()
+        return ToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.WEB_FETCH.getValue())
                 .name(ClineDefaultTool.WEB_FETCH.getValue())

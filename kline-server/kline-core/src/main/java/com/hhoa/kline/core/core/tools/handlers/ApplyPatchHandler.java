@@ -2,10 +2,10 @@ package com.hhoa.kline.core.core.tools.handlers;
 
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
@@ -58,7 +58,7 @@ public class ApplyPatchHandler implements StateFullToolHandler {
     }
 
     @Override
-    public ClineToolSpec getClineToolSpec() {
+    public ToolSpec getToolSpec() {
         return null;
     }
 
@@ -123,7 +123,6 @@ public class ApplyPatchHandler implements StateFullToolHandler {
 
             if (autoApprove != null && autoApprove) {
                 context.getCallbacks().say(ClineSay.TOOL, completeMessage, null, null, false, null);
-                context.getTaskState().setDidEditFile(true);
 
                 StringBuilder response = new StringBuilder();
                 response.append("Successfully applied patch to the following files:");
@@ -167,8 +166,6 @@ public class ApplyPatchHandler implements StateFullToolHandler {
         }
 
         // 用户批准
-        context.getTaskState().setDidEditFile(true);
-
         return new ToolExecuteResult.Immediate(
                 HandlerUtils.createTextBlocks("Successfully applied patch. Changes saved."));
     }

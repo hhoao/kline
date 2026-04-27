@@ -20,7 +20,10 @@ public class ResumeTaskTransition implements SingleArcTransition<TaskV2, TaskEve
                             askPending.getAskType(),
                             null,
                             ClineMessageFormat.PLAIN);
-            operand.getTaskState().getPendingAskTokens().put(askPending.getPendingId(), token);
+            operand.getTaskState()
+                    .getToolExecutionState()
+                    .getPendingAskTokens()
+                    .put(askPending.getPendingId(), token);
         }
     }
 }

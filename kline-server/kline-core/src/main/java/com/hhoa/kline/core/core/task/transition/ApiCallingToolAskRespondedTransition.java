@@ -23,7 +23,10 @@ public class ApiCallingToolAskRespondedTransition
         UserRespondedEvent responded = (UserRespondedEvent) event;
 
         PendingAskToken pendingAskToken =
-                operand.getTaskState().getPendingAskTokens().get(responded.getPendingId());
+                operand.getTaskState()
+                        .getToolExecutionState()
+                        .getPendingAskTokens()
+                        .get(responded.getPendingId());
         ClineAsk askType = pendingAskToken.getAskType();
         AskResult askResult = responded.getAskResult();
         if (askType == ClineAsk.API_REQ_FAILED) {
@@ -48,7 +51,8 @@ public class ApiCallingToolAskRespondedTransition
                 return;
             }
 
-            ApiRequestResult apiResult = operand.getTaskState().getApiRequestResult();
+            ApiRequestResult apiResult =
+                    operand.getTaskState().getApiTurnState().getApiRequestResult();
 
             operand.handle(new ApiCompletedEvent(operand.getTaskId(), apiResult));
         }

@@ -46,8 +46,12 @@ public class ApiCallingCompletedTransition implements SingleArcTransition<TaskV2
             operand.handle(new TaskCompleteEvent(operand.getTaskId()));
         } else if (processResult instanceof ClineRequestResult.DidToolUse) {
             operand.getTaskState()
-                    .setCurrentUserContent(operand.getTaskState().getNextUserMessageContent());
-            operand.getTaskState().setCurrentIncludeFileDetails(false);
+                    .getApiTurnState()
+                    .setCurrentUserContent(
+                            operand.getTaskState()
+                                    .getPresentationState()
+                                    .getNextUserMessageContent());
+            operand.getTaskState().getApiTurnState().setCurrentIncludeFileDetails(false);
             operand.handle(new ContinueNextTurnEvent(operand.getTaskId(), null, null, null));
         }
     }

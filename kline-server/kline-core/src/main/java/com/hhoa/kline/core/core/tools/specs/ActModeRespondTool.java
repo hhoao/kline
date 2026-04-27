@@ -1,7 +1,7 @@
 package com.hhoa.kline.core.core.tools.specs;
 
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.List;
 
@@ -35,7 +35,7 @@ public class ActModeRespondTool extends BaseToolSpec {
                     + "additional work without using act_mode_respond again. If you attempt to call act_mode_respond "
                     + "consecutively, the tool call will fail with an explicit error.";
 
-    public static ClineToolSpec create(ModelFamily modelFamily) {
+    public static ToolSpec create(ModelFamily modelFamily) {
         if (modelFamily != ModelFamily.NATIVE_GPT_5
                 && modelFamily != ModelFamily.NATIVE_GPT_5_1
                 && modelFamily != ModelFamily.NATIVE_NEXT_GEN
@@ -43,7 +43,7 @@ public class ActModeRespondTool extends BaseToolSpec {
             return null;
         }
 
-        return ClineToolSpec.builder()
+        return ToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.ACT_MODE.getValue())
                 .name(ClineDefaultTool.ACT_MODE.getValue())

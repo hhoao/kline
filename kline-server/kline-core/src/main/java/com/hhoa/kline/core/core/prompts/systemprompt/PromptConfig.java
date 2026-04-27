@@ -1,5 +1,6 @@
 package com.hhoa.kline.core.core.prompts.systemprompt;
 
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import java.util.List;
 import java.util.Map;
 import lombok.Builder;
@@ -20,7 +21,7 @@ public class PromptConfig {
 
     private Integer maxTokens;
 
-    private List<ClineToolSpec> tools;
+    private List<ToolSpec> tools;
 
     private Map<String, Object> additionalConfig;
 }

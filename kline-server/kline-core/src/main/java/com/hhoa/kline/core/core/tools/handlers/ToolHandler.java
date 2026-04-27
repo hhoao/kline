@@ -1,7 +1,7 @@
 package com.hhoa.kline.core.core.tools.handlers;
 
 import com.hhoa.kline.core.core.assistant.ToolUse;
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.UIHelpers;
@@ -21,5 +21,5 @@ public interface ToolHandler {
     }
 
     /** 返回该工具在 systemprompt/tools 中的规范，用于执行前做必选/可选参数校验；无规范可返回 null。 */
-    ClineToolSpec getClineToolSpec();
+    ToolSpec getToolSpec();
 }

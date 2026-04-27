@@ -5,12 +5,12 @@ import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.ignore.ClineIgnoreController;
 import com.hhoa.kline.core.core.integrations.editor.DiffViewProvider;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.services.telemetry.TelemetryService;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
@@ -110,7 +110,7 @@ public class WriteToFileToolHandler implements StateFullToolHandler {
     }
 
     @Override
-    public ClineToolSpec getClineToolSpec() {
+    public ToolSpec getToolSpec() {
         // This handler serves multiple tools (write_to_file, replace_in_file, new_rule)
         return null;
     }
@@ -170,8 +170,10 @@ public class WriteToFileToolHandler implements StateFullToolHandler {
         if ("replace_in_file".equals(block.getName())
                 && (rawDiff == null || rawDiff.trim().isEmpty())) {
             context.getTaskState()
+                    .getApiTurnState()
                     .setConsecutiveMistakeCount(
-                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+                            context.getTaskState().getApiTurnState().getConsecutiveMistakeCount()
+                                    + 1);
             if (context.getServices().getDiffViewProvider() != null) {
                 try {
                     context.getServices().getDiffViewProvider().reset();
@@ -185,15 +187,18 @@ public class WriteToFileToolHandler implements StateFullToolHandler {
         if ("write_to_file".equals(block.getName())
                 && (rawContent == null || rawContent.trim().isEmpty())) {
             context.getTaskState()
+                    .getApiTurnState()
                     .setConsecutiveMistakeCount(
-                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+                            context.getTaskState().getApiTurnState().getConsecutiveMistakeCount()
+                                    + 1);
             if (context.getServices().getDiffViewProvider() != null) {
                 try {
                     context.getServices().getDiffViewProvider().reset();
                 } catch (Exception ignored) {
                 }
             }
-            int mistakeCount = context.getTaskState().getConsecutiveMistakeCount();
+            int mistakeCount =
+                    context.getTaskState().getApiTurnState().getConsecutiveMistakeCount();
             context.getCallbacks()
                     .say(
                             ClineSay.ERROR,
@@ -216,8 +221,10 @@ public class WriteToFileToolHandler implements StateFullToolHandler {
         if ("new_rule".equals(block.getName())
                 && (rawContent == null || rawContent.trim().isEmpty())) {
             context.getTaskState()
+                    .getApiTurnState()
                     .setConsecutiveMistakeCount(
-                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+                            context.getTaskState().getApiTurnState().getConsecutiveMistakeCount()
+                                    + 1);
             if (context.getServices().getDiffViewProvider() != null) {
                 try {
                     context.getServices().getDiffViewProvider().reset();
@@ -282,7 +289,7 @@ public class WriteToFileToolHandler implements StateFullToolHandler {
                 }
             }
 
-            context.getTaskState().setDidRejectTool(true);
+            context.getTaskState().getToolExecutionState().setDidRejectTool(true);
 
             String fileDeniedNote =
                     result.fileExists
@@ -552,13 +559,11 @@ public class WriteToFileToolHandler implements StateFullToolHandler {
         DiffViewProvider.SaveResult save = dvp.saveChanges();
 
         // Reset consecutive mistake counter on successful file operation
-        config.getTaskState().setConsecutiveMistakeCount(0);
-
-        // Mark that a file was edited (used to determine if we should wait for busy terminal)
-        config.getTaskState().setDidEditFile(true);
+        config.getTaskState().getApiTurnState().setConsecutiveMistakeCount(0);
 
         // Invalidate file read cache for this file so re-reads get fresh content
         config.getTaskState()
+                .getToolExecutionState()
                 .getFileReadCache()
                 .remove(result.absolutePath.toString().toLowerCase());
 

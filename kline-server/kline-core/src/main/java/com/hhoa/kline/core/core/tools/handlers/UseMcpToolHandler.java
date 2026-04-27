@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.services.mcp.IMcpHub;
 import com.hhoa.kline.core.core.shared.ClineAsk;
@@ -13,6 +12,7 @@ import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.TaskUtils;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.core.tools.specs.UseMcpToolTool;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
@@ -60,7 +60,7 @@ public class UseMcpToolHandler implements StateFullToolHandler {
     }
 
     @Override
-    public ClineToolSpec getClineToolSpec() {
+    public ToolSpec getToolSpec() {
         return UseMcpToolTool.create(ModelFamily.GENERIC);
     }
 
@@ -112,8 +112,12 @@ public class UseMcpToolHandler implements StateFullToolHandler {
                 parsedArguments = parsed;
             } catch (Exception e) {
                 context.getTaskState()
+                        .getApiTurnState()
                         .setConsecutiveMistakeCount(
-                                context.getTaskState().getConsecutiveMistakeCount() + 1);
+                                context.getTaskState()
+                                                .getApiTurnState()
+                                                .getConsecutiveMistakeCount()
+                                        + 1);
                 context.getCallbacks()
                         .say(
                                 ClineSay.ERROR,
@@ -132,7 +136,7 @@ public class UseMcpToolHandler implements StateFullToolHandler {
             parsedArguments = null;
         }
 
-        context.getTaskState().setConsecutiveMistakeCount(0);
+        context.getTaskState().getApiTurnState().setConsecutiveMistakeCount(0);
 
         Map<String, Object> completeMessageMap = new HashMap<>();
         completeMessageMap.put("type", "use_mcp_tool");

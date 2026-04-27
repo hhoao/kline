@@ -1,7 +1,7 @@
 package com.hhoa.kline.core.core.tools.specs;
 
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.List;
 
@@ -84,14 +84,14 @@ public class ApplyPatchTool extends BaseToolSpec {
             *** End Patch
             EOF""";
 
-    public static ClineToolSpec create(ModelFamily modelFamily) {
+    public static ToolSpec create(ModelFamily modelFamily) {
         if (modelFamily != ModelFamily.NATIVE_GPT_5
                 && modelFamily != ModelFamily.NATIVE_GPT_5_1
                 && modelFamily != ModelFamily.GPT_5) {
             return null;
         }
 
-        return ClineToolSpec.builder()
+        return ToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.APPLY_PATCH.getValue())
                 .name(ClineDefaultTool.APPLY_PATCH.getValue())

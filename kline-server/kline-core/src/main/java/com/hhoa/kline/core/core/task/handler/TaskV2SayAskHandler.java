@@ -79,9 +79,6 @@ public final class TaskV2SayAskHandler {
 
     private void resetAskResponse() {
         taskState.setAskResponse(null);
-        taskState.setAskResponseText(null);
-        taskState.setAskResponseImages(null);
-        taskState.setAskResponseFiles(null);
     }
 
     public AskPending ask(ClineAsk type, String text, Boolean partial) {

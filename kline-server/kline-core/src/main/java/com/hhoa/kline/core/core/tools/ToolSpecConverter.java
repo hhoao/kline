@@ -1,14 +1,15 @@
-package com.hhoa.kline.core.core.prompts.systemprompt;
+package com.hhoa.kline.core.core.tools;
 
+import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
 import java.util.*;
 import java.util.function.Function;
 
 /**
- * 将 ClineToolSpec 转换为不同 API 提供商的工具定义格式。 对应 TS 的 spec.ts 中的转换函数。
+ * 将 ToolSpec 转换为不同 API 提供商的工具定义格式。 对应 TS 的 spec.ts 中的转换函数。
  *
  * @author hhoa
  */
-public class ClineToolSpecConverter {
+public class ToolSpecConverter {
 
     /** 多工作区提示 */
     public static final String MULTI_ROOT_HINT =
@@ -37,9 +38,9 @@ public class ClineToolSpecConverter {
                     "object", "OBJECT",
                     "array", "STRING");
 
-    /** 将 ClineToolSpec 转换为 OpenAI ChatCompletionTool 格式的 Map 结构 */
+    /** 将 ToolSpec 转换为 OpenAI ChatCompletionTool 格式的 Map 结构 */
     public static Map<String, Object> toolSpecFunctionDefinition(
-            ClineToolSpec tool, SystemPromptContext context) {
+            ToolSpec tool, SystemPromptContext context) {
         validateContextRequirements(tool, context);
 
         Map<String, Object> properties = new LinkedHashMap<>();
@@ -64,9 +65,9 @@ public class ClineToolSpecConverter {
         return result;
     }
 
-    /** 将 ClineToolSpec 转换为 Anthropic Tool 格式的 Map 结构 */
+    /** 将 ToolSpec 转换为 Anthropic Tool 格式的 Map 结构 */
     public static Map<String, Object> toolSpecInputSchema(
-            ClineToolSpec tool, SystemPromptContext context) {
+            ToolSpec tool, SystemPromptContext context) {
         validateContextRequirements(tool, context);
 
         Map<String, Object> properties = new LinkedHashMap<>();
@@ -85,16 +86,16 @@ public class ClineToolSpecConverter {
         return result;
     }
 
-    /** 将 ClineToolSpec 转换为 Google Gemini FunctionDeclaration 格式的 Map 结构 */
+    /** 将 ToolSpec 转换为 Google Gemini FunctionDeclaration 格式的 Map 结构 */
     public static Map<String, Object> toolSpecFunctionDeclarations(
-            ClineToolSpec tool, SystemPromptContext context) {
+            ToolSpec tool, SystemPromptContext context) {
         validateContextRequirements(tool, context);
 
         Map<String, Object> properties = new LinkedHashMap<>();
         List<String> required = new ArrayList<>();
 
         if (tool.getParameters() != null) {
-            for (ClineToolSpec.ClineToolSpecParameter param : tool.getParameters()) {
+            for (ToolParameterSpec param : tool.getParameters()) {
                 if (param.getContextRequirements() != null
                         && !param.getContextRequirements().apply(context)) {
                     continue;
@@ -271,8 +272,7 @@ public class ClineToolSpecConverter {
     }
 
     /** 解析参数的 instruction（可能是字符串或函数） */
-    public static String resolveInstruction(
-            ClineToolSpec.ClineToolSpecParameter param, SystemPromptContext context) {
+    public static String resolveInstruction(ToolParameterSpec param, SystemPromptContext context) {
         if (param.getInstructionFn() != null) {
             return param.getInstructionFn().apply(context);
         }
@@ -294,12 +294,11 @@ public class ClineToolSpecConverter {
     }
 
     /** 工具转换输入 */
-    public record ToolConversionInput(ClineToolSpec tool, SystemPromptContext context) {}
+    public record ToolConversionInput(ToolSpec tool, SystemPromptContext context) {}
 
     // ========== 私有辅助方法 ==========
 
-    private static void validateContextRequirements(
-            ClineToolSpec tool, SystemPromptContext context) {
+    private static void validateContextRequirements(ToolSpec tool, SystemPromptContext context) {
         if (tool.getContextRequirements() != null
                 && !tool.getContextRequirements().apply(context)) {
             throw new IllegalStateException(
@@ -308,7 +307,7 @@ public class ClineToolSpecConverter {
     }
 
     private static void buildParameterSchemas(
-            ClineToolSpec tool,
+            ToolSpec tool,
             SystemPromptContext context,
             Map<String, Object> properties,
             List<String> required) {
@@ -316,7 +315,7 @@ public class ClineToolSpecConverter {
             return;
         }
 
-        for (ClineToolSpec.ClineToolSpecParameter param : tool.getParameters()) {
+        for (ToolParameterSpec param : tool.getParameters()) {
             if (param.getContextRequirements() != null
                     && !param.getContextRequirements().apply(context)) {
                 continue;

@@ -1,7 +1,7 @@
 package com.hhoa.kline.core.core.tools.specs;
 
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.List;
 
@@ -12,8 +12,8 @@ import java.util.List;
  */
 public class GenerateExplanationTool extends BaseToolSpec {
 
-    public static ClineToolSpec create(ModelFamily modelFamily) {
-        return ClineToolSpec.builder()
+    public static ToolSpec create(ModelFamily modelFamily) {
+        return ToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.GENERATE_EXPLANATION.getValue())
                 .name(ClineDefaultTool.GENERATE_EXPLANATION.getValue())

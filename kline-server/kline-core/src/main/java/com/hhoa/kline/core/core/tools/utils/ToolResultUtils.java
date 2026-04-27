@@ -127,7 +127,7 @@ public final class ToolResultUtils {
         if (hasText || hasImages || hasFiles) {
             String fileContentString = hasFiles ? processFilesIntoText(files) : "";
             pushAdditionalToolFeedback(
-                    config.getTaskState().getNextUserMessageContent(),
+                    config.getTaskState().getPresentationState().getNextUserMessageContent(),
                     text,
                     images,
                     fileContentString);
@@ -135,7 +135,7 @@ public final class ToolResultUtils {
         }
 
         if (result == null || !ClineAskResponse.YES_BUTTON_CLICKED.equals(result.getResponse())) {
-            config.getTaskState().setDidRejectTool(true);
+            config.getTaskState().getToolExecutionState().setDidRejectTool(true);
             return false;
         }
         return true;

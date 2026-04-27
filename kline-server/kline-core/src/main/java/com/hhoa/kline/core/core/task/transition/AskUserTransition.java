@@ -28,7 +28,10 @@ public class AskUserTransition implements SingleArcTransition<TaskV2, TaskEvent>
                             askType,
                             message,
                             ClineMessageFormat.PLAIN);
-            operand.getTaskState().getPendingAskTokens().put(askPending.getPendingId(), token);
+            operand.getTaskState()
+                    .getToolExecutionState()
+                    .getPendingAskTokens()
+                    .put(askPending.getPendingId(), token);
         }
     }
 }

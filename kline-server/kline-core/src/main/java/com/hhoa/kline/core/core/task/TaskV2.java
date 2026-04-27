@@ -610,8 +610,8 @@ public class TaskV2 implements Recoverable<TaskState> {
     public boolean shouldRunTaskCancelHook() {
         lock.lock();
         try {
-            return taskState.isStreaming()
-                    || taskState.isWaitingForFirstChunk()
+            return taskState.getStreamState().isStreaming()
+                    || taskState.getStreamState().isWaitingForFirstChunk()
                     || activeBackgroundCommand != null
                     || taskState.getActiveHookExecution() != null;
         } finally {

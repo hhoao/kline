@@ -14,6 +14,7 @@ import com.hhoa.kline.core.core.ignore.ClineIgnoreController;
 import com.hhoa.kline.core.core.integrations.checkpoints.ICheckpointManager;
 import com.hhoa.kline.core.core.integrations.editor.DiffViewProvider;
 import com.hhoa.kline.core.core.integrations.notifications.NotificationService;
+import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
 import com.hhoa.kline.core.core.services.mcp.IMcpHub;
 import com.hhoa.kline.core.core.services.telemetry.TelemetryService;
 import com.hhoa.kline.core.core.shared.AutoApprovalSettings;
@@ -175,12 +176,49 @@ public final class TaskV2MessagePresenterHandler {
                         .callbacks(buildCallbacks(autoApprover))
                         .coordinator(toolExecutor)
                         .yoloModeToggled(yoloModeToggled)
+                        .enableParallelToolCalling(
+                                taskState.getToolExecutionState().isEnableParallelToolCalling())
+                        .systemPromptContext(buildSystemPromptContextForToolValidation())
                         .toolState(toolState)
                         .autoApprover(autoApprover);
 
         configBuilder.api(api);
         configBuilder.workspaceManager(workspaceManager);
         return configBuilder.build();
+    }
+
+    private SystemPromptContext buildSystemPromptContextForToolValidation() {
+        SystemPromptContext context = new SystemPromptContext();
+        context.setCwd(cwd);
+        ProviderInfo providerInfo =
+                getCurrentProviderInfo != null ? getCurrentProviderInfo.get() : null;
+        if (providerInfo != null) {
+            SystemPromptContext.ApiProviderInfo apiProviderInfo =
+                    new SystemPromptContext.ApiProviderInfo();
+            apiProviderInfo.setProviderId(providerInfo.getProviderId());
+            apiProviderInfo.setCustomPrompt(providerInfo.getCustomPrompt());
+            SystemPromptContext.ApiHandlerModel model = new SystemPromptContext.ApiHandlerModel();
+            model.setId(providerInfo.getModel());
+            apiProviderInfo.setModel(model);
+            context.setProviderInfo(apiProviderInfo);
+        }
+        context.setSupportsBrowserUse(
+                stateManager != null
+                        && stateManager.getSettings() != null
+                        && stateManager.getSettings().getBrowserSettings() != null
+                        && Boolean.TRUE.equals(
+                                stateManager
+                                        .getSettings()
+                                        .getBrowserSettings()
+                                        .getRemoteBrowserEnabled()));
+        context.setYoloModeToggled(
+                stateManager != null
+                        && stateManager.getSettings() != null
+                        && stateManager.getSettings().isYoloModeToggled());
+        context.setEnableParallelToolCalling(
+                taskState.getToolExecutionState().isEnableParallelToolCalling());
+        context.setClineWebToolsEnabled(false);
+        return context;
     }
 
     private ToolContext.Callbacks buildCallbacks(AutoApprove autoApprover) {
@@ -313,9 +351,9 @@ public final class TaskV2MessagePresenterHandler {
     public void startAssistantResponseStream() {
         messageParser.reset();
         messageQueue.clear();
-        taskState.setAssistantMessageContent(new ArrayList<>());
-        taskState.setCurrentStreamingContentIndex(0);
-        taskState.setUserMessageContentReady(false);
+        taskState.getPresentationState().setAssistantMessageContent(new ArrayList<>());
+        taskState.getPresentationState().setCurrentStreamingContentIndex(0);
+        taskState.getPresentationState().setUserMessageContentReady(false);
     }
 
     public void updateAssistantMessageContent(String chunk) {
@@ -338,7 +376,7 @@ public final class TaskV2MessagePresenterHandler {
             }
             if (lockAcquired) {
                 AssistantMessageUpdate poll = messageQueue.poll();
-                if (taskState.isDidRejectTool() || taskState.isAbort()) {
+                if (taskState.getToolExecutionState().isDidRejectTool() || taskState.isAbort()) {
                     messageQueue.clear();
                     return;
                 }
@@ -376,13 +414,16 @@ public final class TaskV2MessagePresenterHandler {
             if (newContentBlocks.isEmpty()) {
                 return;
             }
-            List<AssistantMessageContent> oldContentBlocks = taskState.getAssistantMessageContent();
+            List<AssistantMessageContent> oldContentBlocks =
+                    taskState.getPresentationState().getAssistantMessageContent();
 
             if (newContentBlocks.size() > oldContentBlocks.size()) {
-                taskState.setUserMessageContentReady(false);
+                taskState.getPresentationState().setUserMessageContentReady(false);
             }
 
-            taskState.setAssistantMessageContent(new ArrayList<>(newContentBlocks));
+            taskState
+                    .getPresentationState()
+                    .setAssistantMessageContent(new ArrayList<>(newContentBlocks));
             presentAvailableAssistantBlocks();
         } catch (Exception e) {
             log.error("Error in presentAssistantMessageContent: {}", e.getMessage(), e);
@@ -391,13 +432,13 @@ public final class TaskV2MessagePresenterHandler {
 
     private void presentAvailableAssistantBlocks() {
         while (true) {
-            int currentIndex = taskState.getCurrentStreamingContentIndex();
+            int currentIndex = taskState.getPresentationState().getCurrentStreamingContentIndex();
             List<AssistantMessageContent> currentAssistantContent =
-                    taskState.getAssistantMessageContent();
+                    taskState.getPresentationState().getAssistantMessageContent();
 
             if (currentIndex >= currentAssistantContent.size()) {
-                if (taskState.isDidCompleteReadingStream()) {
-                    taskState.setUserMessageContentReady(true);
+                if (taskState.getStreamState().isDidCompleteReadingStream()) {
+                    taskState.getPresentationState().setUserMessageContentReady(true);
                 }
                 return;
             }
@@ -407,7 +448,7 @@ public final class TaskV2MessagePresenterHandler {
             if (block instanceof TextContent textContent) {
                 processTextContent(textContent);
             } else if (block instanceof ToolUse toolUse) {
-                if (!taskState.isDidAlreadyUseTool()) {
+                if (!taskState.getToolExecutionState().isDidAlreadyUseTool()) {
                     ToolBatchPresentationResult batchResult =
                             presentToolBatchIfAvailable(currentIndex, currentAssistantContent);
                     if (batchResult.processed()) {
@@ -425,16 +466,17 @@ public final class TaskV2MessagePresenterHandler {
             }
 
             if (currentIndex == currentAssistantContent.size() - 1) {
-                taskState.setUserMessageContentReady(true);
+                taskState.getPresentationState().setUserMessageContentReady(true);
             }
 
-            taskState.setCurrentStreamingContentIndex(currentIndex + 1);
+            taskState.getPresentationState().setCurrentStreamingContentIndex(currentIndex + 1);
         }
     }
 
     private ToolBatchPresentationResult presentToolBatchIfAvailable(
             int currentIndex, List<AssistantMessageContent> currentAssistantContent) {
-        if (toolExecutionBatchCoordinator == null || !taskState.isUseNativeToolCalls()) {
+        if (toolExecutionBatchCoordinator == null
+                || !taskState.getToolExecutionState().isUseNativeToolCalls()) {
             return ToolBatchPresentationResult.notProcessed();
         }
 
@@ -450,7 +492,10 @@ public final class TaskV2MessagePresenterHandler {
         boolean paused = false;
         for (ToolExecutionBatchCoordinator.ExecutionResult execution : batchResult.completed()) {
             if (execution.result() instanceof ToolExecuteResult.PendingAsk(PendingAskToken token)) {
-                taskState.getPendingAskTokens().put(token.getPendingId(), token);
+                taskState
+                        .getToolExecutionState()
+                        .getPendingAskTokens()
+                        .put(token.getPendingId(), token);
                 paused = true;
                 break;
             }
@@ -458,7 +503,7 @@ public final class TaskV2MessagePresenterHandler {
                     instanceof ToolExecuteResult.Immediate(List<UserContentBlock> blocks)) {
                 ToolResultUtils.pushToolResult(
                         blocks,
-                        taskState.getNextUserMessageContent(),
+                        taskState.getPresentationState().getNextUserMessageContent(),
                         execution.toolDescription(),
                         null);
                 pushedToolResult = true;
@@ -466,13 +511,16 @@ public final class TaskV2MessagePresenterHandler {
         }
 
         if (pushedToolResult) {
-            taskState.setDidAlreadyUseTool(true);
+            taskState.getToolExecutionState().setDidAlreadyUseTool(true);
         }
-        taskState.setCurrentStreamingContentIndex(currentIndex + batchResult.completed().size());
+        taskState
+                .getPresentationState()
+                .setCurrentStreamingContentIndex(currentIndex + batchResult.completed().size());
         if (!paused
-                && taskState.getCurrentStreamingContentIndex() >= currentAssistantContent.size()
-                && taskState.isDidCompleteReadingStream()) {
-            taskState.setUserMessageContentReady(true);
+                && taskState.getPresentationState().getCurrentStreamingContentIndex()
+                        >= currentAssistantContent.size()
+                && taskState.getStreamState().isDidCompleteReadingStream()) {
+            taskState.getPresentationState().setUserMessageContentReady(true);
         }
         return new ToolBatchPresentationResult(true, paused);
     }
@@ -494,7 +542,7 @@ public final class TaskV2MessagePresenterHandler {
         String toolUseId = UUID.randomUUID().toString();
         toolUse.setId(toolUseId);
         ToolState toolState = toolExecutor.getOrCreateToolState(toolUse.getName());
-        taskState.getToolStates().put(toolUseId, toolState);
+        taskState.getToolExecutionState().getToolStates().put(toolUseId, toolState);
         return buildToolContext(toolState);
     }
 
@@ -502,7 +550,10 @@ public final class TaskV2MessagePresenterHandler {
         ToolContext cfg = prepareToolUseContext(toolUse);
         ToolExecuteResult execResult = toolExecutor.executeTool(toolUse, cfg);
         if (execResult instanceof ToolExecuteResult.PendingAsk(PendingAskToken pendingToken)) {
-            taskState.getPendingAskTokens().put(pendingToken.getPendingId(), pendingToken);
+            taskState
+                    .getToolExecutionState()
+                    .getPendingAskTokens()
+                    .put(pendingToken.getPendingId(), pendingToken);
         } else if (execResult
                 instanceof ToolExecuteResult.Immediate(List<UserContentBlock> blocks)) {
             pushToolResult(
@@ -519,7 +570,8 @@ public final class TaskV2MessagePresenterHandler {
     public void processTextContent(TextContent textContent) {
         // Skip text rendering if tool was rejected, or if a tool was already used and parallel
         // calling is disabled
-        if (taskState.isDidRejectTool() || taskState.isDidAlreadyUseTool()) {
+        if (taskState.getToolExecutionState().isDidRejectTool()
+                || taskState.getToolExecutionState().isDidAlreadyUseTool()) {
             return;
         }
         String content = textContent.getContent();
@@ -556,21 +608,28 @@ public final class TaskV2MessagePresenterHandler {
      * @return 如果所有块处理完毕返回 true；如果又遇到 PendingAsk 返回 false
      */
     public boolean continueAfterToolAskResolved(String pendingId, AskResult askResult) {
-        PendingAskToken askToken = taskState.getPendingAskTokens().remove(pendingId);
+        PendingAskToken askToken =
+                taskState.getToolExecutionState().getPendingAskTokens().remove(pendingId);
         if (askToken instanceof ToolUsePendingAskToken toolUsePendingAskToken) {
             ToolState toolState =
-                    taskState.getToolStates().get(toolUsePendingAskToken.getToolUse().getId());
+                    taskState
+                            .getToolExecutionState()
+                            .getToolStates()
+                            .get(toolUsePendingAskToken.getToolUse().getId());
             ToolContext context = buildToolContext(toolState);
             ToolExecuteResult resumeResult = toolExecutor.resume(askToken, askResult, context);
             if (resumeResult instanceof ToolExecuteResult.PendingAsk(PendingAskToken token)) {
-                taskState.getPendingAskTokens().put(token.getPendingId(), token);
+                taskState
+                        .getToolExecutionState()
+                        .getPendingAskTokens()
+                        .put(token.getPendingId(), token);
             } else if (resumeResult
                     instanceof ToolExecuteResult.Immediate(List<UserContentBlock> blocks)) {
                 pushToolResult(blocks, toolUsePendingAskToken.getToolDescription());
             }
 
             ConcurrentHashMap<String, PendingAskToken> allPendingAsks =
-                    taskState.getPendingAskTokens();
+                    taskState.getToolExecutionState().getPendingAskTokens();
             return allPendingAsks.isEmpty();
         } else {
             throw new IllegalArgumentException(
@@ -582,10 +641,10 @@ public final class TaskV2MessagePresenterHandler {
 
         ToolResultUtils.pushToolResult(
                 toolResult,
-                taskState.getNextUserMessageContent(),
+                taskState.getPresentationState().getNextUserMessageContent(),
                 toolDescription,
                 () -> {
-                    taskState.setDidAlreadyUseTool(true);
+                    taskState.getToolExecutionState().setDidAlreadyUseTool(true);
                 });
     }
 

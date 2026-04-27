@@ -149,16 +149,9 @@ public final class TaskV2ApiCallHandler {
 
         messagePresenterHandler.startAssistantResponseStream();
 
-        int previousApiReqIndex = taskState.getCurrentPreviousApiReqIndex();
+        int previousApiReqIndex = taskState.getApiTurnState().getCurrentPreviousApiReqIndex();
 
-        taskState.setCurrentStreamingContentIndex(0);
-        taskState.setAssistantMessageContent(new ArrayList<>());
-        taskState.setDidCompleteReadingStream(false);
-        taskState.setNextUserMessageContent(new ArrayList<>());
-        taskState.setUserMessageContentReady(false);
-        taskState.setDidRejectTool(false);
-        taskState.setDidAlreadyUseTool(false);
-        taskState.setDidAutomaticallyRetryFailedApiRequest(false);
+        taskState.resetForNewApiRequest();
 
         if (diffViewProvider != null) {
             try {
@@ -168,7 +161,7 @@ public final class TaskV2ApiCallHandler {
             }
         }
 
-        taskState.setStreaming(true);
+        taskState.getStreamState().setStreaming(true);
 
         List<MessageParam> apiConversationHistory = messageStateHandler.getApiConversationHistory();
         List<ClineMessage> clineMessages = messageStateHandler.getClineMessages();
@@ -202,7 +195,7 @@ public final class TaskV2ApiCallHandler {
                 contextResult.getTruncatedConversationHistory();
 
         ApiRequestResult result = attemptApiRequest(truncatedConversationHistory, null);
-        taskState.setDidCompleteReadingStream(true);
+        taskState.getStreamState().setDidCompleteReadingStream(true);
 
         return result;
     }
@@ -245,10 +238,10 @@ public final class TaskV2ApiCallHandler {
                 }
             }
 
-            taskState.setAssistantMessageContent(contentBlocks);
-            taskState.setCurrentStreamingContentIndex(0);
+            taskState.getPresentationState().setAssistantMessageContent(contentBlocks);
+            taskState.getPresentationState().setCurrentStreamingContentIndex(0);
 
-            taskState.setStreaming(false);
+            taskState.getStreamState().setStreaming(false);
 
             List<ClineMessage> messagesForUpdate = messageStateHandler.getClineMessages();
 
@@ -283,7 +276,7 @@ public final class TaskV2ApiCallHandler {
 
             boolean didToolUse = contentBlocks.stream().anyMatch(block -> block instanceof ToolUse);
 
-            taskState.setAutoRetryAttempts(0);
+            taskState.getApiTurnState().setAutoRetryAttempts(0);
 
             return didToolUse
                     ? new ClineRequestResult.DidToolUse()
@@ -328,13 +321,15 @@ public final class TaskV2ApiCallHandler {
     }
 
     public boolean tryRetryAsk(String askMessage) {
-        if (taskState.getAutoRetryAttempts() < 3) {
-            taskState.setAutoRetryAttempts(taskState.getAutoRetryAttempts() + 1);
+        if (taskState.getApiTurnState().getAutoRetryAttempts() < 3) {
+            taskState
+                    .getApiTurnState()
+                    .setAutoRetryAttempts(taskState.getApiTurnState().getAutoRetryAttempts() + 1);
 
-            int delayMs = 2000 * (1 << (taskState.getAutoRetryAttempts() - 1));
+            int delayMs = 2000 * (1 << (taskState.getApiTurnState().getAutoRetryAttempts() - 1));
 
             Map<String, Object> retryInfoMap = new HashMap<String, Object>();
-            retryInfoMap.put("attempt", taskState.getAutoRetryAttempts());
+            retryInfoMap.put("attempt", taskState.getApiTurnState().getAutoRetryAttempts());
             retryInfoMap.put("maxAttempts", 3);
             retryInfoMap.put("delaySeconds", delayMs / 1000);
 
@@ -406,10 +401,12 @@ public final class TaskV2ApiCallHandler {
             try {
                 ApiChunk chunk;
                 while ((chunk = coordinator.nextChunk()) != null) {
-                    if (taskState.isAbort() || taskState.isDidRejectTool()) {
+                    if (taskState.isAbort()
+                            || taskState.getToolExecutionState().isDidRejectTool()) {
                         break;
                     }
-                    if (taskState.isDidAlreadyUseTool() && didReceiveUsageChunk[0]) {
+                    if (taskState.getToolExecutionState().isDidAlreadyUseTool()
+                            && didReceiveUsageChunk[0]) {
                         break;
                     }
                     processContentChunk(
@@ -427,7 +424,7 @@ public final class TaskV2ApiCallHandler {
         } catch (Exception streamError) {
             return handleApiRequestError(streamError, lastApiReqIndex);
         } finally {
-            taskState.setStreaming(false);
+            taskState.getStreamState().setStreaming(false);
         }
 
         if (!didReceiveUsageChunk[0]) {
@@ -517,7 +514,7 @@ public final class TaskV2ApiCallHandler {
             return;
         }
 
-        if (taskState.isDidRejectTool()) {
+        if (taskState.getToolExecutionState().isDidRejectTool()) {
             if (!streamInterrupted[0]
                     || !ClineApiReqCancelReason.USER_FEEDBACK.equals(
                             apiReqInfo.getCancelReason())) {
@@ -527,7 +524,7 @@ public final class TaskV2ApiCallHandler {
             }
             return;
         }
-        if (taskState.isDidAlreadyUseTool()) {
+        if (taskState.getToolExecutionState().isDidAlreadyUseTool()) {
             if (!streamInterrupted[0]) {
                 streamInterrupted[0] = true;
                 assistantMessageBuilder.append(
@@ -610,7 +607,8 @@ public final class TaskV2ApiCallHandler {
         boolean isContextWindowExceededError =
                 ContextErrorHandling.checkContextWindowExceededError(streamError);
 
-        if (isContextWindowExceededError && !taskState.isDidAutomaticallyRetryFailedApiRequest()) {
+        if (isContextWindowExceededError
+                && !taskState.getApiTurnState().isDidAutomaticallyRetryFailedApiRequest()) {
             try {
                 contextWindowHandler.handleContextWindowExceededError();
                 return new ApiRequestResult(new ExistState.ContextWindowExceeded());
@@ -645,7 +643,7 @@ public final class TaskV2ApiCallHandler {
             if (truncatedConversationHistory.size() > 3) {
                 finalErrorMessage =
                         "Context window exceeded. Click retry to truncate the conversation and try again.";
-                this.taskState.setDidAutomaticallyRetryFailedApiRequest(false);
+                this.taskState.getApiTurnState().setDidAutomaticallyRetryFailedApiRequest(false);
             }
         }
 
@@ -687,19 +685,20 @@ public final class TaskV2ApiCallHandler {
                 apiHandler.createMessageStream(
                         systemPrompt != null ? systemPrompt : "", conversationHistory);
 
-        taskState.setWaitingForFirstChunk(true);
+        taskState.getStreamState().setWaitingForFirstChunk(true);
 
         final AtomicBoolean isFirstChunk = new AtomicBoolean(true);
         return chunkFlux
-                .doOnSubscribe(subscription -> taskState.setWaitingForFirstChunk(true))
+                .doOnSubscribe(
+                        subscription -> taskState.getStreamState().setWaitingForFirstChunk(true))
                 .doOnNext(
                         chunk -> {
                             if (isFirstChunk.compareAndSet(true, false)) {
-                                taskState.setWaitingForFirstChunk(false);
+                                taskState.getStreamState().setWaitingForFirstChunk(false);
                             }
                         })
-                .doOnComplete(() -> taskState.setWaitingForFirstChunk(false))
-                .doOnCancel(() -> taskState.setWaitingForFirstChunk(false));
+                .doOnComplete(() -> taskState.getStreamState().setWaitingForFirstChunk(false))
+                .doOnCancel(() -> taskState.getStreamState().setWaitingForFirstChunk(false));
     }
 
     /**
@@ -769,11 +768,6 @@ public final class TaskV2ApiCallHandler {
                 if (streamResponseHandler != null) {
                     streamResponseHandler.getToolUseHandler().processToolUseDelta(chunk);
 
-                    // Map call_id → function_id for proper ToolResultBlockParam
-                    if (chunk.callId() != null && chunk.toolId() != null) {
-                        taskState.getToolUseIdMap().put(chunk.callId(), chunk.toolId());
-                    }
-
                     // Flush presentation immediately on tool transitions
                     if (schedulePresentation != null) {
                         schedulePresentation.accept(PresentationPriority.IMMEDIATE);
@@ -819,6 +813,7 @@ public final class TaskV2ApiCallHandler {
      */
     private void processNativeToolCalls(String assistantText, List<ToolUse> toolBlocks) {
         List<AssistantMessageContent> content = new ArrayList<>();
+        taskState.markNativeToolCallsPresent();
 
         // Add text block if there's any assistant text
         if (assistantText != null && !assistantText.trim().isEmpty()) {
@@ -828,7 +823,7 @@ public final class TaskV2ApiCallHandler {
         // Add tool use blocks
         content.addAll(toolBlocks);
 
-        taskState.setAssistantMessageContent(content);
+        taskState.getPresentationState().setAssistantMessageContent(content);
 
         // Set streaming index to first tool block (skip text blocks)
         int firstToolIndex = 0;
@@ -838,8 +833,8 @@ public final class TaskV2ApiCallHandler {
                 break;
             }
         }
-        taskState.setCurrentStreamingContentIndex(firstToolIndex);
-        taskState.setUserMessageContentReady(false);
+        taskState.getPresentationState().setCurrentStreamingContentIndex(firstToolIndex);
+        taskState.getPresentationState().setUserMessageContentReady(false);
     }
 
     /** Sets the StreamResponseHandler for native tool call support. */

@@ -6,7 +6,6 @@ import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.ignore.ClineIgnoreController;
 import com.hhoa.kline.core.core.integrations.FileContentExtractor;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.services.telemetry.TelemetryService;
 import com.hhoa.kline.core.core.shared.ClineAsk;
@@ -15,6 +14,7 @@ import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.TaskState;
 import com.hhoa.kline.core.core.task.TaskUtils;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.core.tools.specs.ReadFileTool;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
@@ -152,7 +152,7 @@ public class ReadFileToolHandler implements StateFullToolHandler {
     }
 
     @Override
-    public ClineToolSpec getClineToolSpec() {
+    public ToolSpec getToolSpec() {
         return ReadFileTool.create(ModelFamily.GENERIC);
     }
 
@@ -313,7 +313,8 @@ public class ReadFileToolHandler implements StateFullToolHandler {
         // === File Read Deduplication ===
         // Check if we've already read this exact file in this task.
         String cacheKey = absolutePathStr.toLowerCase();
-        var cached = context.getTaskState().getFileReadCache().get(cacheKey);
+        var fileReadCache = context.getTaskState().getToolExecutionState().getFileReadCache();
+        var cached = fileReadCache.get(cacheKey);
 
         if (cached != null) {
             // Check if file has been modified externally by comparing mtime
@@ -322,25 +323,29 @@ public class ReadFileToolHandler implements StateFullToolHandler {
                         java.nio.file.Files.getLastModifiedTime(absolutePath).toMillis();
                 if (currentMtime != cached.getMtime()) {
                     // File was modified — evict cache entry
-                    context.getTaskState().getFileReadCache().remove(cacheKey);
+                    fileReadCache.remove(cacheKey);
                     cached = null;
                 }
             } catch (Exception e) {
-                context.getTaskState().getFileReadCache().remove(cacheKey);
+                fileReadCache.remove(cacheKey);
                 cached = null;
             }
         }
 
         // Re-check after possible mtime eviction
-        var validCached = context.getTaskState().getFileReadCache().get(cacheKey);
+        var validCached = fileReadCache.get(cacheKey);
 
         if (validCached != null) {
             validCached.setReadCount(validCached.getReadCount() + 1);
 
             // Re-push image block for multimodal models
             if (validCached.getImageBlock() != null
-                    && context.getTaskState().getNextUserMessageContent() != null) {
-                context.getTaskState().getNextUserMessageContent().add(validCached.getImageBlock());
+                    && context.getTaskState().getPresentationState().getNextUserMessageContent()
+                            != null) {
+                context.getTaskState()
+                        .getPresentationState()
+                        .getNextUserMessageContent()
+                        .add(validCached.getImageBlock());
             }
 
             // Re-read from disk (cache doesn't store content to save memory)
@@ -349,8 +354,12 @@ public class ReadFileToolHandler implements StateFullToolHandler {
                 fileContent = FileContentExtractor.extractFileContent(absolutePath, supportsImages);
             } catch (Exception e) {
                 context.getTaskState()
+                        .getApiTurnState()
                         .setConsecutiveMistakeCount(
-                                context.getTaskState().getConsecutiveMistakeCount() + 1);
+                                context.getTaskState()
+                                                .getApiTurnState()
+                                                .getConsecutiveMistakeCount()
+                                        + 1);
                 String errorMessage = e.getMessage() != null ? e.getMessage() : String.valueOf(e);
                 String normalizedMessage =
                         errorMessage.startsWith("Error reading file:")
@@ -389,8 +398,10 @@ public class ReadFileToolHandler implements StateFullToolHandler {
         } catch (Exception e) {
             // Return a graceful tool error instead of crashing
             context.getTaskState()
+                    .getApiTurnState()
                     .setConsecutiveMistakeCount(
-                            context.getTaskState().getConsecutiveMistakeCount() + 1);
+                            context.getTaskState().getApiTurnState().getConsecutiveMistakeCount()
+                                    + 1);
             String errorMessage = e.getMessage() != null ? e.getMessage() : String.valueOf(e);
             String normalizedMessage =
                     errorMessage.startsWith("Error reading file:")
@@ -401,7 +412,7 @@ public class ReadFileToolHandler implements StateFullToolHandler {
         }
 
         // Only reset mistake count after a successful read
-        context.getTaskState().setConsecutiveMistakeCount(0);
+        context.getTaskState().getApiTurnState().setConsecutiveMistakeCount(0);
 
         // Track file read operation
         if (context.getServices() != null
@@ -429,12 +440,18 @@ public class ReadFileToolHandler implements StateFullToolHandler {
                             fileContent.imageBlock.source.mediaType);
         }
         context.getTaskState()
+                .getToolExecutionState()
                 .getFileReadCache()
                 .put(cacheKey, new TaskState.FileReadCacheEntry(1, mtime, imageBlock));
 
         // Handle image blocks — push to userMessageContent
-        if (imageBlock != null && context.getTaskState().getNextUserMessageContent() != null) {
-            context.getTaskState().getNextUserMessageContent().add(imageBlock);
+        if (imageBlock != null
+                && context.getTaskState().getPresentationState().getNextUserMessageContent()
+                        != null) {
+            context.getTaskState()
+                    .getPresentationState()
+                    .getNextUserMessageContent()
+                    .add(imageBlock);
         }
 
         String content = fileContent.text != null ? fileContent.text : "[Image file]";

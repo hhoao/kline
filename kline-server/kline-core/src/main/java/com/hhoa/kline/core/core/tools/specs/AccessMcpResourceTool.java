@@ -1,8 +1,8 @@
 package com.hhoa.kline.core.core.tools.specs;
 
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.List;
 import java.util.function.Function;
@@ -23,7 +23,7 @@ public class AccessMcpResourceTool extends BaseToolSpec {
     private static final Function<SystemPromptContext, Boolean> CONTEXT_REQUIREMENTS =
             (context) -> context.getMcpHub() != null;
 
-    public static ClineToolSpec create(ModelFamily modelFamily) {
+    public static ToolSpec create(ModelFamily modelFamily) {
         boolean isNative =
                 modelFamily == ModelFamily.NATIVE_GPT_5
                         || modelFamily == ModelFamily.NATIVE_GPT_5_1
@@ -31,7 +31,7 @@ public class AccessMcpResourceTool extends BaseToolSpec {
 
         String description = isNative ? NATIVE_DESCRIPTION : GENERIC_DESCRIPTION;
 
-        return ClineToolSpec.builder()
+        return ToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.MCP_ACCESS.getValue())
                 .name(ClineDefaultTool.MCP_ACCESS.getValue())

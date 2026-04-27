@@ -1,7 +1,7 @@
 package com.hhoa.kline.core.core.tools.specs;
 
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import java.util.List;
 
 /**
@@ -11,8 +11,8 @@ import java.util.List;
  */
 public class CliSubagentsTool extends BaseToolSpec {
 
-    public static ClineToolSpec create(ModelFamily modelFamily) {
-        return ClineToolSpec.builder()
+    public static ToolSpec create(ModelFamily modelFamily) {
+        return ToolSpec.builder()
                 .variant(modelFamily)
                 .id("cli_subagents")
                 .name("cli_subagents")

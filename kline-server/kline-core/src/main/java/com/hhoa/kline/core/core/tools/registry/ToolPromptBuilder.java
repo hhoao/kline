@@ -1,7 +1,8 @@
 package com.hhoa.kline.core.core.tools.registry;
 
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
+import com.hhoa.kline.core.core.tools.ToolParameterSpec;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -11,7 +12,7 @@ public final class ToolPromptBuilder {
     private ToolPromptBuilder() {}
 
     public static String render(
-            ClineToolSpec config, List<String> registry, SystemPromptContext context) {
+            ToolSpec config, List<String> registry, SystemPromptContext context) {
         if ((config.getParameters() == null || config.getParameters().isEmpty())
                 && (config.getDescription() == null || config.getDescription().isBlank())) {
             return "";
@@ -26,12 +27,12 @@ public final class ToolPromptBuilder {
         description.add(
                 "Description: " + (config.getDescription() != null ? config.getDescription() : ""));
 
-        List<ClineToolSpec.ClineToolSpecParameter> params =
+        List<ToolParameterSpec> params =
                 config.getParameters() != null
                         ? new ArrayList<>(config.getParameters())
                         : new ArrayList<>();
 
-        List<ClineToolSpec.ClineToolSpecParameter> filteredParams =
+        List<ToolParameterSpec> filteredParams =
                 params.stream()
                         .filter(
                                 p -> {
@@ -58,7 +59,7 @@ public final class ToolPromptBuilder {
 
         List<String> additionalDesc =
                 filteredParams.stream()
-                        .map(ClineToolSpec.ClineToolSpecParameter::getDescription)
+                        .map(ToolParameterSpec::getDescription)
                         .filter(desc -> desc != null && !desc.isBlank())
                         .collect(Collectors.toList());
         if (!additionalDesc.isEmpty()) {
@@ -77,7 +78,7 @@ public final class ToolPromptBuilder {
     }
 
     private static String buildParametersSection(
-            List<ClineToolSpec.ClineToolSpecParameter> params, SystemPromptContext context) {
+            List<ToolParameterSpec> params, SystemPromptContext context) {
         if (params == null || params.isEmpty()) {
             return "Parameters: None";
         }
@@ -100,8 +101,7 @@ public final class ToolPromptBuilder {
         return String.join("\n", sections);
     }
 
-    private static String resolveInstruction(
-            ClineToolSpec.ClineToolSpecParameter param, SystemPromptContext context) {
+    private static String resolveInstruction(ToolParameterSpec param, SystemPromptContext context) {
         if (param.getInstructionFn() != null && context != null) {
             try {
                 return param.getInstructionFn().apply(context);
@@ -112,8 +112,7 @@ public final class ToolPromptBuilder {
         return param.getInstruction() != null ? param.getInstruction() : "";
     }
 
-    private static String buildUsageSection(
-            String toolId, List<ClineToolSpec.ClineToolSpecParameter> params) {
+    private static String buildUsageSection(String toolId, List<ToolParameterSpec> params) {
         List<String> usageSection = new ArrayList<>();
         usageSection.add("Usage:");
         String usageTag = "<" + toolId + ">";
@@ -122,7 +121,7 @@ public final class ToolPromptBuilder {
         usageSection.add(usageTag);
 
         if (params != null) {
-            for (ClineToolSpec.ClineToolSpecParameter param : params) {
+            for (ToolParameterSpec param : params) {
                 String usage = param.getUsage() != null ? param.getUsage() : "";
                 usageSection.add(
                         String.format("<%s>%s</%s>", param.getName(), usage, param.getName()));

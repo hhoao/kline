@@ -10,7 +10,6 @@ import com.hhoa.kline.core.core.hooks.HookInput;
 import com.hhoa.kline.core.core.hooks.HookName;
 import com.hhoa.kline.core.core.ignore.ClineIgnoreController;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.shared.FocusChainSettings;
 import com.hhoa.kline.core.core.shared.storage.types.Mode;
@@ -144,7 +143,8 @@ public class DefaultExecutor implements ToolExecutor {
                     HandlerUtils.createTextBlocks(
                             responseFormatter.toolError("(Unsupported tool: " + toolName + ")")));
         }
-        if (config.getTaskState() != null && config.getTaskState().isDidRejectTool()) {
+        if (config.getTaskState() != null
+                && config.getTaskState().getToolExecutionState().isDidRejectTool()) {
             String reason =
                     block.isPartial()
                             ? "Tool was interrupted and not executed due to user rejecting a previous tool."
@@ -153,10 +153,14 @@ public class DefaultExecutor implements ToolExecutor {
             return new ToolExecuteResult.Immediate(
                     HandlerUtils.createTextBlocks(responseFormatter.toolDenied()));
         }
-        if (config.getTaskState() != null && config.getTaskState().isDidAlreadyUseTool()) {
+        if (config.getTaskState() != null
+                && config.getTaskState().getToolExecutionState().isDidAlreadyUseTool()) {
             String msg = responseFormatter.toolAlreadyUsed(toolName);
-            if (config.getTaskState().getNextUserMessageContent() != null) {
-                config.getTaskState().getNextUserMessageContent().add(new TextContentBlock(msg));
+            if (config.getTaskState().getPresentationState().getNextUserMessageContent() != null) {
+                config.getTaskState()
+                        .getPresentationState()
+                        .getNextUserMessageContent()
+                        .add(new TextContentBlock(msg));
             }
             return new ToolExecuteResult.Immediate(HandlerUtils.createTextBlocks(msg));
         }
@@ -188,31 +192,29 @@ public class DefaultExecutor implements ToolExecutor {
             return new ToolExecuteResult.Immediate(errorResult);
         }
 
-        ClineToolSpec spec = handler.getClineToolSpec();
-        if (spec != null && spec.getParameters() != null) {
-            List<String> required =
-                    spec.getParameters().stream()
-                            .filter(ClineToolSpec.ClineToolSpecParameter::isRequired)
-                            .map(ClineToolSpec.ClineToolSpecParameter::getName)
-                            .toList();
-            for (String paramName : required) {
-                Object v = block.getParams() == null ? null : block.getParams().get(paramName);
-                if (v == null || String.valueOf(v).trim().isEmpty()) {
-                    if (config.getTaskState() != null) {
-                        config.getTaskState()
-                                .setConsecutiveMistakeCount(
-                                        config.getTaskState().getConsecutiveMistakeCount() + 1);
-                    }
-                    String errorResult =
-                            config.getCallbacks()
-                                    .sayAndCreateMissingParamError(block.getName(), paramName);
-                    List<UserContentBlock> errorBlocks = HandlerUtils.createTextBlocks(errorResult);
-                    return new ToolExecuteResult.Immediate(errorBlocks);
-                }
+        ToolCallValidator.ValidationResult validation =
+                ToolCallValidator.validate(handler.getToolSpec(), block, config);
+        if (!validation.isValid()) {
+            if (config.getTaskState() != null) {
+                config.getTaskState()
+                        .getApiTurnState()
+                        .setConsecutiveMistakeCount(
+                                config.getTaskState().getApiTurnState().getConsecutiveMistakeCount()
+                                        + 1);
             }
+            if (validation.errorCode() == ToolCallValidator.ErrorCode.MISSING_REQUIRED_PARAMETER) {
+                String errorResult =
+                        config.getCallbacks()
+                                .sayAndCreateMissingParamError(
+                                        block.getName(), validation.paramName());
+                return new ToolExecuteResult.Immediate(HandlerUtils.createTextBlocks(errorResult));
+            }
+            return new ToolExecuteResult.Immediate(
+                    HandlerUtils.createTextBlocks(
+                            responseFormatter.toolError(validation.message())));
         }
 
-        config.getTaskState().setConsecutiveMistakeCount(0);
+        config.getTaskState().getApiTurnState().setConsecutiveMistakeCount(0);
 
         try {
             return handleCompleteBlockAsyncInternal(block, config, handler);
@@ -245,7 +247,7 @@ public class DefaultExecutor implements ToolExecutor {
 
             // Track the last executed tool for consecutive call detection
             if (config.getTaskState() != null) {
-                config.getTaskState().setLastToolName(block.getName());
+                config.getTaskState().getToolExecutionState().setLastToolName(block.getName());
             }
 
             updateFocusChainIfNeeded(block, config);
@@ -365,13 +367,15 @@ public class DefaultExecutor implements ToolExecutor {
             if (hookResult.getContextModification() != null
                     && !hookResult.getContextModification().trim().isEmpty()
                     && config.getTaskState() != null
-                    && config.getTaskState().getNextUserMessageContent() != null) {
+                    && config.getTaskState().getPresentationState().getNextUserMessageContent()
+                            != null) {
                 String contextText = hookResult.getContextModification().trim();
                 String hookContextBlock =
                         String.format(
                                 "<hook_context source=\"PostToolUse\" type=\"general\">\n%s\n</hook_context>",
                                 contextText);
                 config.getTaskState()
+                        .getPresentationState()
                         .getNextUserMessageContent()
                         .add(new TextContentBlock(hookContextBlock));
             }
@@ -492,13 +496,17 @@ public class DefaultExecutor implements ToolExecutor {
 
     private void createToolRejectionMessage(ToolUse block, String reason, ToolContext config) {
         if (config.getTaskState() == null
-                || config.getTaskState().getNextUserMessageContent() == null) {
+                || config.getTaskState().getPresentationState().getNextUserMessageContent()
+                        == null) {
             return;
         }
         String description = getToolDescription(block);
         String message = reason + " " + description;
         TextContentBlock userContentBlock = new TextContentBlock(message);
-        config.getTaskState().getNextUserMessageContent().add(userContentBlock);
+        config.getTaskState()
+                .getPresentationState()
+                .getNextUserMessageContent()
+                .add(userContentBlock);
     }
 
     private String getToolDescription(ToolUse toolUse) {

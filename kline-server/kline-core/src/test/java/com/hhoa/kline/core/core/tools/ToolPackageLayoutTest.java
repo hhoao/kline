@@ -17,6 +17,11 @@ class ToolPackageLayoutTest {
                         sourceRoot.resolve("com/hhoa/kline/core/core/prompts/systemprompt/tools")),
                 "Tool specs should live under core/core/tools/specs");
         assertFalse(
+                Files.exists(
+                        sourceRoot.resolve(
+                                "com/hhoa/kline/core/core/prompts/systemprompt/ClineToolSpec.java")),
+                "Tool contract should live under core/core/tools");
+        assertFalse(
                 Files.exists(sourceRoot.resolve("com/hhoa/kline/core/core/task/tools/handlers")),
                 "Tool handlers should live under core/core/tools/handlers");
         assertTrue(

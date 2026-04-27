@@ -1,8 +1,9 @@
 package com.hhoa.kline.core.core.tools.specs;
 
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
+import com.hhoa.kline.core.core.tools.ToolParameterSpec;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,7 +25,7 @@ public class ExecuteCommandTool extends BaseToolSpec {
     private static final String GEMINI_3_DESCRIPTION =
             "Request to execute a CLI command on the system. Use this when you need to perform system operations or run specific commands to accomplish any step in the user's task. When chaining commands, use the shell operator && (not the HTML entity &amp;&amp;). If using search/grep commands, be careful to not use vague search terms that may return thousands of results. When in PLAN MODE, you may use the execute_command tool, but only in a non-destructive manner and in a way that does not alter any files.";
 
-    public static ClineToolSpec create(ModelFamily modelFamily) {
+    public static ToolSpec create(ModelFamily modelFamily) {
         if (modelFamily == ModelFamily.NATIVE_GPT_5
                 || modelFamily == ModelFamily.NATIVE_GPT_5_1
                 || modelFamily == ModelFamily.NATIVE_NEXT_GEN) {
@@ -38,8 +39,8 @@ public class ExecuteCommandTool extends BaseToolSpec {
         return createGenericVariant(modelFamily);
     }
 
-    private static ClineToolSpec createGenericVariant(ModelFamily modelFamily) {
-        List<ClineToolSpec.ClineToolSpecParameter> parameters = new ArrayList<>();
+    private static ToolSpec createGenericVariant(ModelFamily modelFamily) {
+        List<ToolParameterSpec> parameters = new ArrayList<>();
         parameters.add(
                 createParameter(
                         "command",
@@ -56,8 +57,8 @@ public class ExecuteCommandTool extends BaseToolSpec {
 
         Function<SystemPromptContext, Boolean> yoloModeContextRequirement =
                 (context) -> Boolean.TRUE.equals(context.getYoloModeToggled());
-        ClineToolSpec.ClineToolSpecParameter timeoutParam =
-                ClineToolSpec.ClineToolSpecParameter.builder()
+        ToolParameterSpec timeoutParam =
+                ToolParameterSpec.builder()
                         .name("timeout")
                         .required(false)
                         .type("integer")
@@ -68,7 +69,7 @@ public class ExecuteCommandTool extends BaseToolSpec {
                         .build();
         parameters.add(timeoutParam);
 
-        return ClineToolSpec.builder()
+        return ToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.BASH.getValue())
                 .name(ClineDefaultTool.BASH.getValue())
@@ -77,8 +78,8 @@ public class ExecuteCommandTool extends BaseToolSpec {
                 .build();
     }
 
-    private static ClineToolSpec createNativeGpt5Variant(ModelFamily modelFamily) {
-        return ClineToolSpec.builder()
+    private static ToolSpec createNativeGpt5Variant(ModelFamily modelFamily) {
+        return ToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.BASH.getValue())
                 .name(ClineDefaultTool.BASH.getValue())
@@ -99,8 +100,8 @@ public class ExecuteCommandTool extends BaseToolSpec {
                 .build();
     }
 
-    private static ClineToolSpec createGemini3Variant() {
-        return ClineToolSpec.builder()
+    private static ToolSpec createGemini3Variant() {
+        return ToolSpec.builder()
                 .variant(ModelFamily.GEMINI_3)
                 .id(ClineDefaultTool.BASH.getValue())
                 .name(ClineDefaultTool.BASH.getValue())

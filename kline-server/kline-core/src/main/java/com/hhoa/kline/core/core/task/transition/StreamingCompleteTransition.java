@@ -17,14 +17,15 @@ public class StreamingCompleteTransition implements SingleArcTransition<TaskV2, 
 
     @Override
     public void transition(TaskV2 operand, TaskEvent event) {
-        if (operand.getTaskState().getPendingAskTokens().isEmpty()) {
-            ApiRequestResult result = operand.getTaskState().getApiRequestResult();
+        if (operand.getTaskState().getToolExecutionState().getPendingAskTokens().isEmpty()) {
+            ApiRequestResult result =
+                    operand.getTaskState().getApiTurnState().getApiRequestResult();
             operand.handle(new ApiCompletedEvent(operand.getTaskId(), result));
         } else {
             log.debug(
                     "Task {} streaming complete but {} tool asks pending, waiting for user response",
                     operand.getTaskId(),
-                    operand.getTaskState().getPendingAskTokens().size());
+                    operand.getTaskState().getToolExecutionState().getPendingAskTokens().size());
         }
     }
 }

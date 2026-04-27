@@ -1,7 +1,7 @@
 package com.hhoa.kline.core.core.tools.specs;
 
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.List;
 
@@ -15,7 +15,7 @@ public class ListFilesTool extends BaseToolSpec {
     private static final String DESCRIPTION =
             "Request to list files and directories within the specified directory. If recursive is true, it will list all files and directories recursively. If recursive is false or not provided, it will only list the top-level contents. Do not use this tool to confirm the existence of files you may have created, as the user will let you know if the files were created successfully or not.";
 
-    public static ClineToolSpec create(ModelFamily modelFamily) {
+    public static ToolSpec create(ModelFamily modelFamily) {
         if (modelFamily == ModelFamily.NATIVE_GPT_5
                 || modelFamily == ModelFamily.NATIVE_GPT_5_1
                 || modelFamily == ModelFamily.NATIVE_NEXT_GEN) {
@@ -25,8 +25,8 @@ public class ListFilesTool extends BaseToolSpec {
         return createGenericVariant(modelFamily);
     }
 
-    private static ClineToolSpec createGenericVariant(ModelFamily modelFamily) {
-        return ClineToolSpec.builder()
+    private static ToolSpec createGenericVariant(ModelFamily modelFamily) {
+        return ToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.LIST_FILES.getValue())
                 .name(ClineDefaultTool.LIST_FILES.getValue())
@@ -48,8 +48,8 @@ public class ListFilesTool extends BaseToolSpec {
                 .build();
     }
 
-    private static ClineToolSpec createNativeVariant(ModelFamily modelFamily) {
-        return ClineToolSpec.builder()
+    private static ToolSpec createNativeVariant(ModelFamily modelFamily) {
+        return ToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.LIST_FILES.getValue())
                 .name(ClineDefaultTool.LIST_FILES.getValue())

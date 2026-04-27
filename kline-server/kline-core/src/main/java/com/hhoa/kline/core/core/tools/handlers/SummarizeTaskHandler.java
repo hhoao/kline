@@ -9,9 +9,10 @@ import com.hhoa.kline.core.core.ignore.ClineIgnoreController;
 import com.hhoa.kline.core.core.integrations.FileContentExtractor;
 import com.hhoa.kline.core.core.prompts.ContextManagement;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
+import com.hhoa.kline.core.core.tools.ToolParameterSpec;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.UIHelpers;
@@ -77,12 +78,12 @@ public class SummarizeTaskHandler implements ToolHandler {
     }
 
     @Override
-    public ClineToolSpec getClineToolSpec() {
-        return ClineToolSpec.builder()
+    public ToolSpec getToolSpec() {
+        return ToolSpec.builder()
                 .name(NAME)
                 .parameters(
                         List.of(
-                                ClineToolSpec.ClineToolSpecParameter.builder()
+                                ToolParameterSpec.builder()
                                         .name("context")
                                         .required(true)
                                         .instruction("")

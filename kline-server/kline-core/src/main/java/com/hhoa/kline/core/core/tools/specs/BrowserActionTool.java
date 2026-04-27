@@ -1,8 +1,8 @@
 package com.hhoa.kline.core.core.tools.specs;
 
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.List;
 import java.util.function.Function;
@@ -24,7 +24,7 @@ public class BrowserActionTool extends BaseToolSpec {
     private static final Function<SystemPromptContext, Boolean> CONTEXT_REQUIREMENTS =
             (context) -> Boolean.TRUE.equals(context.getSupportsBrowserUse());
 
-    public static ClineToolSpec create(ModelFamily modelFamily) {
+    public static ToolSpec create(ModelFamily modelFamily) {
         if (modelFamily == ModelFamily.NATIVE_NEXT_GEN) {
             return createNativeNextGenVariant();
         }
@@ -32,8 +32,8 @@ public class BrowserActionTool extends BaseToolSpec {
         return createGenericVariant(modelFamily);
     }
 
-    private static ClineToolSpec createGenericVariant(ModelFamily modelFamily) {
-        return ClineToolSpec.builder()
+    private static ToolSpec createGenericVariant(ModelFamily modelFamily) {
+        return ToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.BROWSER.getValue())
                 .name(ClineDefaultTool.BROWSER.getValue())
@@ -79,8 +79,8 @@ public class BrowserActionTool extends BaseToolSpec {
                 .build();
     }
 
-    private static ClineToolSpec createNativeNextGenVariant() {
-        return ClineToolSpec.builder()
+    private static ToolSpec createNativeNextGenVariant() {
+        return ToolSpec.builder()
                 .variant(ModelFamily.NATIVE_NEXT_GEN)
                 .id(ClineDefaultTool.BROWSER.getValue())
                 .name(ClineDefaultTool.BROWSER.getValue())

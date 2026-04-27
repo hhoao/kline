@@ -1,8 +1,9 @@
 package com.hhoa.kline.core.core.tools.specs;
 
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
+import com.hhoa.kline.core.core.tools.ToolParameterSpec;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,7 +23,7 @@ public class PlanModeRespondTool extends BaseToolSpec {
             "Respond with a plan that outlines a solution to the user's request. This tool should ONLY be used when you have already explored the relevant files and are ready to present a concrete plan. Only use this tool after you have explored relevant files and collected sufficient context to create a detailed, accurate plan. This tool is only available in PLAN MODE, as indicated by the environment_details.\n"
                     + "If it becomes apparent that additional exploration is required while the plan_mode_respond response is being generated, the optional needs_more_exploration parameter can be toggled to enable further research. This allows you to acknowledge that more exploration is required before the final plan_mode_respond is generated, and signals that your next message will use exploration tools instead.";
 
-    public static ClineToolSpec create(ModelFamily modelFamily, SystemPromptContext context) {
+    public static ToolSpec create(ModelFamily modelFamily, SystemPromptContext context) {
         if (modelFamily == ModelFamily.NATIVE_GPT_5
                 || modelFamily == ModelFamily.NATIVE_GPT_5_1
                 || modelFamily == ModelFamily.NATIVE_NEXT_GEN) {
@@ -36,9 +37,9 @@ public class PlanModeRespondTool extends BaseToolSpec {
         return createGenericVariant(modelFamily, context);
     }
 
-    private static ClineToolSpec createGenericVariant(
+    private static ToolSpec createGenericVariant(
             ModelFamily modelFamily, SystemPromptContext context) {
-        List<ClineToolSpec.ClineToolSpecParameter> parameters = new ArrayList<>();
+        List<ToolParameterSpec> parameters = new ArrayList<>();
         parameters.add(
                 createParameter(
                         "response",
@@ -66,7 +67,7 @@ public class PlanModeRespondTool extends BaseToolSpec {
                             ClineDefaultTool.TODO.getValue()));
         }
 
-        return ClineToolSpec.builder()
+        return ToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.PLAN_MODE.getValue())
                 .name(ClineDefaultTool.PLAN_MODE.getValue())
@@ -75,8 +76,8 @@ public class PlanModeRespondTool extends BaseToolSpec {
                 .build();
     }
 
-    private static ClineToolSpec createNativeGpt5Variant(ModelFamily modelFamily) {
-        return ClineToolSpec.builder()
+    private static ToolSpec createNativeGpt5Variant(ModelFamily modelFamily) {
+        return ToolSpec.builder()
                 .variant(modelFamily)
                 .id(ClineDefaultTool.PLAN_MODE.getValue())
                 .name(ClineDefaultTool.PLAN_MODE.getValue())
@@ -96,8 +97,8 @@ public class PlanModeRespondTool extends BaseToolSpec {
                 .build();
     }
 
-    private static ClineToolSpec createGemini3Variant(SystemPromptContext context) {
-        List<ClineToolSpec.ClineToolSpecParameter> parameters = new ArrayList<>();
+    private static ToolSpec createGemini3Variant(SystemPromptContext context) {
+        List<ToolParameterSpec> parameters = new ArrayList<>();
         parameters.add(
                 createParameter(
                         "response",
@@ -125,7 +126,7 @@ public class PlanModeRespondTool extends BaseToolSpec {
                             ClineDefaultTool.TODO.getValue()));
         }
 
-        return ClineToolSpec.builder()
+        return ToolSpec.builder()
                 .variant(ModelFamily.GEMINI_3)
                 .id(ClineDefaultTool.PLAN_MODE.getValue())
                 .name(ClineDefaultTool.PLAN_MODE.getValue())

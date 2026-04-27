@@ -1,12 +1,13 @@
 package com.hhoa.kline.core.core.prompts.systemprompt.registry;
 
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.prompts.systemprompt.PromptVariant;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptSection;
 import com.hhoa.kline.core.core.prompts.systemprompt.templates.Placeholders;
 import com.hhoa.kline.core.core.prompts.systemprompt.templates.TemplateEngine;
+import com.hhoa.kline.core.core.tools.ToolParameterSpec;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.core.tools.registry.ToolPromptBuilder;
 import com.hhoa.kline.core.core.tools.registry.ToolSpecManager;
 import com.hhoa.kline.core.core.tools.subagent.AgentConfigLoader;
@@ -206,18 +207,18 @@ public class PromptBuilder {
             family = ModelFamily.GENERIC;
         }
 
-        List<ClineToolSpec> resolvedTools;
+        List<ToolSpec> resolvedTools;
 
         if (variant.getTools() != null && !variant.getTools().isEmpty()) {
             List<String> requestedIds = new ArrayList<>(variant.getTools());
             resolvedTools =
                     ToolSpecManager.getToolsForVariantWithFallback(family, requestedIds, context);
 
-            Map<String, ClineToolSpec> toolMap =
+            Map<String, ToolSpec> toolMap =
                     resolvedTools.stream()
                             .collect(
                                     Collectors.toMap(
-                                            ClineToolSpec::getId,
+                                            ToolSpec::getId,
                                             tool -> tool,
                                             (existing, replacement) -> existing));
             resolvedTools =
@@ -246,7 +247,7 @@ public class PromptBuilder {
 
         resolvedTools = mergeDynamicSubagentToolSpecs(resolvedTools, variant, context);
 
-        List<ClineToolSpec> enabledTools =
+        List<ToolSpec> enabledTools =
                 resolvedTools.stream()
                         .filter(
                                 tool -> {
@@ -264,7 +265,7 @@ public class PromptBuilder {
 
         List<String> ids =
                 enabledTools.stream()
-                        .map(ClineToolSpec::getId)
+                        .map(ToolSpec::getId)
                         .filter(id -> id != null && !id.isBlank())
                         .collect(Collectors.toList());
 
@@ -278,8 +279,8 @@ public class PromptBuilder {
      * 与 Cline {@code ClineToolSet.getDynamicSubagentToolSpecs} / {@code getEnabledToolSpecs}
      * 一致：在启用子代理且存在 YAML 配置时，用动态 {@code use_subagent_*} 工具替换单一的 {@code use_subagents}。
      */
-    private static List<ClineToolSpec> mergeDynamicSubagentToolSpecs(
-            List<ClineToolSpec> resolvedTools, PromptVariant variant, SystemPromptContext context) {
+    private static List<ToolSpec> mergeDynamicSubagentToolSpecs(
+            List<ToolSpec> resolvedTools, PromptVariant variant, SystemPromptContext context) {
         if (!Boolean.TRUE.equals(context.getSubagentsEnabled())
                 || Boolean.TRUE.equals(context.getIsSubagentRun())) {
             return resolvedTools;
@@ -299,8 +300,8 @@ public class PromptBuilder {
         if (agentConfigs.isEmpty()) {
             return resolvedTools;
         }
-        List<ClineToolSpec> filtered = new ArrayList<>();
-        for (ClineToolSpec t : resolvedTools) {
+        List<ToolSpec> filtered = new ArrayList<>();
+        for (ToolSpec t : resolvedTools) {
             if (!ClineDefaultTool.USE_SUBAGENTS.getValue().equals(t.getId())) {
                 filtered.add(t);
             }
@@ -313,17 +314,17 @@ public class PromptBuilder {
         return filtered;
     }
 
-    private static ClineToolSpec buildDynamicSubagentSpec(
+    private static ToolSpec buildDynamicSubagentSpec(
             AgentConfigLoader.AgentConfigWithToolName entry, ModelFamily family) {
-        ClineToolSpec.ClineToolSpecParameter promptParam =
-                ClineToolSpec.ClineToolSpecParameter.builder()
+        ToolParameterSpec promptParam =
+                ToolParameterSpec.builder()
                         .name("prompt")
                         .required(true)
                         .instruction(
                                 "Helpful instruction for the task that the subagent will perform.")
                         .build();
 
-        return ClineToolSpec.builder()
+        return ToolSpec.builder()
                 .variant(family)
                 .id(ClineDefaultTool.USE_SUBAGENTS.getValue())
                 .name(entry.toolName())

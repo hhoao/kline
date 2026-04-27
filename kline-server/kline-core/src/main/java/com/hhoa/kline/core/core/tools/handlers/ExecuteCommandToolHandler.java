@@ -2,7 +2,6 @@ package com.hhoa.kline.core.core.tools.handlers;
 
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.services.telemetry.TelemetryService;
 import com.hhoa.kline.core.core.shared.ClineAsk;
@@ -10,6 +9,7 @@ import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.TaskUtils;
 import com.hhoa.kline.core.core.tools.AutoApproveToolResult;
+import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.core.tools.specs.ExecuteCommandTool;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
@@ -98,7 +98,7 @@ public class ExecuteCommandToolHandler implements StateFullToolHandler {
     }
 
     @Override
-    public ClineToolSpec getClineToolSpec() {
+    public ToolSpec getToolSpec() {
         return ExecuteCommandTool.create(ModelFamily.GENERIC);
     }
 
@@ -238,10 +238,10 @@ public class ExecuteCommandToolHandler implements StateFullToolHandler {
 
             // Invalidate file read cache after command execution — commands can modify files
             if (!result.userRejected) {
-                context.getTaskState().getFileReadCache().clear();
+                context.getTaskState().getToolExecutionState().getFileReadCache().clear();
             }
             if (result.userRejected) {
-                context.getTaskState().setDidRejectTool(true);
+                context.getTaskState().getToolExecutionState().setDidRejectTool(true);
             }
             return HandlerUtils.createToolExecuteResult(result.result);
         } else {
@@ -284,7 +284,7 @@ public class ExecuteCommandToolHandler implements StateFullToolHandler {
 
         boolean approved = ToolResultUtils.processAskResult(askResult, context);
         if (!approved) {
-            context.getTaskState().setDidRejectTool(true);
+            context.getTaskState().getToolExecutionState().setDidRejectTool(true);
             captureTelemetry(context, block, false, false, state.getWorkspaceContext());
             return HandlerUtils.createToolExecuteResult(formatResponse.toolDenied());
         }
@@ -303,10 +303,10 @@ public class ExecuteCommandToolHandler implements StateFullToolHandler {
 
         // Invalidate file read cache after command execution — commands can modify files
         if (!result.userRejected) {
-            context.getTaskState().getFileReadCache().clear();
+            context.getTaskState().getToolExecutionState().getFileReadCache().clear();
         }
         if (result.userRejected) {
-            context.getTaskState().setDidRejectTool(true);
+            context.getTaskState().getToolExecutionState().setDidRejectTool(true);
         }
         return HandlerUtils.createToolExecuteResult(result.result);
     }

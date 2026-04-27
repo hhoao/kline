@@ -1,7 +1,7 @@
 package com.hhoa.kline.core.core.tools.specs;
 
-import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
+import com.hhoa.kline.core.core.tools.ToolParameterSpec;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.List;
 import java.util.function.Function;
@@ -22,9 +22,9 @@ public abstract class BaseToolSpec {
      * @param usage 用法
      * @return 参数规格
      */
-    protected static ClineToolSpec.ClineToolSpecParameter createParameter(
+    protected static ToolParameterSpec createParameter(
             String name, boolean required, String instruction, String usage) {
-        return ClineToolSpec.ClineToolSpecParameter.builder()
+        return ToolParameterSpec.builder()
                 .name(name)
                 .required(required)
                 .instruction(instruction)
@@ -37,8 +37,8 @@ public abstract class BaseToolSpec {
      *
      * @return 任务进度参数规格
      */
-    protected static ClineToolSpec.ClineToolSpecParameter createTaskProgressParameter() {
-        return ClineToolSpec.ClineToolSpecParameter.builder()
+    protected static ToolParameterSpec createTaskProgressParameter() {
+        return ToolParameterSpec.builder()
                 .name("task_progress")
                 .required(false)
                 .instruction(
@@ -59,15 +59,15 @@ public abstract class BaseToolSpec {
      * @param dependencyToolId 依赖的工具 ID（如 "focus_chain"）
      * @return 参数规格
      */
-    protected static ClineToolSpec.ClineToolSpecParameter createParameterWithDependency(
+    protected static ToolParameterSpec createParameterWithDependency(
             String name,
             boolean required,
             String instruction,
             String usage,
             String description,
             String dependencyToolId) {
-        ClineToolSpec.ClineToolSpecParameter.ClineToolSpecParameterBuilder builder =
-                ClineToolSpec.ClineToolSpecParameter.builder()
+        ToolParameterSpec.ToolParameterSpecBuilder builder =
+                ToolParameterSpec.builder()
                         .name(name)
                         .required(required)
                         .instruction(instruction)
@@ -89,9 +89,9 @@ public abstract class BaseToolSpec {
      * @param type 参数类型 ("string", "boolean", "integer", "array", "object")
      * @return 参数规格
      */
-    protected static ClineToolSpec.ClineToolSpecParameter createParameterWithType(
+    protected static ToolParameterSpec createParameterWithType(
             String name, boolean required, String instruction, String usage, String type) {
-        return ClineToolSpec.ClineToolSpecParameter.builder()
+        return ToolParameterSpec.builder()
                 .name(name)
                 .required(required)
                 .instruction(instruction)
@@ -109,12 +109,12 @@ public abstract class BaseToolSpec {
      * @param usage 用法
      * @return 参数规格
      */
-    protected static ClineToolSpec.ClineToolSpecParameter createParameterWithInstructionFn(
+    protected static ToolParameterSpec createParameterWithInstructionFn(
             String name,
             boolean required,
             Function<SystemPromptContext, String> instructionFn,
             String usage) {
-        return ClineToolSpec.ClineToolSpecParameter.builder()
+        return ToolParameterSpec.builder()
                 .name(name)
                 .required(required)
                 .instructionFn(instructionFn)
