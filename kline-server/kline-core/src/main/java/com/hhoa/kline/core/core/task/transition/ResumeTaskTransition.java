@@ -5,7 +5,7 @@ import com.hhoa.kline.core.core.task.AskPending;
 import com.hhoa.kline.core.core.task.TaskV2;
 import com.hhoa.kline.core.core.task.event.TaskEvent;
 import com.hhoa.kline.core.core.task.statemachine.SingleArcTransition;
-import com.hhoa.kline.core.core.task.tools.types.PendingAskToken.DefaultPendingAskToken;
+import com.hhoa.kline.core.core.tools.types.PendingAskToken.DefaultPendingAskToken;
 
 public class ResumeTaskTransition implements SingleArcTransition<TaskV2, TaskEvent> {
 

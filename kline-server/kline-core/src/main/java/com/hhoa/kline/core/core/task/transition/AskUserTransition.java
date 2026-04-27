@@ -7,7 +7,7 @@ import com.hhoa.kline.core.core.task.TaskV2;
 import com.hhoa.kline.core.core.task.event.AskUserEvent;
 import com.hhoa.kline.core.core.task.event.TaskEvent;
 import com.hhoa.kline.core.core.task.statemachine.SingleArcTransition;
-import com.hhoa.kline.core.core.task.tools.types.PendingAskToken;
+import com.hhoa.kline.core.core.tools.types.PendingAskToken;
 
 public class AskUserTransition implements SingleArcTransition<TaskV2, TaskEvent> {
 

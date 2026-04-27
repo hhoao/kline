@@ -42,7 +42,7 @@ import com.hhoa.kline.core.core.task.handler.TaskV2StartTaskHandler;
 import com.hhoa.kline.core.core.task.statemachine.Recoverable;
 import com.hhoa.kline.core.core.task.statemachine.StateMachine;
 import com.hhoa.kline.core.core.task.statemachine.StateMachineFactory;
-import com.hhoa.kline.core.core.task.tools.ToolExecutor;
+import com.hhoa.kline.core.core.tools.ToolExecutor;
 import com.hhoa.kline.core.core.workspace.WorkspaceRootManager;
 import com.hhoa.kline.core.subscription.MessageSender;
 import com.hhoa.kline.core.subscription.message.WindowShowMessageRequestMessage;
@@ -467,8 +467,7 @@ public class TaskV2 implements Recoverable<TaskState> {
         }
 
         // Wire hook state callbacks on DefaultExecutor
-        if (toolExecutor
-                instanceof com.hhoa.kline.core.core.task.tools.DefaultExecutor defaultExec) {
+        if (toolExecutor instanceof com.hhoa.kline.core.core.tools.DefaultExecutor defaultExec) {
             defaultExec.setSetActiveHookExecution(this::setActiveHookExecution);
             defaultExec.setClearActiveHookExecution(this::clearActiveHookExecution);
         }

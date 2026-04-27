@@ -8,7 +8,7 @@ import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptService;
 import com.hhoa.kline.core.core.services.mcp.IMcpHub;
 import com.hhoa.kline.core.core.storage.StateManager;
 import com.hhoa.kline.core.core.task.focuschain.FocusChainManagerFactory;
-import com.hhoa.kline.core.core.task.tools.ToolExecutor;
+import com.hhoa.kline.core.core.tools.ToolExecutor;
 import com.hhoa.kline.core.core.workspace.WorkspaceRootManager;
 import com.hhoa.kline.core.subscription.MessageSender;
 import java.util.List;

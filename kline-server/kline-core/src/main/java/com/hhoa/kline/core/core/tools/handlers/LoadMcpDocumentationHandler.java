@@ -1,0 +1,65 @@
+package com.hhoa.kline.core.core.tools.handlers;
+
+import com.hhoa.kline.core.core.assistant.ToolUse;
+import com.hhoa.kline.core.core.prompts.McpDocumentationLoader;
+import com.hhoa.kline.core.core.prompts.systemprompt.ClineToolSpec;
+import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
+import com.hhoa.kline.core.core.shared.ClineSay;
+import com.hhoa.kline.core.core.tools.specs.LoadMcpDocumentationTool;
+import com.hhoa.kline.core.core.tools.types.ToolContext;
+import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
+import com.hhoa.kline.core.core.tools.types.UIHelpers;
+import com.hhoa.kline.core.enums.ClineDefaultTool;
+import java.util.ArrayList;
+import java.util.List;
+
+/** 加载 MCP 文档的工具处理器 */
+public class LoadMcpDocumentationHandler implements ToolHandler {
+
+    @Override
+    public String getName() {
+        return ClineDefaultTool.MCP_DOCS.getValue();
+    }
+
+    @Override
+    public String getDescription(ToolUse block) {
+        return "[" + block.getName() + "]";
+    }
+
+    @Override
+    public ClineToolSpec getClineToolSpec() {
+        return LoadMcpDocumentationTool.create(ModelFamily.GENERIC);
+    }
+
+    @Override
+    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
+        ui.say(ClineSay.LOAD_MCP_DOCUMENTATION, "", null, null, true, null);
+    }
+
+    @Override
+    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
+        context.getCallbacks().say(ClineSay.LOAD_MCP_DOCUMENTATION, "", null, null, false, null);
+
+        try {
+            if (context.getServices().getMcpHub() == null) {
+                return HandlerUtils.createToolExecuteResult(
+                        "Error loading MCP documentation: MCP Hub is not available.");
+            }
+
+            String mcpServersPath = "MCP servers directory";
+            String mcpSettingsFilePath = "(application settings)";
+            List<McpDocumentationLoader.McpServer> connectedServers = new ArrayList<>();
+
+            McpDocumentationLoader loader = new McpDocumentationLoader();
+            String documentation =
+                    loader.loadMcpDocumentation(
+                            mcpServersPath, mcpSettingsFilePath, connectedServers);
+
+            return HandlerUtils.createToolExecuteResult(documentation);
+        } catch (Exception error) {
+            return HandlerUtils.createToolExecuteResult(
+                    "Error loading MCP documentation: "
+                            + (error.getMessage() != null ? error.getMessage() : "Unknown error"));
+        }
+    }
+}

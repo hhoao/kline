@@ -11,7 +11,7 @@ import com.hhoa.kline.core.core.task.event.TaskCompleteEvent;
 import com.hhoa.kline.core.core.task.event.TaskEvent;
 import com.hhoa.kline.core.core.task.event.UserRespondedEvent;
 import com.hhoa.kline.core.core.task.statemachine.SingleArcTransition;
-import com.hhoa.kline.core.core.task.tools.types.PendingAskToken;
+import com.hhoa.kline.core.core.tools.types.PendingAskToken;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
