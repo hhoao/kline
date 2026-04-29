@@ -1,16 +1,19 @@
 package com.hhoa.kline.core.core.tools.specs;
 
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
-import com.hhoa.kline.core.core.tools.ToolSpec;
+import com.hhoa.kline.core.core.tools.ToolSpecProvider;
+import com.hhoa.kline.core.core.tools.args.AttemptCompletionInput;
+import com.hhoa.kline.core.core.tools.handlers.AttemptCompletionHandler;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
-import java.util.List;
+import java.util.Set;
 
 /**
  * 尝试完成任务工具规格
  *
  * @author hhoa
  */
-public class AttemptCompletionTool extends BaseToolSpec {
+public final class AttemptCompletionTool extends BaseToolSpec
+        implements ToolSpecProvider<AttemptCompletionInput, AttemptCompletionHandler> {
 
     private static final String GENERIC_DESCRIPTION =
             "After each tool use, the user will respond with the result of that tool use, i.e. if it succeeded or failed, along with any reasons for failure. Once you've received the results of tool uses and can confirm that the task is complete, use this tool to present the result of your work to the user. Optionally you may provide a CLI command to showcase the result of your work. The user may respond with feedback if they are not satisfied with the result, which you can use to make improvements and try again.\n"
@@ -23,72 +26,25 @@ public class AttemptCompletionTool extends BaseToolSpec {
     private static final String NATIVE_DESCRIPTION =
             "Once you've completed the user's task, use this tool to present the final result to the user, including a brief and very short (1-2 paragraph) summary of the task and what was done to resolve it. Provide the basics, hitting the highlights, but do delve into the specifics. You should only call this tool when you have completed all tasks in the task_progress list, and completed all changes that are necessary to satisfy the user's request. You should not provide the contents of the task_progress list in the result parameter, it must be included in the task_progress parameter.";
 
-    public static ToolSpec create(ModelFamily modelFamily) {
-        if (modelFamily == ModelFamily.NATIVE_GPT_5
-                || modelFamily == ModelFamily.NATIVE_GPT_5_1
-                || modelFamily == ModelFamily.NATIVE_NEXT_GEN) {
-            return createNativeVariant(modelFamily);
-        }
-
-        String description;
-        if (modelFamily == ModelFamily.GPT_5) {
-            description = GPT_5_DESCRIPTION;
-        } else {
-            description = GENERIC_DESCRIPTION;
-        }
-
-        return ToolSpec.builder()
-                .variant(modelFamily)
-                .id(ClineDefaultTool.ATTEMPT.getValue())
-                .name(ClineDefaultTool.ATTEMPT.getValue())
-                .description(description)
-                .parameters(
-                        List.of(
-                                createParameter(
-                                        "result",
-                                        true,
-                                        "The result of the tool use. This should be a clear, specific description of the result.",
-                                        "Your final result description here"),
-                                createParameter(
-                                        "command",
-                                        false,
-                                        "A CLI command to execute to show a live demo of the result to the user. For example, use `open index.html` to display a created html website, or `open localhost:3000` to display a locally running development server. But DO NOT use commands like `echo` or `cat` that merely print text. This command should be valid for the current operating system. Ensure the command is properly formatted and does not contain any harmful instructions",
-                                        "Your command here (optional)"),
-                                createParameterWithDependency(
-                                        "task_progress",
-                                        false,
-                                        "A checklist showing task progress after this tool use is completed. (See 'Updating Task Progress' section for more details)",
-                                        "Checklist here (required if you used task_progress in previous tool uses)",
-                                        "If you were using task_progress to update the task progress, you must include the completed list in the result as well.",
-                                        ClineDefaultTool.TODO.getValue())))
-                .build();
+    @Override
+    public String id() {
+        return ClineDefaultTool.ATTEMPT.getValue();
     }
 
-    private static ToolSpec createNativeVariant(ModelFamily modelFamily) {
-        return ToolSpec.builder()
-                .variant(modelFamily)
-                .id(ClineDefaultTool.ATTEMPT.getValue())
-                .name(ClineDefaultTool.ATTEMPT.getValue())
-                .description(NATIVE_DESCRIPTION)
-                .parameters(
-                        List.of(
-                                createParameter(
-                                        "result",
-                                        true,
-                                        "A clear, brief and very short (1-2 paragraph) summary of the final result of the task.",
-                                        null),
-                                createParameter(
-                                        "command",
-                                        false,
-                                        "An actionable terminal command that is non-verbose that allows user to review the result of your work. For example, use `start localhost:3000` to start a locally running development server. Commands like `echo` or `cat` that merely print text or open a file are not allowed. Ensure the command is properly formatted for user's OS and does not contain any harmful instructions",
-                                        null),
-                                createParameterWithDependency(
-                                        "task_progress",
-                                        false,
-                                        "A checklist showing task progress with the latest status of each subtasks included previously, if any. If you are calling attempt completion, and all items in this list have been completed, they must be marked as completed in this response.",
-                                        null,
-                                        null,
-                                        ClineDefaultTool.TODO.getValue())))
-                .build();
+    @Override
+    public String description(ModelFamily family) {
+        return switch (family) {
+            case NATIVE_GPT_5, NATIVE_GPT_5_1, NATIVE_NEXT_GEN -> NATIVE_DESCRIPTION;
+            case GPT_5 -> GPT_5_DESCRIPTION;
+            default -> GENERIC_DESCRIPTION;
+        };
+    }
+
+    @Override
+    public Set<String> excludedParameters(ModelFamily family) {
+        return switch (family) {
+            case NATIVE_GPT_5, NATIVE_GPT_5_1, NATIVE_NEXT_GEN -> Set.of("command");
+            default -> Set.of();
+        };
     }
 }

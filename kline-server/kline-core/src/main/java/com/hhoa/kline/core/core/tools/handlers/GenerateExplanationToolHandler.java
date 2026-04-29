@@ -3,14 +3,11 @@ package com.hhoa.kline.core.core.tools.handlers;
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.shared.ClineSay;
-import com.hhoa.kline.core.core.tools.ToolSpec;
-import com.hhoa.kline.core.core.tools.specs.GenerateExplanationTool;
+import com.hhoa.kline.core.core.tools.args.GenerateExplanationInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.UIHelpers;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -19,14 +16,9 @@ import java.util.Map;
  *
  * @author hhoa
  */
-public class GenerateExplanationToolHandler implements ToolHandler {
+public class GenerateExplanationToolHandler implements ToolHandler<GenerateExplanationInput> {
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
-
-    @Override
-    public String getName() {
-        return ClineDefaultTool.GENERATE_EXPLANATION.getValue();
-    }
 
     @Override
     public String getDescription(ToolUse block) {
@@ -35,15 +27,12 @@ public class GenerateExplanationToolHandler implements ToolHandler {
     }
 
     @Override
-    public ToolSpec getToolSpec() {
-        return GenerateExplanationTool.create(ModelFamily.GENERIC);
-    }
-
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
-        String title = HandlerUtils.getStringParam(block, "title");
-        String fromRef = HandlerUtils.getStringParam(block, "from_ref");
-        String toRef = HandlerUtils.getStringParam(block, "to_ref");
+    public void handlePartialBlock(
+            GenerateExplanationInput input, ToolContext context, ToolUse block) {
+        UIHelpers ui = UIHelpers.create(context);
+        String title = input.title();
+        String fromRef = input.fromRef();
+        String toRef = input.toRef();
         String message =
                 createExplanationMessage(
                         title != null ? title : "code changes",
@@ -55,10 +44,11 @@ public class GenerateExplanationToolHandler implements ToolHandler {
     }
 
     @Override
-    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
-        String title = HandlerUtils.getStringParam(block, "title");
-        String fromRef = HandlerUtils.getStringParam(block, "from_ref");
-        String toRef = HandlerUtils.getStringParam(block, "to_ref");
+    public ToolExecuteResult execute(
+            GenerateExplanationInput input, ToolContext context, ToolUse block) {
+        String title = input.title();
+        String fromRef = input.fromRef();
+        String toRef = input.toRef();
 
         String toRefDisplay = toRef != null ? toRef : "working directory";
         context.getCallbacks()

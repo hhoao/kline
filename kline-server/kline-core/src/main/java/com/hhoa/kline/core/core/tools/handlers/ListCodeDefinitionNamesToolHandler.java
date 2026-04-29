@@ -5,14 +5,12 @@ import static com.google.common.io.Files.getFileExtension;
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.TaskUtils;
-import com.hhoa.kline.core.core.tools.ToolSpec;
-import com.hhoa.kline.core.core.tools.specs.ListCodeDefinitionNamesTool;
+import com.hhoa.kline.core.core.tools.args.ListCodeDefinitionNamesInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
@@ -40,7 +38,8 @@ import lombok.Setter;
  *
  * @author hhoa
  */
-public class ListCodeDefinitionNamesToolHandler implements StateFullToolHandler {
+public class ListCodeDefinitionNamesToolHandler
+        implements StateFullToolHandler<ListCodeDefinitionNamesInput> {
 
     private static final int MAX_FILES = 200;
 
@@ -54,11 +53,6 @@ public class ListCodeDefinitionNamesToolHandler implements StateFullToolHandler 
     }
 
     @Override
-    public String getName() {
-        return ClineDefaultTool.LIST_CODE_DEF.getValue();
-    }
-
-    @Override
     public ToolState createToolState() {
         return new ListCodeDefToolState();
     }
@@ -69,22 +63,19 @@ public class ListCodeDefinitionNamesToolHandler implements StateFullToolHandler 
     }
 
     @Override
-    public ToolSpec getToolSpec() {
-        return ListCodeDefinitionNamesTool.create(ModelFamily.GENERIC);
-    }
-
-    @Override
     public boolean isConcurrencySafe(ToolUse block, ToolContext context) {
         String path = HandlerUtils.getStringParam(block, "path");
         return context != null
                 && context.getCallbacks() != null
                 && Boolean.TRUE.equals(
-                        context.getCallbacks().shouldAutoApproveToolWithPath(getName(), path));
+                        context.getCallbacks()
+                                .shouldAutoApproveToolWithPath(block.getName(), path));
     }
 
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
-        String relPath = HandlerUtils.getStringParam(block, "path");
+    public void handlePartialBlock(
+            ListCodeDefinitionNamesInput input, ToolContext context, ToolUse block) {
+        UIHelpers ui = UIHelpers.create(context);
+        String relPath = input.path();
         ToolContext config = ui.getContext();
 
         Map<String, Object> sharedMessageMap = new HashMap<>();
@@ -110,9 +101,9 @@ public class ListCodeDefinitionNamesToolHandler implements StateFullToolHandler 
         }
     }
 
-    @Override
-    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
-        String relPath = HandlerUtils.getStringParam(block, "path");
+    public ToolExecuteResult execute(
+            ListCodeDefinitionNamesInput input, ToolContext context, ToolUse block) {
+        String relPath = input.path();
 
         // try/catch so that failures (e.g. bad workspace hint, non-existent
         // directory) return a graceful tool error instead of crashing the task.

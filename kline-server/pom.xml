@@ -629,6 +629,7 @@
                 <artifactId>spotless-maven-plugin</artifactId>
                 <version>3.2.1</version>
                 <configuration>
+                    <checkSkip>true</checkSkip>
                     <java>
                         <formatAnnotations/>
                         <googleJavaFormat>

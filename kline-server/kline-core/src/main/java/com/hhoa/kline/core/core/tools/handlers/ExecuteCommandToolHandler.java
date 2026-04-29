@@ -2,15 +2,13 @@ package com.hhoa.kline.core.core.tools.handlers;
 
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.services.telemetry.TelemetryService;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.TaskUtils;
 import com.hhoa.kline.core.core.tools.AutoApproveToolResult;
-import com.hhoa.kline.core.core.tools.ToolSpec;
-import com.hhoa.kline.core.core.tools.specs.ExecuteCommandTool;
+import com.hhoa.kline.core.core.tools.args.ExecuteCommandInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
@@ -36,7 +34,7 @@ import lombok.Setter;
  *
  * @author hhoa
  */
-public class ExecuteCommandToolHandler implements StateFullToolHandler {
+public class ExecuteCommandToolHandler implements StateFullToolHandler<ExecuteCommandInput> {
 
     private static final String COMMAND_REQ_APP_STRING = " (requires approval)";
 
@@ -82,11 +80,6 @@ public class ExecuteCommandToolHandler implements StateFullToolHandler {
     }
 
     @Override
-    public String getName() {
-        return ClineDefaultTool.BASH.getValue();
-    }
-
-    @Override
     public ToolState createToolState() {
         return new ExecuteCommandToolState();
     }
@@ -97,14 +90,9 @@ public class ExecuteCommandToolHandler implements StateFullToolHandler {
         return "[" + block.getName() + " for '" + (cmd == null ? "" : cmd) + "']";
     }
 
-    @Override
-    public ToolSpec getToolSpec() {
-        return ExecuteCommandTool.create(ModelFamily.GENERIC);
-    }
-
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
-        String command = HandlerUtils.getStringParam(block, "command");
+    public void handlePartialBlock(ExecuteCommandInput input, ToolContext context, ToolUse block) {
+        UIHelpers ui = UIHelpers.create(context);
+        String command = input.command();
         Boolean shouldAutoApprove = ui.shouldAutoApproveTool(ClineDefaultTool.BASH.getValue());
         if (Boolean.TRUE.equals(shouldAutoApprove)) {
             // For auto-approved commands, we can't partially stream a say prematurely
@@ -115,11 +103,9 @@ public class ExecuteCommandToolHandler implements StateFullToolHandler {
         ui.ask(ClineAsk.COMMAND, command, block.isPartial(), null);
     }
 
-    @Override
-    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
-        String rawCommand = HandlerUtils.getStringParam(block, "command");
-        String requiresApprovalRaw = HandlerUtils.getStringParam(block, "requires_approval");
-        String timeoutParam = HandlerUtils.getStringParam(block, "timeout");
+    public ToolExecuteResult execute(ExecuteCommandInput args, ToolContext context, ToolUse block) {
+        String rawCommand = args.command();
+        Integer timeoutParam = args.timeout();
 
         String command = rawCommand;
         if (context.getApi() != null
@@ -175,7 +161,7 @@ public class ExecuteCommandToolHandler implements StateFullToolHandler {
             }
         }
 
-        boolean requiresApproval = Boolean.parseBoolean(requiresApprovalRaw.toLowerCase());
+        boolean requiresApproval = Boolean.TRUE.equals(args.requiresApproval());
         final Integer timeoutSeconds =
                 computeTimeoutSeconds(context.isYoloModeToggled(), timeoutParam, rawCommand);
 
@@ -348,16 +334,11 @@ public class ExecuteCommandToolHandler implements StateFullToolHandler {
     }
 
     private static Integer computeTimeoutSeconds(
-            Boolean yoloModeToggled, String timeoutParam, String command) {
+            Boolean yoloModeToggled, Integer timeoutParam, String command) {
         if (!Boolean.TRUE.equals(yoloModeToggled)) return null;
 
-        if (timeoutParam != null) {
-            try {
-                int parsed = Integer.parseInt(timeoutParam);
-                if (parsed > 0) return parsed;
-            } catch (NumberFormatException ignored) {
-                // fall through to default logic
-            }
+        if (timeoutParam != null && timeoutParam > 0) {
+            return timeoutParam;
         }
 
         return isLikelyLongRunningCommand(command)

@@ -10,12 +10,10 @@ import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.shared.api.ApiProvider;
 import com.hhoa.kline.core.core.shared.storage.types.Mode;
 import com.hhoa.kline.core.core.task.AskResult;
-import com.hhoa.kline.core.core.tools.ToolParameterSpec;
-import com.hhoa.kline.core.core.tools.ToolSpec;
+import com.hhoa.kline.core.core.tools.args.ReportBugInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
-import com.hhoa.kline.core.core.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.tools.utils.ToolResultUtils;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -30,7 +28,7 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class ReportBugHandler implements StateFullToolHandler {
+public class ReportBugHandler implements StateFullToolHandler<ReportBugInput> {
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
 
@@ -54,73 +52,28 @@ public class ReportBugHandler implements StateFullToolHandler {
     }
 
     @Override
-    public String getName() {
-        return ClineAsk.REPORT_BUG.getValue();
-    }
-
-    @Override
     public String getDescription(ToolUse block) {
         return "[" + block.getName() + "]";
     }
 
-    @Override
-    public ToolSpec getToolSpec() {
-        return ToolSpec.builder()
-                .name(ClineAsk.REPORT_BUG.getValue())
-                .parameters(
-                        List.of(
-                                ToolParameterSpec.builder()
-                                        .name("title")
-                                        .required(true)
-                                        .instruction("")
-                                        .usage("")
-                                        .build(),
-                                ToolParameterSpec.builder()
-                                        .name("what_happened")
-                                        .required(true)
-                                        .instruction("")
-                                        .usage("")
-                                        .build(),
-                                ToolParameterSpec.builder()
-                                        .name("steps_to_reproduce")
-                                        .required(true)
-                                        .instruction("")
-                                        .usage("")
-                                        .build(),
-                                ToolParameterSpec.builder()
-                                        .name("api_request_output")
-                                        .required(true)
-                                        .instruction("")
-                                        .usage("")
-                                        .build(),
-                                ToolParameterSpec.builder()
-                                        .name("additional_context")
-                                        .required(true)
-                                        .instruction("")
-                                        .usage("")
-                                        .build()))
-                .build();
-    }
-
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
+    public void handlePartialBlock(ReportBugInput input, ToolContext context, ToolUse block) {
         Map<String, Object> partialMap = new HashMap<>();
-        partialMap.put("title", getStringParam(block, "title"));
-        partialMap.put("what_happened", getStringParam(block, "what_happened"));
-        partialMap.put("steps_to_reproduce", getStringParam(block, "steps_to_reproduce"));
-        partialMap.put("api_request_output", getStringParam(block, "api_request_output"));
-        partialMap.put("additional_context", getStringParam(block, "additional_context"));
+        partialMap.put("title", input.title());
+        partialMap.put("what_happened", input.whatHappened());
+        partialMap.put("steps_to_reproduce", input.stepsToReproduce());
+        partialMap.put("api_request_output", input.apiRequestOutput());
+        partialMap.put("additional_context", input.additionalContext());
         String partial = JsonUtils.toJsonString(partialMap);
-        ui.ask(ClineAsk.REPORT_BUG, partial, block.isPartial(), ClineMessageFormat.JSON);
+        context.getCallbacks()
+                .ask(ClineAsk.REPORT_BUG, partial, block.isPartial(), ClineMessageFormat.JSON);
     }
 
-    @Override
-    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
-        String title = getStringParam(block, "title");
-        String what = getStringParam(block, "what_happened");
-        String steps = getStringParam(block, "steps_to_reproduce");
-        String output = getStringParam(block, "api_request_output");
-        String ctx = getStringParam(block, "additional_context");
+    public ToolExecuteResult execute(ReportBugInput input, ToolContext context, ToolUse block) {
+        String title = input.title();
+        String what = input.whatHappened();
+        String steps = input.stepsToReproduce();
+        String output = input.apiRequestOutput();
+        String ctx = input.additionalContext();
 
         if (context.getAutoApprovalSettings() != null
                 && context.getAutoApprovalSettings().isEnabled()
@@ -254,10 +207,6 @@ public class ReportBugHandler implements StateFullToolHandler {
         return HandlerUtils.createToolExecuteResult(
                 formatResponse.toolResult(
                         "The user accepted the creation of the Github issue.", null, null));
-    }
-
-    private static String getStringParam(ToolUse block, String key) {
-        return HandlerUtils.getStringParam(block, key);
     }
 
     private static String getClineVersion() {

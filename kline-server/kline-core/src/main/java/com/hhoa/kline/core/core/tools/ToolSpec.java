@@ -2,7 +2,7 @@ package com.hhoa.kline.core.core.tools;
 
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
-import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import lombok.Data;
 
@@ -27,7 +27,9 @@ public class ToolSpec {
 
     private Function<SystemPromptContext, Boolean> contextRequirements;
 
-    private List<ToolParameterSpec> parameters;
+    private Map<String, Object> inputSchema;
+
+    private Class<?> inputType;
 
     public static ToolSpecBuilder builder() {
         return new ToolSpecBuilder();
@@ -67,8 +69,13 @@ public class ToolSpec {
             return this;
         }
 
-        public ToolSpecBuilder parameters(List<ToolParameterSpec> parameters) {
-            spec.setParameters(parameters);
+        public ToolSpecBuilder inputSchema(Map<String, Object> inputSchema) {
+            spec.setInputSchema(inputSchema);
+            return this;
+        }
+
+        public ToolSpecBuilder inputType(Class<?> inputType) {
+            spec.setInputType(inputType);
             return this;
         }
 

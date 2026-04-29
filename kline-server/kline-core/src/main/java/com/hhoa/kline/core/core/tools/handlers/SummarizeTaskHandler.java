@@ -11,11 +11,9 @@ import com.hhoa.kline.core.core.prompts.ContextManagement;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
-import com.hhoa.kline.core.core.tools.ToolParameterSpec;
-import com.hhoa.kline.core.core.tools.ToolSpec;
+import com.hhoa.kline.core.core.tools.args.SummarizeTaskInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
-import com.hhoa.kline.core.core.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.workspace.WorkspaceConfig;
 import com.hhoa.kline.core.core.workspace.WorkspaceResolver;
 import com.hhoa.kline.core.core.workspace.WorkspaceResolver.WorkspacePathResult;
@@ -38,9 +36,8 @@ import lombok.extern.slf4j.Slf4j;
  * @author hhoa
  */
 @Slf4j
-public class SummarizeTaskHandler implements ToolHandler {
+public class SummarizeTaskHandler implements ToolHandler<SummarizeTaskInput> {
 
-    private static final String NAME = "summarize_task";
     private static final int MAX_FILES_LOADED = 8;
     private static final int MAX_FILES_PROCESSED = 10;
     private static final int MAX_CHARS = 100_000;
@@ -68,43 +65,27 @@ public class SummarizeTaskHandler implements ToolHandler {
     }
 
     @Override
-    public String getName() {
-        return NAME;
-    }
-
-    @Override
     public String getDescription(ToolUse block) {
         return "[" + block.getName() + "]";
     }
 
     @Override
-    public ToolSpec getToolSpec() {
-        return ToolSpec.builder()
-                .name(NAME)
-                .parameters(
-                        List.of(
-                                ToolParameterSpec.builder()
-                                        .name("context")
-                                        .required(true)
-                                        .instruction("")
-                                        .usage("")
-                                        .build()))
-                .build();
-    }
-
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
-        String context = HandlerUtils.getStringParam(block, "context");
+    public void handlePartialBlock(
+            SummarizeTaskInput input, ToolContext toolContext, ToolUse block) {
+        String context = input.context();
         Map<String, Object> msgMap = new HashMap<>();
         msgMap.put("tool", "summarizeTask");
         msgMap.put("content", context == null ? "" : context);
         String msg = JsonUtils.toJsonString(msgMap);
-        ui.say(ClineSay.TOOL, msg, null, null, block.isPartial(), ClineMessageFormat.JSON);
+        toolContext
+                .getCallbacks()
+                .say(ClineSay.TOOL, msg, null, null, block.isPartial(), ClineMessageFormat.JSON);
     }
 
     @Override
-    public ToolExecuteResult execute(ToolContext toolContext, ToolUse block) {
-        String context = HandlerUtils.getStringParam(block, "context");
+    public ToolExecuteResult execute(
+            SummarizeTaskInput input, ToolContext toolContext, ToolUse block) {
+        String context = input.context();
 
         Map<String, Object> completeMessageMap = new HashMap<>();
         completeMessageMap.put("tool", "summarizeTask");

@@ -8,7 +8,7 @@ import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import java.util.HashMap;
-import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -18,12 +18,7 @@ class ToolCallValidatorTest {
         ToolSpec spec =
                 ToolSpec.builder()
                         .name("read_file")
-                        .parameters(
-                                List.of(
-                                        ToolParameterSpec.builder()
-                                                .name("path")
-                                                .required(true)
-                                                .build()))
+                        .inputSchema(schema(Map.of("path", property("string")), "path"))
                         .build();
 
         ToolCallValidator.ValidationResult result =
@@ -44,11 +39,16 @@ class ToolCallValidatorTest {
         ToolSpec spec =
                 ToolSpec.builder()
                         .name("execute_command")
-                        .parameters(
-                                List.of(
-                                        param("requires_approval", "boolean", true),
-                                        param("timeout", "integer", false),
-                                        param("ratio", "number", false)))
+                        .inputSchema(
+                                schema(
+                                        Map.of(
+                                                "requires_approval",
+                                                property("boolean"),
+                                                "timeout",
+                                                property("integer"),
+                                                "ratio",
+                                                property("number")),
+                                        "requires_approval"))
                         .build();
 
         ToolCallValidator.ValidationResult result =
@@ -65,7 +65,7 @@ class ToolCallValidatorTest {
         ToolSpec spec =
                 ToolSpec.builder()
                         .name("list_files")
-                        .parameters(List.of(param("recursive", "boolean", false)))
+                        .inputSchema(schema(Map.of("recursive", property("boolean"))))
                         .build();
 
         ToolCallValidator.ValidationResult result =
@@ -82,7 +82,7 @@ class ToolCallValidatorTest {
         ToolSpec spec =
                 ToolSpec.builder()
                         .name("read_file")
-                        .parameters(List.of(param("path", "string", true)))
+                        .inputSchema(schema(Map.of("path", property("string")), "path"))
                         .build();
 
         ToolCallValidator.ValidationResult result =
@@ -101,18 +101,17 @@ class ToolCallValidatorTest {
         ToolSpec spec =
                 ToolSpec.builder()
                         .name("execute_command")
-                        .parameters(
-                                List.of(
-                                        ToolParameterSpec.builder()
-                                                .name("timeout")
-                                                .required(true)
-                                                .type("integer")
-                                                .contextRequirements(
+                        .inputSchema(
+                                schema(
+                                        Map.of(
+                                                "timeout",
+                                                property(
+                                                        "integer",
                                                         context ->
                                                                 Boolean.TRUE.equals(
                                                                         context
-                                                                                .getYoloModeToggled()))
-                                                .build()))
+                                                                                .getYoloModeToggled()))),
+                                        "timeout"))
                         .build();
 
         ToolCallValidator.ValidationResult result =
@@ -128,7 +127,7 @@ class ToolCallValidatorTest {
                         .name("browser_action")
                         .contextRequirements(
                                 context -> Boolean.TRUE.equals(context.getSupportsBrowserUse()))
-                        .parameters(List.of(param("action", "string", true)))
+                        .inputSchema(schema(Map.of("action", property("string")), "action"))
                         .build();
 
         ToolCallValidator.ValidationResult result =
@@ -139,13 +138,28 @@ class ToolCallValidatorTest {
         assertEquals(ToolCallValidator.ErrorCode.TOOL_DISABLED, result.errorCode());
     }
 
-    private static ToolParameterSpec param(String name, String type, boolean required) {
-        return ToolParameterSpec.builder()
-                .name(name)
-                .type(type)
-                .required(required)
-                .instruction(name)
-                .build();
+    private static Map<String, Object> schema(
+            Map<String, Map<String, Object>> properties, String... required) {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("type", "object");
+        schema.put("properties", new LinkedHashMap<>(properties));
+        schema.put("required", java.util.List.of(required));
+        schema.put("additionalProperties", false);
+        return schema;
+    }
+
+    private static Map<String, Object> property(String type) {
+        Map<String, Object> property = new LinkedHashMap<>();
+        property.put("type", type);
+        return property;
+    }
+
+    private static Map<String, Object> property(
+            String type,
+            java.util.function.Function<SystemPromptContext, Boolean> contextRequirements) {
+        Map<String, Object> property = property(type);
+        property.put(ToolSchema.X_CONTEXT_REQUIREMENTS, contextRequirements);
+        return property;
     }
 
     private static ToolUse toolUse(String name, Map<String, Object> params) {

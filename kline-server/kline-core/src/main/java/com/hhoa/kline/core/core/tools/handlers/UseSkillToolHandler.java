@@ -5,28 +5,19 @@ import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.context.instructions.userinstructions.SkillContent;
 import com.hhoa.kline.core.core.context.instructions.userinstructions.SkillDiscovery;
 import com.hhoa.kline.core.core.context.instructions.userinstructions.SkillMetadata;
-import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.storage.GlobalFileNames;
-import com.hhoa.kline.core.core.tools.ToolSpec;
-import com.hhoa.kline.core.core.tools.specs.UseSkillTool;
+import com.hhoa.kline.core.core.tools.args.UseSkillInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.UIHelpers;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 /** Use Skill 工具处理器 - 加载并激活技能。 */
-public class UseSkillToolHandler implements ToolHandler {
-
-    @Override
-    public String getName() {
-        return ClineDefaultTool.USE_SKILL.getValue();
-    }
-
+public class UseSkillToolHandler implements ToolHandler<UseSkillInput> {
     @Override
     public String getDescription(ToolUse block) {
         String skillName = HandlerUtils.getStringParam(block, "skill_name");
@@ -36,13 +27,9 @@ public class UseSkillToolHandler implements ToolHandler {
     }
 
     @Override
-    public ToolSpec getToolSpec() {
-        return UseSkillTool.create(ModelFamily.GENERIC);
-    }
-
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
-        String skillName = HandlerUtils.getStringParam(block, "skill_name");
+    public void handlePartialBlock(UseSkillInput input, ToolContext context, ToolUse block) {
+        UIHelpers ui = UIHelpers.create(context);
+        String skillName = input.skillName();
         Map<String, Object> payload = new HashMap<>();
         payload.put("tool", "useSkill");
         payload.put("path", skillName != null ? skillName : "");
@@ -50,8 +37,8 @@ public class UseSkillToolHandler implements ToolHandler {
     }
 
     @Override
-    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
-        String skillName = HandlerUtils.getStringParam(block, "skill_name");
+    public ToolExecuteResult execute(UseSkillInput input, ToolContext context, ToolUse block) {
+        String skillName = input.skillName();
         if (skillName == null || skillName.isBlank()) {
             context.getTaskState()
                     .getApiTurnState()

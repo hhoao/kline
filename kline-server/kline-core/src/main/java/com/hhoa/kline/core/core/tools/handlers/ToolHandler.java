@@ -1,25 +1,19 @@
 package com.hhoa.kline.core.core.tools.handlers;
 
 import com.hhoa.kline.core.core.assistant.ToolUse;
-import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
-import com.hhoa.kline.core.core.tools.types.UIHelpers;
 
-/** 完全托管的工具接口：提供名称、描述、部分块处理与执行。 */
-public interface ToolHandler {
-    String getName();
+/** 完全托管的工具接口：提供名称、描述与规范；执行入口由 ToolHandlerInvocationSupport 反射解析。 */
+public interface ToolHandler<T> {
 
     String getDescription(ToolUse block);
-
-    void handlePartialBlock(ToolUse block, UIHelpers uiHelpers);
-
-    ToolExecuteResult execute(ToolContext context, ToolUse block);
 
     default boolean isConcurrencySafe(ToolUse block, ToolContext context) {
         return false;
     }
 
-    /** 返回该工具在 systemprompt/tools 中的规范，用于执行前做必选/可选参数校验；无规范可返回 null。 */
-    ToolSpec getToolSpec();
+    void handlePartialBlock(T input, ToolContext context, ToolUse block);
+
+    ToolExecuteResult execute(T input, ToolContext context, ToolUse block);
 }

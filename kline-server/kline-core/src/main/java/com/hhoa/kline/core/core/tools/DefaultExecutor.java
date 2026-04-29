@@ -10,6 +10,7 @@ import com.hhoa.kline.core.core.hooks.HookInput;
 import com.hhoa.kline.core.core.hooks.HookName;
 import com.hhoa.kline.core.core.ignore.ClineIgnoreController;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
+import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.shared.FocusChainSettings;
 import com.hhoa.kline.core.core.shared.storage.types.Mode;
@@ -23,7 +24,6 @@ import com.hhoa.kline.core.core.tools.types.PendingAskToken.ToolUsePendingAskTok
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
-import com.hhoa.kline.core.core.tools.types.UIHelpers;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -193,7 +193,8 @@ public class DefaultExecutor implements ToolExecutor {
         }
 
         ToolCallValidator.ValidationResult validation =
-                ToolCallValidator.validate(handler.getToolSpec(), block, config);
+                ToolCallValidator.validate(
+                        registry.getSpec(block.getName(), ModelFamily.GENERIC), block, config);
         if (!validation.isValid()) {
             if (config.getTaskState() != null) {
                 config.getTaskState()
@@ -238,7 +239,7 @@ public class DefaultExecutor implements ToolExecutor {
         }
 
         long executionStartTime = System.currentTimeMillis();
-        ToolExecuteResult execResult = handler.execute(config, block);
+        ToolExecuteResult execResult = ToolHandlerInvocationSupport.invoke(handler, config, block);
 
         if (execResult instanceof ToolExecuteResult.Immediate immediateResult) {
             if (config.getCallbacks() != null) {
@@ -518,9 +519,7 @@ public class DefaultExecutor implements ToolExecutor {
         if (handler == null) {
             return;
         }
-        UIHelpers uiHelpers = UIHelpers.create(config);
-
-        handler.handlePartialBlock(block, uiHelpers);
+        ToolHandlerInvocationSupport.handlePartialBlock(handler, config, block);
     }
 
     private List<UserContentBlock> handleError(

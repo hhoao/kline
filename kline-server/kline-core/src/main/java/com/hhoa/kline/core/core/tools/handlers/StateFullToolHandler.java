@@ -9,7 +9,7 @@ import com.hhoa.kline.core.core.tools.types.ToolState;
 /**
  * 有状态的工具处理器接口。当工具需要 ask 用户时，execute 返回 PendingAsk， 状态保存在对应的 ToolState 子类中；用户响应后框架调用 resume 恢复执行。
  */
-public interface StateFullToolHandler extends ToolHandler {
+public interface StateFullToolHandler<T> extends ToolHandler<T> {
 
     /**
      * 创建该工具专属的 ToolState 子类实例。 框架在执行工具前调用此方法，创建的 ToolState 会被存入 TaskState.toolStates 中。

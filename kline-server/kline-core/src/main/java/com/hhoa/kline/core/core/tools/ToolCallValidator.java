@@ -6,6 +6,7 @@ import com.hhoa.kline.core.core.tools.types.ToolContext;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** Validates and normalizes tool call inputs before handler execution. */
 public final class ToolCallValidator {
@@ -13,6 +14,10 @@ public final class ToolCallValidator {
 
     public static ValidationResult validate(ToolSpec spec, ToolUse toolUse, ToolContext context) {
         if (spec == null) {
+            return ValidationResult.valid();
+        }
+        Map<String, Object> inputSchema = spec.getInputSchema();
+        if (inputSchema == null) {
             return ValidationResult.valid();
         }
         SystemPromptContext promptContext = resolvePromptContext(context);
@@ -30,7 +35,8 @@ public final class ToolCallValidator {
             toolUse.setParams(params);
         }
 
-        Map<String, ToolParameterSpec> availableParams = availableParameters(spec, promptContext);
+        Map<String, Map<String, Object>> availableParams =
+                availableParameters(inputSchema, promptContext);
         for (String paramName : params.keySet()) {
             if (!availableParams.containsKey(paramName)) {
                 return ValidationResult.invalid(
@@ -41,11 +47,13 @@ public final class ToolCallValidator {
             }
         }
 
-        for (ToolParameterSpec parameter : availableParams.values()) {
-            String paramName = parameter.getName();
+        Set<String> required = ToolSchema.required(inputSchema);
+        for (Map.Entry<String, Map<String, Object>> entry : availableParams.entrySet()) {
+            String paramName = entry.getKey();
+            Map<String, Object> parameter = entry.getValue();
             Object value = params.get(paramName);
             if (isMissing(value)) {
-                if (parameter.isRequired()) {
+                if (required.contains(paramName)) {
                     return ValidationResult.invalid(
                             ErrorCode.MISSING_REQUIRED_PARAMETER,
                             paramName,
@@ -59,7 +67,8 @@ public final class ToolCallValidator {
                 return ValidationResult.invalid(
                         ErrorCode.INVALID_PARAMETER_TYPE,
                         paramName,
-                        "Parameter '%s' must be %s.".formatted(paramName, parameter.getType()));
+                        "Parameter '%s' must be %s."
+                                .formatted(paramName, ToolSchema.type(parameter)));
             }
             params.put(paramName, normalized);
         }
@@ -80,21 +89,18 @@ public final class ToolCallValidator {
         return promptContext;
     }
 
-    private static Map<String, ToolParameterSpec> availableParameters(
-            ToolSpec spec, SystemPromptContext context) {
-        Map<String, ToolParameterSpec> available = new LinkedHashMap<>();
-        List<ToolParameterSpec> parameters = spec.getParameters();
-        if (parameters == null) {
-            return available;
-        }
-        for (ToolParameterSpec parameter : parameters) {
-            if (parameter.getName() == null || parameter.getName().isBlank()) {
+    private static Map<String, Map<String, Object>> availableParameters(
+            Map<String, Object> inputSchema, SystemPromptContext context) {
+        Map<String, Map<String, Object>> available = new LinkedHashMap<>();
+        for (Map.Entry<String, Map<String, Object>> entry :
+                ToolSchema.properties(inputSchema).entrySet()) {
+            if (entry.getKey() == null || entry.getKey().isBlank()) {
                 continue;
             }
-            if (!isContextEnabled(parameter.getContextRequirements(), context)) {
+            if (!ToolSchema.parameterEnabled(entry.getValue(), context, null)) {
                 continue;
             }
-            available.put(parameter.getName(), parameter);
+            available.put(entry.getKey(), entry.getValue());
         }
         return available;
     }
@@ -118,11 +124,8 @@ public final class ToolCallValidator {
 
     private static final Object INVALID_VALUE = new Object();
 
-    private static Object normalizeValue(ToolParameterSpec parameter, Object value) {
-        String type =
-                parameter.getType() == null || parameter.getType().isBlank()
-                        ? "string"
-                        : parameter.getType();
+    private static Object normalizeValue(Map<String, Object> parameter, Object value) {
+        String type = ToolSchema.type(parameter);
         return switch (type) {
             case "boolean" -> normalizeBoolean(value);
             case "integer" -> normalizeInteger(value);

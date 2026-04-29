@@ -5,21 +5,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.services.mcp.IMcpHub;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.TaskUtils;
-import com.hhoa.kline.core.core.tools.ToolSpec;
-import com.hhoa.kline.core.core.tools.specs.UseMcpToolTool;
+import com.hhoa.kline.core.core.tools.args.UseMcpToolInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
 import com.hhoa.kline.core.core.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.tools.utils.ToolResultUtils;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
 import io.modelcontextprotocol.spec.McpSchema;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -30,7 +27,7 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class UseMcpToolHandler implements StateFullToolHandler {
+public class UseMcpToolHandler implements StateFullToolHandler<UseMcpToolInput> {
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -44,11 +41,6 @@ public class UseMcpToolHandler implements StateFullToolHandler {
     }
 
     @Override
-    public String getName() {
-        return ClineDefaultTool.MCP_USE.getValue();
-    }
-
-    @Override
     public ToolState createToolState() {
         return new UseMcpToolState();
     }
@@ -59,16 +51,11 @@ public class UseMcpToolHandler implements StateFullToolHandler {
         return "[" + block.getName() + " for '" + (server == null ? "" : server) + "']";
     }
 
-    @Override
-    public ToolSpec getToolSpec() {
-        return UseMcpToolTool.create(ModelFamily.GENERIC);
-    }
-
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
-        String serverName = HandlerUtils.getStringParam(block, "server_name");
-        String toolName = HandlerUtils.getStringParam(block, "tool_name");
-        String mcpArguments = HandlerUtils.getStringParam(block, "arguments");
+    public void handlePartialBlock(UseMcpToolInput input, ToolContext context, ToolUse block) {
+        UIHelpers ui = UIHelpers.create(context);
+        String serverName = input.serverName();
+        String toolName = input.toolName();
+        String mcpArguments = input.arguments();
 
         Map<String, Object> partialMessageMap = new HashMap<>();
         partialMessageMap.put("type", "use_mcp_tool");
@@ -77,8 +64,7 @@ public class UseMcpToolHandler implements StateFullToolHandler {
         partialMessageMap.put("arguments", mcpArguments);
         String partialMessage = JsonUtils.toJsonString(partialMessageMap);
 
-        ToolContext config = ui.getContext();
-        boolean autoApprove = config.getCallbacks().shouldAutoApproveTool(block.getName());
+        boolean autoApprove = context.getCallbacks().shouldAutoApproveTool(block.getName());
 
         if (autoApprove) {
             ui.say(
@@ -97,11 +83,10 @@ public class UseMcpToolHandler implements StateFullToolHandler {
         }
     }
 
-    @Override
-    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
-        String serverName = HandlerUtils.getStringParam(block, "server_name");
-        String toolName = HandlerUtils.getStringParam(block, "tool_name");
-        String mcpArguments = HandlerUtils.getStringParam(block, "arguments");
+    public ToolExecuteResult execute(UseMcpToolInput input, ToolContext context, ToolUse block) {
+        String serverName = input.serverName();
+        String toolName = input.toolName();
+        String mcpArguments = input.arguments();
 
         final Map<String, Object> parsedArguments;
         if (mcpArguments != null && !mcpArguments.isEmpty()) {

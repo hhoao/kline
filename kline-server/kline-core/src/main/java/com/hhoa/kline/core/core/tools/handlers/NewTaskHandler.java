@@ -3,12 +3,10 @@ package com.hhoa.kline.core.core.tools.handlers;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.integrations.misc.ExtractText;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
-import com.hhoa.kline.core.core.tools.ToolSpec;
-import com.hhoa.kline.core.core.tools.specs.NewTaskTool;
+import com.hhoa.kline.core.core.tools.args.NewTaskInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
@@ -23,7 +21,7 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class NewTaskHandler implements StateFullToolHandler {
+public class NewTaskHandler implements StateFullToolHandler<NewTaskInput> {
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
 
@@ -39,29 +37,19 @@ public class NewTaskHandler implements StateFullToolHandler {
     }
 
     @Override
-    public String getName() {
-        return ClineAsk.NEW_TASK.getValue();
-    }
-
-    @Override
     public String getDescription(ToolUse block) {
         return "[" + block.getName() + " for creating a new task]";
     }
 
     @Override
-    public ToolSpec getToolSpec() {
-        return NewTaskTool.create(ModelFamily.GENERIC);
+    public void handlePartialBlock(NewTaskInput input, ToolContext context, ToolUse block) {
+        UIHelpers ui = UIHelpers.create(context);
+        ui.ask(ClineAsk.NEW_TASK, input.context(), true, null);
     }
 
     @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
-        String context = HandlerUtils.getStringParam(block, "context");
-        ui.ask(ClineAsk.NEW_TASK, context, true, null);
-    }
-
-    @Override
-    public ToolExecuteResult execute(ToolContext toolContext, ToolUse block) {
-        String context = HandlerUtils.getStringParam(block, "context");
+    public ToolExecuteResult execute(NewTaskInput input, ToolContext toolContext, ToolUse block) {
+        String context = input.context();
 
         if (toolContext.getAutoApprovalSettings() != null
                 && toolContext.getAutoApprovalSettings().isEnabled()

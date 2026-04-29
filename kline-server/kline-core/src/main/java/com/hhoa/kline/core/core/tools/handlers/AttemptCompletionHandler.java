@@ -7,21 +7,18 @@ import com.hhoa.kline.core.core.assistant.UserContentBlock;
 import com.hhoa.kline.core.core.integrations.misc.ExtractText;
 import com.hhoa.kline.core.core.integrations.notifications.NotificationType;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineAskResponse;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.ClineMessage;
 import com.hhoa.kline.core.core.task.MessageUtils;
-import com.hhoa.kline.core.core.tools.ToolSpec;
-import com.hhoa.kline.core.core.tools.specs.AttemptCompletionTool;
+import com.hhoa.kline.core.core.tools.args.AttemptCompletionInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
 import com.hhoa.kline.core.core.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.tools.utils.ToolResultUtils;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -34,7 +31,7 @@ import lombok.Setter;
  *
  * @author hhoa
  */
-public class AttemptCompletionHandler implements StateFullToolHandler {
+public class AttemptCompletionHandler implements StateFullToolHandler<AttemptCompletionInput> {
 
     private static final String COMPLETION_RESULT_CHANGES_FLAG = "HAS_CHANGES";
 
@@ -52,12 +49,8 @@ public class AttemptCompletionHandler implements StateFullToolHandler {
     public static class AttemptCompletionToolState extends ToolState {
         private String command;
         private String result;
+        private String taskProgress;
         private List<UserContentBlock> cmdResult;
-    }
-
-    @Override
-    public String getName() {
-        return ClineDefaultTool.ATTEMPT.getValue();
     }
 
     @Override
@@ -70,25 +63,22 @@ public class AttemptCompletionHandler implements StateFullToolHandler {
         return "[" + block.getName() + "]";
     }
 
-    @Override
-    public ToolSpec getToolSpec() {
-        return AttemptCompletionTool.create(ModelFamily.GENERIC);
-    }
-
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
-        String result = HandlerUtils.getStringParam(block, "result");
-        String command = HandlerUtils.getStringParam(block, "command");
+    public void handlePartialBlock(
+            AttemptCompletionInput input, ToolContext context, ToolUse block) {
+        UIHelpers ui = UIHelpers.create(context);
+        String result = input.result();
+        String command = input.command();
 
         if (command == null || command.isEmpty()) {
             ui.say(ClineSay.COMPLETION_RESULT, result, null, null, block.isPartial(), null);
         }
     }
 
-    @Override
-    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
-        String result = HandlerUtils.getStringParam(block, "result");
-        String command = HandlerUtils.getStringParam(block, "command");
+    public ToolExecuteResult execute(
+            AttemptCompletionInput input, ToolContext context, ToolUse block) {
+        String result = input.result();
+        String command = input.command();
+        String taskProgress = input.taskProgress();
 
         if (context.getAutoApprovalSettings() != null
                 && context.getAutoApprovalSettings().isEnabled()
@@ -119,7 +109,6 @@ public class AttemptCompletionHandler implements StateFullToolHandler {
             }
 
             if (!block.isPartial()) {
-                String taskProgress = HandlerUtils.getStringParam(block, "task_progress");
                 if (taskProgress != null) {
                     context.getCallbacks().updateFCListFromToolResponse(taskProgress);
                 }
@@ -130,6 +119,7 @@ public class AttemptCompletionHandler implements StateFullToolHandler {
             state.setPhase(PHASE_COMMAND_ASK);
             state.setCommand(command);
             state.setResult(result);
+            state.setTaskProgress(taskProgress);
 
             var token =
                     ToolResultUtils.askApprovalAndPushFeedbackForToken(
@@ -148,7 +138,7 @@ public class AttemptCompletionHandler implements StateFullToolHandler {
         }
 
         // 无命令，直接进入完成结果 ask
-        return proceedToCompletionAsk(context, block, cmdResult);
+        return proceedToCompletionAsk(context, block, taskProgress, cmdResult);
     }
 
     @Override
@@ -197,12 +187,15 @@ public class AttemptCompletionHandler implements StateFullToolHandler {
         }
 
         state.setCmdResult(cmdResult);
-        return proceedToCompletionAsk(context, block, cmdResult);
+        return proceedToCompletionAsk(context, block, state.getTaskProgress(), cmdResult);
     }
 
     /** 进入完成结果 ask 阶段：发送 COMPLETION_RESULT ask 并返回 PendingAsk */
     private ToolExecuteResult proceedToCompletionAsk(
-            ToolContext context, ToolUse block, List<UserContentBlock> cmdResult) {
+            ToolContext context,
+            ToolUse block,
+            String taskProgress,
+            List<UserContentBlock> cmdResult) {
 
         List<ClineMessage> currentMessages = context.getMessageState().getClineMessages();
         if (!currentMessages.isEmpty()) {
@@ -213,7 +206,6 @@ public class AttemptCompletionHandler implements StateFullToolHandler {
         }
 
         if (!block.isPartial()) {
-            String taskProgress = HandlerUtils.getStringParam(block, "task_progress");
             if (taskProgress != null) {
                 context.getCallbacks().updateFCListFromToolResponse(taskProgress);
             }

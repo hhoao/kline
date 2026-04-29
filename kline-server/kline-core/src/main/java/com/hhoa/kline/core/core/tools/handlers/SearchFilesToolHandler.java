@@ -3,7 +3,6 @@ package com.hhoa.kline.core.core.tools.handlers;
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.services.ripgrep.RipgrepService;
 import com.hhoa.kline.core.core.services.telemetry.TelemetryService;
 import com.hhoa.kline.core.core.shared.ClineAsk;
@@ -11,8 +10,7 @@ import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.TaskUtils;
-import com.hhoa.kline.core.core.tools.ToolSpec;
-import com.hhoa.kline.core.core.tools.specs.SearchFilesTool;
+import com.hhoa.kline.core.core.tools.args.SearchFilesInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
@@ -37,9 +35,7 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class SearchFilesToolHandler implements StateFullToolHandler {
-
-    private static final String NAME = "search_files";
+public class SearchFilesToolHandler implements StateFullToolHandler<SearchFilesInput> {
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
     private final RipgrepService ripgrepService = new RipgrepService();
@@ -74,11 +70,6 @@ public class SearchFilesToolHandler implements StateFullToolHandler {
     }
 
     @Override
-    public String getName() {
-        return NAME;
-    }
-
-    @Override
     public String getDescription(ToolUse block) {
         String regex = HandlerUtils.getStringParam(block, "regex");
         String pattern = HandlerUtils.getStringParam(block, "file_pattern");
@@ -92,24 +83,20 @@ public class SearchFilesToolHandler implements StateFullToolHandler {
     }
 
     @Override
-    public ToolSpec getToolSpec() {
-        return SearchFilesTool.create(ModelFamily.GENERIC);
-    }
-
-    @Override
     public boolean isConcurrencySafe(ToolUse block, ToolContext context) {
         String path = HandlerUtils.getStringParam(block, "path");
         return context != null
                 && context.getCallbacks() != null
                 && Boolean.TRUE.equals(
-                        context.getCallbacks().shouldAutoApproveToolWithPath(getName(), path));
+                        context.getCallbacks()
+                                .shouldAutoApproveToolWithPath(block.getName(), path));
     }
 
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
-        String relPath = HandlerUtils.getStringParam(block, "path");
-        String regex = HandlerUtils.getStringParam(block, "regex");
-        String filePattern = HandlerUtils.getStringParam(block, "file_pattern");
+    public void handlePartialBlock(SearchFilesInput input, ToolContext context, ToolUse block) {
+        UIHelpers ui = UIHelpers.create(context);
+        String relPath = input.path();
+        String regex = input.regex();
+        String filePattern = input.filePattern();
 
         ToolContext config = ui.getContext();
         Map<String, Object> messageMap = new HashMap<>();
@@ -252,11 +239,10 @@ public class SearchFilesToolHandler implements StateFullToolHandler {
         }
     }
 
-    @Override
-    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
-        String relDirPath = HandlerUtils.getStringParam(block, "path");
-        String regex = HandlerUtils.getStringParam(block, "regex");
-        String filePattern = HandlerUtils.getStringParam(block, "file_pattern");
+    public ToolExecuteResult execute(SearchFilesInput input, ToolContext context, ToolUse block) {
+        String relDirPath = input.path();
+        String regex = input.regex();
+        String filePattern = input.filePattern();
 
         if (relDirPath == null || relDirPath.trim().isEmpty()) {
             context.getTaskState()

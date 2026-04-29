@@ -3,18 +3,15 @@ package com.hhoa.kline.core.core.tools.handlers;
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
-import com.hhoa.kline.core.core.tools.ToolSpec;
-import com.hhoa.kline.core.core.tools.specs.SubagentTool;
+import com.hhoa.kline.core.core.tools.args.SubagentInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
 import com.hhoa.kline.core.core.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.tools.utils.ToolResultUtils;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -27,24 +24,15 @@ import lombok.Setter;
  *
  * @author hhoa
  */
-public class SubagentToolHandler implements StateFullToolHandler {
+public class SubagentToolHandler implements StateFullToolHandler<SubagentInput> {
 
     private static final int MAX_SUBAGENT_PROMPTS = 5;
-    private static final String[] PROMPT_KEYS = {
-        "prompt_1", "prompt_2", "prompt_3", "prompt_4", "prompt_5"
-    };
-
     private final ResponseFormatter formatResponse = new ResponseFormatter();
 
     @Getter
     @Setter
     public static class SubagentToolState extends ToolState {
         private List<String> prompts;
-    }
-
-    @Override
-    public String getName() {
-        return ClineDefaultTool.USE_SUBAGENTS.getValue();
     }
 
     @Override
@@ -57,14 +45,9 @@ public class SubagentToolHandler implements StateFullToolHandler {
         return "[subagents]";
     }
 
-    @Override
-    public ToolSpec getToolSpec() {
-        return SubagentTool.create(ModelFamily.GENERIC);
-    }
-
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
-        List<String> prompts = collectPrompts(block);
+    public void handlePartialBlock(SubagentInput input, ToolContext context, ToolUse block) {
+        UIHelpers ui = UIHelpers.create(context);
+        List<String> prompts = collectPrompts(input);
         if (prompts.isEmpty()) {
             return;
         }
@@ -79,9 +62,8 @@ public class SubagentToolHandler implements StateFullToolHandler {
                 null);
     }
 
-    @Override
-    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
-        List<String> prompts = collectPrompts(block);
+    public ToolExecuteResult execute(SubagentInput input, ToolContext context, ToolUse block) {
+        List<String> prompts = collectPrompts(input);
 
         if (prompts.isEmpty()) {
             context.getTaskState()
@@ -91,7 +73,7 @@ public class SubagentToolHandler implements StateFullToolHandler {
                                     + 1);
             return HandlerUtils.createToolExecuteResult(
                     formatResponse.toolError(
-                            "Missing required parameter: provide 'prompt' or at least 'prompt_1'."));
+                            "Missing required parameter: provide at least 'prompt_1'."));
         }
 
         if (prompts.size() > MAX_SUBAGENT_PROMPTS) {
@@ -167,14 +149,12 @@ public class SubagentToolHandler implements StateFullToolHandler {
                 formatResponse.toolResult(summary.toString(), null, null));
     }
 
-    private List<String> collectPrompts(ToolUse block) {
-        String single = HandlerUtils.getStringParam(block, "prompt");
-        if (single != null && !single.trim().isEmpty()) {
-            return List.of(single.trim());
-        }
+    private List<String> collectPrompts(SubagentInput input) {
         List<String> prompts = new ArrayList<>();
-        for (String key : PROMPT_KEYS) {
-            String prompt = HandlerUtils.getStringParam(block, key);
+        String[] inputPrompts = {
+            input.prompt1(), input.prompt2(), input.prompt3(), input.prompt4(), input.prompt5()
+        };
+        for (String prompt : inputPrompts) {
             if (prompt != null && !prompt.trim().isEmpty()) {
                 prompts.add(prompt.trim());
             }

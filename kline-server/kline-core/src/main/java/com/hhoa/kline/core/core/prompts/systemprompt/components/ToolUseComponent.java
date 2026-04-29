@@ -7,7 +7,7 @@ import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptSection;
 import com.hhoa.kline.core.core.prompts.systemprompt.registry.PromptBuilder;
 import com.hhoa.kline.core.core.prompts.systemprompt.templates.TemplateEngine;
 import com.hhoa.kline.core.core.shared.proto.cline.Viewport;
-import com.hhoa.kline.core.core.tools.ToolParameterSpec;
+import com.hhoa.kline.core.core.tools.ToolSchema;
 import com.hhoa.kline.core.core.tools.ToolSpec;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
@@ -364,7 +364,7 @@ public class ToolUseComponent implements SystemPromptComponent {
     private String buildToolDescription(
             ToolSpec spec, SystemPromptContext context, List<String> allToolIds) {
         boolean hasDesc = spec.getDescription() != null && !spec.getDescription().isBlank();
-        boolean hasParams = spec.getParameters() != null && !spec.getParameters().isEmpty();
+        boolean hasParams = !ToolSchema.properties(spec.getInputSchema()).isEmpty();
         if (!hasDesc && !hasParams) {
             return null;
         }
@@ -384,16 +384,17 @@ public class ToolUseComponent implements SystemPromptComponent {
         StringBuilder sb = new StringBuilder();
         sb.append("## ").append(spec.getId()).append('\n');
 
-        List<ToolParameterSpec> filteredParams =
-                filterParameters(spec.getParameters(), context, allToolIds);
+        List<Map.Entry<String, Map<String, Object>>> filteredParams =
+                filterParameters(spec.getInputSchema(), context, allToolIds);
 
         List<String> descriptionLines = new ArrayList<>();
         String mainDescription = spec.getDescription() != null ? spec.getDescription() : "";
         descriptionLines.add("Description: " + mainDescription);
 
         for (var p : filteredParams) {
-            if (p.getDescription() != null && !p.getDescription().isBlank()) {
-                descriptionLines.add(p.getDescription());
+            Object description = p.getValue().get("description");
+            if (description != null && !String.valueOf(description).isBlank()) {
+                descriptionLines.add(String.valueOf(description));
             }
         }
 
@@ -404,13 +405,16 @@ public class ToolUseComponent implements SystemPromptComponent {
         } else {
             sb.append("Parameters:\n");
             for (var p : filteredParams) {
-                String requiredText = p.isRequired() ? "required" : "optional";
+                String requiredText =
+                        ToolSchema.required(spec.getInputSchema()).contains(p.getKey())
+                                ? "required"
+                                : "optional";
                 sb.append("- ")
-                        .append(p.getName())
+                        .append(p.getKey())
                         .append(": (")
                         .append(requiredText)
                         .append(") ")
-                        .append(p.getInstruction() != null ? p.getInstruction() : "")
+                        .append(ToolSchema.instruction(p.getValue(), context))
                         .append('\n');
             }
         }
@@ -420,11 +424,11 @@ public class ToolUseComponent implements SystemPromptComponent {
         sb.append('<').append(toolId).append('>').append('\n');
         for (var p : filteredParams) {
             sb.append('<')
-                    .append(p.getName())
+                    .append(p.getKey())
                     .append('>')
-                    .append(p.getUsage() != null ? p.getUsage() : "")
+                    .append(ToolSchema.usage(p.getValue()))
                     .append("</")
-                    .append(p.getName())
+                    .append(p.getKey())
                     .append('>')
                     .append('\n');
         }
@@ -441,37 +445,15 @@ public class ToolUseComponent implements SystemPromptComponent {
      * @param allToolIds 所有工具 ID 列表
      * @return 过滤后的参数列表
      */
-    private List<ToolParameterSpec> filterParameters(
-            List<ToolParameterSpec> parameters,
-            SystemPromptContext context,
-            List<String> allToolIds) {
-        if (parameters == null || parameters.isEmpty()) {
+    private List<Map.Entry<String, Map<String, Object>>> filterParameters(
+            Map<String, Object> inputSchema, SystemPromptContext context, List<String> allToolIds) {
+        Map<String, Map<String, Object>> parameters = ToolSchema.properties(inputSchema);
+        if (parameters.isEmpty()) {
             return List.of();
         }
 
-        return parameters.stream()
-                .filter(
-                        p -> {
-                            if (p.getDependencies() != null && !p.getDependencies().isEmpty()) {
-                                if (!new HashSet<>(allToolIds).containsAll(p.getDependencies())) {
-                                    return false;
-                                }
-                            }
-
-                            if (p.getContextRequirements() != null) {
-                                try {
-                                    return Boolean.TRUE.equals(
-                                            p.getContextRequirements().apply(context));
-                                } catch (Exception e) {
-                                    log.warn(
-                                            "Param contextRequirements evaluation failed for {}",
-                                            p.getName(),
-                                            e);
-                                    return false;
-                                }
-                            }
-                            return true;
-                        })
+        return parameters.entrySet().stream()
+                .filter(entry -> ToolSchema.parameterEnabled(entry.getValue(), context, allToolIds))
                 .toList();
     }
 

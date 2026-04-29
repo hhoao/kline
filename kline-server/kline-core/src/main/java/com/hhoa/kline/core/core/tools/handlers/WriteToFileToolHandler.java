@@ -10,7 +10,9 @@ import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
-import com.hhoa.kline.core.core.tools.ToolSpec;
+import com.hhoa.kline.core.core.tools.ToolArgumentMapper;
+import com.hhoa.kline.core.core.tools.args.ReplaceInFileInput;
+import com.hhoa.kline.core.core.tools.args.WriteToFileInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
@@ -19,7 +21,6 @@ import com.hhoa.kline.core.core.tools.utils.ToolResultUtils;
 import com.hhoa.kline.core.core.utils.StringUtils;
 import com.hhoa.kline.core.core.workspace.WorkspaceConfig;
 import com.hhoa.kline.core.core.workspace.WorkspaceResolver;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -34,7 +35,7 @@ import lombok.Setter;
  *
  * @author hhoa
  */
-public class WriteToFileToolHandler implements StateFullToolHandler {
+public class WriteToFileToolHandler implements StateFullToolHandler<WriteToFileInput> {
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
 
@@ -46,12 +47,18 @@ public class WriteToFileToolHandler implements StateFullToolHandler {
         private String completeMessage;
     }
 
-    private static String getStringParam(ToolUse block, String key) {
-        return HandlerUtils.getStringParam(block, key);
+    private static String getPathParam(String path, String absolutePath) {
+        return path != null && !path.isEmpty() ? path : absolutePath;
     }
 
-    private static String getToolDescription(ToolUse block) {
-        return "[" + block.getName() + " for '" + HandlerUtils.getPathParam(block) + "']";
+    private static FileToolInput inputForTool(WriteToFileInput input, ToolUse block) {
+        if ("replace_in_file".equals(block.getName())) {
+            ReplaceInFileInput replaceInput =
+                    ToolArgumentMapper.map(block, ReplaceInFileInput.class);
+            return new FileToolInput(
+                    replaceInput.path(), replaceInput.absolutePath(), null, replaceInput.diff());
+        }
+        return new FileToolInput(input.path(), input.absolutePath(), input.content(), null);
     }
 
     private static String buildToolMessage(String tool, String path, String content) {
@@ -95,11 +102,6 @@ public class WriteToFileToolHandler implements StateFullToolHandler {
     }
 
     @Override
-    public String getName() {
-        return ClineDefaultTool.FILE_NEW.getValue();
-    }
-
-    @Override
     public ToolState createToolState() {
         return new WriteFileToolState();
     }
@@ -109,17 +111,12 @@ public class WriteToFileToolHandler implements StateFullToolHandler {
         return "[" + block.getName() + " for '" + HandlerUtils.getPathParam(block) + "']";
     }
 
-    @Override
-    public ToolSpec getToolSpec() {
-        // This handler serves multiple tools (write_to_file, replace_in_file, new_rule)
-        return null;
-    }
-
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
-        String rawRelPath = HandlerUtils.getPathParam(block);
-        String rawContent = getStringParam(block, "content");
-        String rawDiff = getStringParam(block, "diff");
+    public void handlePartialBlock(WriteToFileInput input, ToolContext context, ToolUse block) {
+        UIHelpers ui = UIHelpers.create(context);
+        FileToolInput toolInput = inputForTool(input, block);
+        String rawRelPath = getPathParam(toolInput.path(), toolInput.absolutePath());
+        String rawContent = toolInput.content();
+        String rawDiff = toolInput.diff();
 
         if (rawRelPath == null || (rawContent == null && rawDiff == null)) {
             return;
@@ -161,11 +158,19 @@ public class WriteToFileToolHandler implements StateFullToolHandler {
         }
     }
 
-    @Override
-    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
-        String rawRelPath = HandlerUtils.getPathParam(block);
-        String rawContent = getStringParam(block, "content");
-        String rawDiff = getStringParam(block, "diff");
+    public void handleReplaceInFilePartialBlock(
+            ReplaceInFileInput input, ToolContext context, ToolUse block) {
+        WriteToFileInput writeInput =
+                new WriteToFileInput(
+                        input.path(), input.absolutePath(), null, input.taskProgress());
+        handlePartialBlock(writeInput, context, block);
+    }
+
+    public ToolExecuteResult execute(WriteToFileInput input, ToolContext context, ToolUse block) {
+        FileToolInput toolInput = inputForTool(input, block);
+        String rawRelPath = getPathParam(toolInput.path(), toolInput.absolutePath());
+        String rawContent = toolInput.content();
+        String rawDiff = toolInput.diff();
 
         if ("replace_in_file".equals(block.getName())
                 && (rawDiff == null || rawDiff.trim().isEmpty())) {
@@ -258,6 +263,14 @@ public class WriteToFileToolHandler implements StateFullToolHandler {
             return HandlerUtils.createToolExecuteResult(
                     formatResponse.toolError("File operation failed: " + e.getMessage()));
         }
+    }
+
+    public ToolExecuteResult executeReplaceInFile(
+            ReplaceInFileInput input, ToolContext context, ToolUse block) {
+        WriteToFileInput writeInput =
+                new WriteToFileInput(
+                        input.path(), input.absolutePath(), null, input.taskProgress());
+        return execute(writeInput, context, block);
     }
 
     @Override
@@ -637,4 +650,6 @@ public class WriteToFileToolHandler implements StateFullToolHandler {
             this.error = error;
         }
     }
+
+    private record FileToolInput(String path, String absolutePath, String content, String diff) {}
 }

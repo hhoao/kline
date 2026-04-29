@@ -2,42 +2,31 @@ package com.hhoa.kline.core.core.tools.handlers;
 
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.McpDocumentationLoader;
-import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.shared.ClineSay;
-import com.hhoa.kline.core.core.tools.ToolSpec;
-import com.hhoa.kline.core.core.tools.specs.LoadMcpDocumentationTool;
+import com.hhoa.kline.core.core.tools.args.LoadMcpDocumentationInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.UIHelpers;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.ArrayList;
 import java.util.List;
 
 /** 加载 MCP 文档的工具处理器 */
-public class LoadMcpDocumentationHandler implements ToolHandler {
-
-    @Override
-    public String getName() {
-        return ClineDefaultTool.MCP_DOCS.getValue();
-    }
-
+public class LoadMcpDocumentationHandler implements ToolHandler<LoadMcpDocumentationInput> {
     @Override
     public String getDescription(ToolUse block) {
         return "[" + block.getName() + "]";
     }
 
     @Override
-    public ToolSpec getToolSpec() {
-        return LoadMcpDocumentationTool.create(ModelFamily.GENERIC);
-    }
-
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
+    public void handlePartialBlock(
+            LoadMcpDocumentationInput input, ToolContext context, ToolUse block) {
+        UIHelpers ui = UIHelpers.create(context);
         ui.say(ClineSay.LOAD_MCP_DOCUMENTATION, "", null, null, true, null);
     }
 
     @Override
-    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
+    public ToolExecuteResult execute(
+            LoadMcpDocumentationInput input, ToolContext context, ToolUse block) {
         context.getCallbacks().say(ClineSay.LOAD_MCP_DOCUMENTATION, "", null, null, false, null);
 
         try {

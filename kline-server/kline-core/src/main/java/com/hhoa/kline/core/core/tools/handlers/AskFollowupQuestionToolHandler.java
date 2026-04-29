@@ -6,21 +6,18 @@ import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.integrations.misc.ExtractText;
 import com.hhoa.kline.core.core.integrations.notifications.NotificationType;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.ClineMessage;
 import com.hhoa.kline.core.core.task.MessageUtils;
-import com.hhoa.kline.core.core.tools.ToolSpec;
-import com.hhoa.kline.core.core.tools.specs.AskFollowupQuestionTool;
+import com.hhoa.kline.core.core.tools.args.AskFollowupQuestionInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
 import com.hhoa.kline.core.core.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.tools.utils.ToolResultUtils;
 import com.hhoa.kline.core.core.utils.PartialJsonUtils;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -30,7 +27,8 @@ import java.util.Map;
 import lombok.Getter;
 import lombok.Setter;
 
-public class AskFollowupQuestionToolHandler implements StateFullToolHandler {
+public class AskFollowupQuestionToolHandler
+        implements StateFullToolHandler<AskFollowupQuestionInput> {
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -49,25 +47,16 @@ public class AskFollowupQuestionToolHandler implements StateFullToolHandler {
     }
 
     @Override
-    public String getName() {
-        return ClineDefaultTool.ASK.getValue();
-    }
-
-    @Override
     public String getDescription(ToolUse block) {
         String q = HandlerUtils.getStringParam(block, "question");
         return "[" + block.getName() + " for '" + (q == null ? "" : q) + "']";
     }
 
-    @Override
-    public ToolSpec getToolSpec() {
-        return AskFollowupQuestionTool.create(ModelFamily.GENERIC);
-    }
-
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
-        String question = HandlerUtils.getStringParam(block, "question");
-        String optionsRaw = HandlerUtils.getStringParam(block, "options");
+    public void handlePartialBlock(
+            AskFollowupQuestionInput input, ToolContext context, ToolUse block) {
+        UIHelpers ui = UIHelpers.create(context);
+        String question = input.question();
+        String optionsRaw = input.options();
 
         String message;
         try {
@@ -87,10 +76,10 @@ public class AskFollowupQuestionToolHandler implements StateFullToolHandler {
         ui.ask(ClineAsk.FOLLOWUP, message, block.isPartial(), null);
     }
 
-    @Override
-    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
-        String question = HandlerUtils.getStringParam(block, "question");
-        String optionsRaw = HandlerUtils.getStringParam(block, "options");
+    public ToolExecuteResult execute(
+            AskFollowupQuestionInput input, ToolContext context, ToolUse block) {
+        String question = input.question();
+        String optionsRaw = input.options();
 
         // In yolo mode, don't wait for user input - instruct AI to use tools instead
         if (context.isYoloModeToggled()) {

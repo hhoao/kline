@@ -2,9 +2,10 @@ package com.hhoa.kline.core.core.tools.specs;
 
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
-import com.hhoa.kline.core.core.tools.ToolSpec;
+import com.hhoa.kline.core.core.tools.ToolSpecProvider;
+import com.hhoa.kline.core.core.tools.args.FocusChainInput;
+import com.hhoa.kline.core.core.tools.handlers.ToolHandler;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
-import java.util.Collections;
 import java.util.function.Function;
 
 /**
@@ -12,23 +13,23 @@ import java.util.function.Function;
  *
  * @author hhoa
  */
-public class FocusChainTool extends BaseToolSpec {
+public final class FocusChainTool extends BaseToolSpec
+        implements ToolSpecProvider<FocusChainInput, ToolHandler> {
 
-    public static ToolSpec create(ModelFamily modelFamily) {
-        // HACK: Placeholder to act as tool dependency
-        // This is a placeholder tool with empty description, used as a dependency for other tools
-        Function<SystemPromptContext, Boolean> contextRequirements =
-                (context) ->
-                        context.getFocusChainSettings() != null
-                                && Boolean.TRUE.equals(context.getFocusChainSettings().isEnabled());
+    @Override
+    public String id() {
+        return ClineDefaultTool.TODO.getValue();
+    }
 
-        return ToolSpec.builder()
-                .variant(modelFamily)
-                .id(ClineDefaultTool.TODO.getValue())
-                .name(ClineDefaultTool.TODO.getValue())
-                .description("")
-                .contextRequirements(contextRequirements)
-                .parameters(Collections.emptyList())
-                .build();
+    @Override
+    public String description(ModelFamily family) {
+        return "";
+    }
+
+    @Override
+    public Function<SystemPromptContext, Boolean> contextRequirements(ModelFamily family) {
+        return context ->
+                context.getFocusChainSettings() != null
+                        && Boolean.TRUE.equals(context.getFocusChainSettings().isEnabled());
     }
 }

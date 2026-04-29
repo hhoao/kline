@@ -1,17 +1,20 @@
 package com.hhoa.kline.core.core.tools.specs;
 
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
-import com.hhoa.kline.core.core.tools.ToolParameterSpec;
-import com.hhoa.kline.core.core.tools.ToolSpec;
+import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
+import com.hhoa.kline.core.core.tools.ToolSpecProvider;
+import com.hhoa.kline.core.core.tools.args.WebSearchInput;
+import com.hhoa.kline.core.core.tools.handlers.WebSearchToolHandler;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
-import java.util.List;
+import java.util.function.Function;
 
 /**
  * Web Search 工具规格 - 执行网络搜索并返回相关结果
  *
  * @author hhoa
  */
-public class WebSearchTool extends BaseToolSpec {
+public final class WebSearchTool extends BaseToolSpec
+        implements ToolSpecProvider<WebSearchInput, WebSearchToolHandler> {
 
     private static final String GENERIC_DESCRIPTION =
             "Performs a web search and returns relevant results\n"
@@ -30,60 +33,23 @@ public class WebSearchTool extends BaseToolSpec {
                     + "IMPORTANT: If an MCP-provided web search tool is available, prefer using that tool "
                     + "instead of this one, as it may have fewer restrictions.";
 
-    public static ToolSpec create(ModelFamily modelFamily) {
-        boolean isNative =
-                modelFamily == ModelFamily.NATIVE_GPT_5
-                        || modelFamily == ModelFamily.NATIVE_NEXT_GEN;
+    @Override
+    public String id() {
+        return ClineDefaultTool.WEB_SEARCH.getValue();
+    }
 
-        String description = isNative ? CONCISE_DESCRIPTION : GENERIC_DESCRIPTION;
+    @Override
+    public String description(ModelFamily family) {
+        return switch (family) {
+            case NATIVE_GPT_5, NATIVE_NEXT_GEN -> CONCISE_DESCRIPTION;
+            default -> GENERIC_DESCRIPTION;
+        };
+    }
 
-        List<ToolParameterSpec> parameters;
-        if (isNative) {
-            parameters =
-                    List.of(
-                            createParameter("query", true, "The search query to use", null),
-                            createParameter(
-                                    "allowed_domains",
-                                    false,
-                                    "JSON array of domains to restrict results to",
-                                    null),
-                            createParameter(
-                                    "blocked_domains",
-                                    false,
-                                    "JSON array of domains to exclude from results",
-                                    null),
-                            createTaskProgressParameter());
-        } else {
-            parameters =
-                    List.of(
-                            createParameter(
-                                    "query",
-                                    true,
-                                    "The search query to use",
-                                    "latest developments in AI"),
-                            createParameter(
-                                    "allowed_domains",
-                                    false,
-                                    "JSON array of domains to restrict results to",
-                                    "[\"example.com\", \"github.com\"]"),
-                            createParameter(
-                                    "blocked_domains",
-                                    false,
-                                    "JSON array of domains to exclude from results",
-                                    "[\"ads.com\", \"spam.com\"]"),
-                            createTaskProgressParameter());
-        }
-
-        return ToolSpec.builder()
-                .variant(modelFamily)
-                .id(ClineDefaultTool.WEB_SEARCH.getValue())
-                .name(ClineDefaultTool.WEB_SEARCH.getValue())
-                .description(description)
-                .contextRequirements(
-                        context ->
-                                "cline".equals(context.getProviderId())
-                                        && Boolean.TRUE.equals(context.getClineWebToolsEnabled()))
-                .parameters(parameters)
-                .build();
+    @Override
+    public Function<SystemPromptContext, Boolean> contextRequirements(ModelFamily family) {
+        return context ->
+                "cline".equals(context.getProviderId())
+                        && Boolean.TRUE.equals(context.getClineWebToolsEnabled());
     }
 }

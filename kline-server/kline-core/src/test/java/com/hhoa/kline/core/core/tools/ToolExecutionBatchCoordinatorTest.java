@@ -7,17 +7,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.hhoa.kline.core.core.assistant.TextContentBlock;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.assistant.UserContentBlock;
+import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
+import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
 import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.tools.handlers.ToolHandler;
 import com.hhoa.kline.core.core.tools.types.PendingAskToken;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
-import com.hhoa.kline.core.core.tools.types.UIHelpers;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
@@ -143,9 +145,9 @@ class ToolExecutionBatchCoordinatorTest {
     private static final class FakeToolExecutor implements ToolExecutor {
         private final Map<String, ToolHandler> handlers = new ConcurrentHashMap<>();
 
-        private FakeToolExecutor(ToolHandler... handlers) {
-            for (ToolHandler handler : handlers) {
-                this.handlers.put(handler.getName(), handler);
+        private FakeToolExecutor(NamedTestToolHandler... handlers) {
+            for (NamedTestToolHandler handler : handlers) {
+                this.handlers.put(handler.registryName(), handler);
             }
         }
 
@@ -161,12 +163,47 @@ class ToolExecutionBatchCoordinatorTest {
                 public boolean has(String toolName) {
                     return handlers.containsKey(toolName);
                 }
+
+                @Override
+                public ToolSpec getSpec(String toolName, ModelFamily family) {
+                    return null;
+                }
+
+                @Override
+                public List<ToolSpec> getToolSpecs(
+                        ModelFamily variant, SystemPromptContext context) {
+                    return List.of();
+                }
+
+                @Override
+                public List<ToolSpec> getToolsForVariantWithFallback(
+                        ModelFamily variant,
+                        List<String> requestedIds,
+                        SystemPromptContext context) {
+                    return List.of();
+                }
+
+                @Override
+                public List<ToolSpec> getEnabledTools(
+                        ModelFamily variant, SystemPromptContext context) {
+                    return List.of();
+                }
+
+                @Override
+                public List<Map<String, Object>> getNativeTools(
+                        ModelFamily variant,
+                        SystemPromptContext context,
+                        Function<ToolSpecConverter.ToolConversionInput, Map<String, Object>>
+                                converter) {
+                    return List.of();
+                }
             };
         }
 
         @Override
         public ToolExecuteResult executeTool(ToolUse block, ToolContext config) {
-            return handlers.get(block.getName()).execute(config, block);
+            return ToolHandlerInvocationSupport.invoke(
+                    handlers.get(block.getName()), config, block);
         }
 
         @Override
@@ -181,7 +218,11 @@ class ToolExecutionBatchCoordinatorTest {
         }
     }
 
-    private static final class FakeToolHandler implements ToolHandler {
+    private interface NamedTestToolHandler extends ToolHandler {
+        String registryName();
+    }
+
+    private static final class FakeToolHandler implements NamedTestToolHandler {
         private final String name;
         private final AtomicInteger active;
         private final AtomicInteger maxActive;
@@ -193,7 +234,7 @@ class ToolExecutionBatchCoordinatorTest {
         }
 
         @Override
-        public String getName() {
+        public String registryName() {
             return name;
         }
 
@@ -202,11 +243,7 @@ class ToolExecutionBatchCoordinatorTest {
             return name;
         }
 
-        @Override
-        public void handlePartialBlock(ToolUse block, UIHelpers uiHelpers) {}
-
-        @Override
-        public ToolExecuteResult execute(ToolContext context, ToolUse block) {
+        public ToolExecuteResult execute(BatchInput input, ToolContext context, ToolUse block) {
             int running = active.incrementAndGet();
             maxActive.accumulateAndGet(running, Math::max);
             try {
@@ -220,19 +257,14 @@ class ToolExecutionBatchCoordinatorTest {
         }
 
         @Override
-        public ToolSpec getToolSpec() {
-            return null;
-        }
-
-        @Override
         public boolean isConcurrencySafe(ToolUse block, ToolContext context) {
             return true;
         }
     }
 
-    private static class PendingToolHandler implements ToolHandler {
+    private static class PendingToolHandler implements NamedTestToolHandler {
         @Override
-        public String getName() {
+        public String registryName() {
             return "pending";
         }
 
@@ -241,25 +273,16 @@ class ToolExecutionBatchCoordinatorTest {
             return "pending";
         }
 
-        @Override
-        public void handlePartialBlock(ToolUse block, UIHelpers uiHelpers) {}
-
-        @Override
-        public ToolExecuteResult execute(ToolContext context, ToolUse block) {
+        public ToolExecuteResult execute(BatchInput input, ToolContext context, ToolUse block) {
             return new ToolExecuteResult.PendingAsk(
                     new PendingAskToken.ToolUsePendingAskToken(
                             "pending-id", "task", "pending", null, "", null, block));
-        }
-
-        @Override
-        public ToolSpec getToolSpec() {
-            return null;
         }
     }
 
     private static final class SafePendingToolHandler extends PendingToolHandler {
         @Override
-        public String getName() {
+        public String registryName() {
             return "safe-pending";
         }
 
@@ -269,7 +292,7 @@ class ToolExecutionBatchCoordinatorTest {
         }
     }
 
-    private static final class CountingToolHandler implements ToolHandler {
+    private static final class CountingToolHandler implements NamedTestToolHandler {
         private final AtomicInteger count;
         private final boolean concurrencySafe;
 
@@ -283,7 +306,7 @@ class ToolExecutionBatchCoordinatorTest {
         }
 
         @Override
-        public String getName() {
+        public String registryName() {
             return "later";
         }
 
@@ -292,18 +315,9 @@ class ToolExecutionBatchCoordinatorTest {
             return "later";
         }
 
-        @Override
-        public void handlePartialBlock(ToolUse block, UIHelpers uiHelpers) {}
-
-        @Override
-        public ToolExecuteResult execute(ToolContext context, ToolUse block) {
+        public ToolExecuteResult execute(BatchInput input, ToolContext context, ToolUse block) {
             count.incrementAndGet();
             return new ToolExecuteResult.Immediate(List.of(new TextContentBlock("later result")));
-        }
-
-        @Override
-        public ToolSpec getToolSpec() {
-            return null;
         }
 
         @Override
@@ -312,7 +326,7 @@ class ToolExecutionBatchCoordinatorTest {
         }
     }
 
-    private static final class ThrowingToolHandler implements ToolHandler {
+    private static final class ThrowingToolHandler implements NamedTestToolHandler {
         private final String name;
 
         private ThrowingToolHandler(String name) {
@@ -320,7 +334,7 @@ class ToolExecutionBatchCoordinatorTest {
         }
 
         @Override
-        public String getName() {
+        public String registryName() {
             return name;
         }
 
@@ -329,11 +343,7 @@ class ToolExecutionBatchCoordinatorTest {
             return name;
         }
 
-        @Override
-        public void handlePartialBlock(ToolUse block, UIHelpers uiHelpers) {}
-
-        @Override
-        public ToolExecuteResult execute(ToolContext context, ToolUse block) {
+        public ToolExecuteResult execute(BatchInput input, ToolContext context, ToolUse block) {
             throw new IllegalStateException("boom");
         }
 
@@ -341,10 +351,7 @@ class ToolExecutionBatchCoordinatorTest {
         public boolean isConcurrencySafe(ToolUse block, ToolContext context) {
             return true;
         }
-
-        @Override
-        public ToolSpec getToolSpec() {
-            return null;
-        }
     }
+
+    record BatchInput() {}
 }

@@ -6,10 +6,10 @@ import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptSection;
 import com.hhoa.kline.core.core.prompts.systemprompt.templates.Placeholders;
 import com.hhoa.kline.core.core.prompts.systemprompt.templates.TemplateEngine;
-import com.hhoa.kline.core.core.tools.ToolParameterSpec;
+import com.hhoa.kline.core.core.tools.DefaultToolRegistry;
+import com.hhoa.kline.core.core.tools.ToolSchema;
 import com.hhoa.kline.core.core.tools.ToolSpec;
 import com.hhoa.kline.core.core.tools.registry.ToolPromptBuilder;
-import com.hhoa.kline.core.core.tools.registry.ToolSpecManager;
 import com.hhoa.kline.core.core.tools.subagent.AgentConfigLoader;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.time.LocalDate;
@@ -36,6 +36,7 @@ import lombok.extern.slf4j.Slf4j;
 public class PromptBuilder {
 
     private static final List<String> STANDARD_PLACEHOLDER_KEYS;
+    private static final DefaultToolRegistry TOOL_REGISTRY = new DefaultToolRegistry();
 
     static {
         STANDARD_PLACEHOLDER_KEYS = new ArrayList<>(Placeholders.STANDARD_PLACEHOLDERS.values());
@@ -212,7 +213,7 @@ public class PromptBuilder {
         if (variant.getTools() != null && !variant.getTools().isEmpty()) {
             List<String> requestedIds = new ArrayList<>(variant.getTools());
             resolvedTools =
-                    ToolSpecManager.getToolsForVariantWithFallback(family, requestedIds, context);
+                    TOOL_REGISTRY.getToolsForVariantWithFallback(family, requestedIds, context);
 
             Map<String, ToolSpec> toolMap =
                     resolvedTools.stream()
@@ -227,9 +228,9 @@ public class PromptBuilder {
                             .filter(Objects::nonNull)
                             .collect(Collectors.toList());
         } else {
-            resolvedTools = ToolSpecManager.getToolSpecs(family, context);
+            resolvedTools = TOOL_REGISTRY.getToolSpecs(family, context);
             if (resolvedTools == null || resolvedTools.isEmpty()) {
-                resolvedTools = ToolSpecManager.getToolSpecs(ModelFamily.GENERIC, context);
+                resolvedTools = TOOL_REGISTRY.getToolSpecs(ModelFamily.GENERIC, context);
             }
             if (resolvedTools == null || resolvedTools.isEmpty()) {
                 return Collections.emptyList();
@@ -316,13 +317,13 @@ public class PromptBuilder {
 
     private static ToolSpec buildDynamicSubagentSpec(
             AgentConfigLoader.AgentConfigWithToolName entry, ModelFamily family) {
-        ToolParameterSpec promptParam =
-                ToolParameterSpec.builder()
-                        .name("prompt")
-                        .required(true)
-                        .instruction(
-                                "Helpful instruction for the task that the subagent will perform.")
-                        .build();
+        Map<String, Object> inputSchema = ToolSchema.objectSchema();
+        ToolSchema.putProperty(
+                inputSchema,
+                "prompt",
+                ToolSchema.stringProperty(
+                        "Helpful instruction for the task that the subagent will perform."));
+        ToolSchema.require(inputSchema, "prompt");
 
         return ToolSpec.builder()
                 .variant(family)
@@ -336,7 +337,7 @@ public class PromptBuilder {
                         ctx ->
                                 Boolean.TRUE.equals(ctx.getSubagentsEnabled())
                                         && !Boolean.TRUE.equals(ctx.getIsSubagentRun()))
-                .parameters(List.of(promptParam))
+                .inputSchema(inputSchema)
                 .build();
     }
 

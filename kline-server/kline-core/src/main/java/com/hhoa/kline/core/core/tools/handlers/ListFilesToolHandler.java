@@ -3,15 +3,13 @@ package com.hhoa.kline.core.core.tools.handlers;
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.services.telemetry.TelemetryService;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.TaskUtils;
-import com.hhoa.kline.core.core.tools.ToolSpec;
-import com.hhoa.kline.core.core.tools.specs.ListFilesTool;
+import com.hhoa.kline.core.core.tools.args.ListFilesArgs;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
@@ -19,7 +17,6 @@ import com.hhoa.kline.core.core.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.tools.utils.ToolResultUtils;
 import com.hhoa.kline.core.core.workspace.WorkspaceConfig;
 import com.hhoa.kline.core.core.workspace.WorkspaceResolver;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -39,7 +36,7 @@ import lombok.Setter;
  *
  * @author hhoa
  */
-public class ListFilesToolHandler implements StateFullToolHandler {
+public class ListFilesToolHandler implements StateFullToolHandler<ListFilesArgs> {
 
     private static final int MAX_FILES = 200;
 
@@ -54,11 +51,6 @@ public class ListFilesToolHandler implements StateFullToolHandler {
     }
 
     @Override
-    public String getName() {
-        return ClineDefaultTool.LIST_FILES.getValue();
-    }
-
-    @Override
     public ToolState createToolState() {
         return new ListFilesToolState();
     }
@@ -70,26 +62,21 @@ public class ListFilesToolHandler implements StateFullToolHandler {
     }
 
     @Override
-    public ToolSpec getToolSpec() {
-        return ListFilesTool.create(ModelFamily.GENERIC);
-    }
-
-    @Override
     public boolean isConcurrencySafe(ToolUse block, ToolContext context) {
         String path = HandlerUtils.getStringParam(block, "path");
         return context != null
                 && context.getCallbacks() != null
                 && Boolean.TRUE.equals(
-                        context.getCallbacks().shouldAutoApproveToolWithPath(getName(), path));
+                        context.getCallbacks()
+                                .shouldAutoApproveToolWithPath(block.getName(), path));
     }
 
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
-        String relPath = HandlerUtils.getStringParam(block, "path");
+    public void handlePartialBlock(ListFilesArgs input, ToolContext context, ToolUse block) {
+        UIHelpers ui = UIHelpers.create(context);
+        String relPath = input.path();
         ToolContext config = ui.getContext();
 
-        String recursiveRaw = HandlerUtils.getStringParam(block, "recursive");
-        boolean recursive = recursiveRaw != null && recursiveRaw.equalsIgnoreCase("true");
+        boolean recursive = Boolean.TRUE.equals(input.recursive());
 
         Map<String, Object> sharedMessageMap = new HashMap<>();
         sharedMessageMap.put("tool", recursive ? "listFilesRecursive" : "listFilesTopLevel");
@@ -114,11 +101,9 @@ public class ListFilesToolHandler implements StateFullToolHandler {
         }
     }
 
-    @Override
-    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
-        String relDirPath = HandlerUtils.getStringParam(block, "path");
-        String recursiveRaw = HandlerUtils.getStringParam(block, "recursive");
-        boolean recursive = recursiveRaw != null && recursiveRaw.equalsIgnoreCase("true");
+    public ToolExecuteResult execute(ListFilesArgs args, ToolContext context, ToolUse block) {
+        String relDirPath = args.path();
+        boolean recursive = Boolean.TRUE.equals(args.recursive());
 
         // Check clineignore access before performing any IO.
         // Increment the counter so repeated attempts at blocked paths

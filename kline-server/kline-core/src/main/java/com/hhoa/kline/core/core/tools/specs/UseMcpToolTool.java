@@ -2,9 +2,10 @@ package com.hhoa.kline.core.core.tools.specs;
 
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
-import com.hhoa.kline.core.core.tools.ToolSpec;
+import com.hhoa.kline.core.core.tools.ToolSpecProvider;
+import com.hhoa.kline.core.core.tools.args.UseMcpToolInput;
+import com.hhoa.kline.core.core.tools.handlers.UseMcpToolHandler;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
-import java.util.List;
 import java.util.function.Function;
 
 /**
@@ -12,41 +13,24 @@ import java.util.function.Function;
  *
  * @author hhoa
  */
-public class UseMcpToolTool extends BaseToolSpec {
+public final class UseMcpToolTool extends BaseToolSpec
+        implements ToolSpecProvider<UseMcpToolInput, UseMcpToolHandler> {
 
-    public static ToolSpec create(ModelFamily modelFamily) {
-        // 只有在 mcpHub 存在时才显示此工具
-        Function<SystemPromptContext, Boolean> contextRequirements =
-                (context) -> context.getMcpHub() != null;
+    private static final String DESCRIPTION =
+            "Request to use a tool provided by a connected MCP server. Each MCP server can provide multiple tools with different capabilities. Tools have defined input schemas that specify required and optional parameters.";
 
-        return ToolSpec.builder()
-                .variant(modelFamily)
-                .id(ClineDefaultTool.MCP_USE.getValue())
-                .name(ClineDefaultTool.MCP_USE.getValue())
-                .description(
-                        "Request to use a tool provided by a connected MCP server. Each MCP server can provide multiple tools with different capabilities. Tools have defined input schemas that specify required and optional parameters.")
-                .contextRequirements(contextRequirements)
-                .parameters(
-                        List.of(
-                                createParameter(
-                                        "server_name",
-                                        true,
-                                        "The name of the MCP server providing the tool",
-                                        "server name here"),
-                                createParameter(
-                                        "tool_name",
-                                        true,
-                                        "The name of the tool to execute",
-                                        "tool name here"),
-                                createParameter(
-                                        "arguments",
-                                        true,
-                                        "A JSON object containing the tool's input parameters, following the tool's input schema",
-                                        "{\n"
-                                                + "  \"param1\": \"value1\",\n"
-                                                + "  \"param2\": \"value2\"\n"
-                                                + "}"),
-                                createTaskProgressParameter()))
-                .build();
+    @Override
+    public String id() {
+        return ClineDefaultTool.MCP_USE.getValue();
+    }
+
+    @Override
+    public String description(ModelFamily family) {
+        return DESCRIPTION;
+    }
+
+    @Override
+    public Function<SystemPromptContext, Boolean> contextRequirements(ModelFamily family) {
+        return context -> context.getMcpHub() != null;
     }
 }

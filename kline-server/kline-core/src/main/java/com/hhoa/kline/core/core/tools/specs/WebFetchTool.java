@@ -1,17 +1,20 @@
 package com.hhoa.kline.core.core.tools.specs;
 
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
-import com.hhoa.kline.core.core.tools.ToolParameterSpec;
-import com.hhoa.kline.core.core.tools.ToolSpec;
+import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
+import com.hhoa.kline.core.core.tools.ToolSpecProvider;
+import com.hhoa.kline.core.core.tools.args.WebFetchInput;
+import com.hhoa.kline.core.core.tools.handlers.WebFetchToolHandler;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
-import java.util.List;
+import java.util.function.Function;
 
 /**
  * Web 获取工具规格
  *
  * @author hhoa
  */
-public class WebFetchTool extends BaseToolSpec {
+public final class WebFetchTool extends BaseToolSpec
+        implements ToolSpecProvider<WebFetchInput, WebFetchToolHandler> {
 
     private static final String GENERIC_DESCRIPTION =
             "Fetches content from a specified URL and analyzes it using your prompt\n"
@@ -29,50 +32,23 @@ public class WebFetchTool extends BaseToolSpec {
                     + "IMPORTANT: If an MCP-provided web fetch tool is available, prefer using that tool "
                     + "instead of this one, as it may have fewer restrictions.";
 
-    public static ToolSpec create(ModelFamily modelFamily) {
-        boolean isNative =
-                modelFamily == ModelFamily.NATIVE_GPT_5
-                        || modelFamily == ModelFamily.NATIVE_NEXT_GEN;
+    @Override
+    public String id() {
+        return ClineDefaultTool.WEB_FETCH.getValue();
+    }
 
-        String description = isNative ? CONCISE_DESCRIPTION : GENERIC_DESCRIPTION;
+    @Override
+    public String description(ModelFamily family) {
+        return switch (family) {
+            case NATIVE_GPT_5, NATIVE_NEXT_GEN -> CONCISE_DESCRIPTION;
+            default -> GENERIC_DESCRIPTION;
+        };
+    }
 
-        List<ToolParameterSpec> parameters;
-        if (isNative) {
-            parameters =
-                    List.of(
-                            createParameter("url", true, "The URL to fetch content from", null),
-                            createParameter(
-                                    "prompt",
-                                    true,
-                                    "Prompt for analyzing the webpage content",
-                                    null),
-                            createTaskProgressParameter());
-        } else {
-            parameters =
-                    List.of(
-                            createParameter(
-                                    "url",
-                                    true,
-                                    "The URL to fetch content from",
-                                    "https://example.com/docs"),
-                            createParameter(
-                                    "prompt",
-                                    true,
-                                    "The prompt to use for analyzing the webpage content",
-                                    "Summarize the main points and key takeaways"),
-                            createTaskProgressParameter());
-        }
-
-        return ToolSpec.builder()
-                .variant(modelFamily)
-                .id(ClineDefaultTool.WEB_FETCH.getValue())
-                .name(ClineDefaultTool.WEB_FETCH.getValue())
-                .description(description)
-                .contextRequirements(
-                        context ->
-                                "cline".equals(context.getProviderId())
-                                        && Boolean.TRUE.equals(context.getClineWebToolsEnabled()))
-                .parameters(parameters)
-                .build();
+    @Override
+    public Function<SystemPromptContext, Boolean> contextRequirements(ModelFamily family) {
+        return context ->
+                "cline".equals(context.getProviderId())
+                        && Boolean.TRUE.equals(context.getClineWebToolsEnabled());
     }
 }

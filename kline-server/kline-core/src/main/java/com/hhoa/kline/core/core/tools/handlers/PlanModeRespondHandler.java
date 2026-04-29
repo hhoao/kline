@@ -9,8 +9,7 @@ import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.shared.storage.types.Mode;
 import com.hhoa.kline.core.core.task.AskResult;
-import com.hhoa.kline.core.core.tools.ToolParameterSpec;
-import com.hhoa.kline.core.core.tools.ToolSpec;
+import com.hhoa.kline.core.core.tools.args.PlanModeRespondInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
@@ -26,7 +25,7 @@ import java.util.Map;
 import lombok.Getter;
 import lombok.Setter;
 
-public class PlanModeRespondHandler implements StateFullToolHandler {
+public class PlanModeRespondHandler implements StateFullToolHandler<PlanModeRespondInput> {
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
 
@@ -44,34 +43,14 @@ public class PlanModeRespondHandler implements StateFullToolHandler {
     }
 
     @Override
-    public String getName() {
-        return ClineAsk.PLAN_MODE_RESPOND.getValue();
-    }
-
-    @Override
     public String getDescription(ToolUse block) {
         return "[" + block.getName() + "]";
     }
 
-    @Override
-    public ToolSpec getToolSpec() {
-        return ToolSpec.builder()
-                .name(ClineAsk.PLAN_MODE_RESPOND.getValue())
-                .parameters(
-                        List.of(
-                                ToolParameterSpec.builder()
-                                        .name("response")
-                                        .required(true)
-                                        .instruction("")
-                                        .usage("")
-                                        .build()))
-                .build();
-    }
-
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
-        String response = HandlerUtils.getStringParam(block, "response");
-        String optionsRaw = HandlerUtils.getStringParam(block, "options");
+    public void handlePartialBlock(PlanModeRespondInput input, ToolContext context, ToolUse block) {
+        UIHelpers ui = UIHelpers.create(context);
+        String response = input.response();
+        String optionsRaw = input.options();
         Map<String, Object> messageMap = new HashMap<>();
         messageMap.put("response", response);
         messageMap.put("options", String.join(",", PartialJsonUtils.parseArrayString(optionsRaw)));
@@ -79,14 +58,11 @@ public class PlanModeRespondHandler implements StateFullToolHandler {
         ui.ask(ClineAsk.PLAN_MODE_RESPOND, message, true, ClineMessageFormat.JSON);
     }
 
-    @Override
-    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
-        String response = HandlerUtils.getStringParam(block, "response");
-        String optionsRaw = HandlerUtils.getStringParam(block, "options");
-        boolean needsMoreExploration =
-                "true"
-                        .equalsIgnoreCase(
-                                HandlerUtils.getStringParam(block, "needs_more_exploration"));
+    public ToolExecuteResult execute(
+            PlanModeRespondInput input, ToolContext context, ToolUse block) {
+        String response = input.response();
+        String optionsRaw = input.options();
+        boolean needsMoreExploration = Boolean.TRUE.equals(input.needsMoreExploration());
 
         // Validate required parameters
         if (response == null || response.trim().isEmpty()) {

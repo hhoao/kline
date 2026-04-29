@@ -3,19 +3,16 @@ package com.hhoa.kline.core.core.tools.handlers;
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
-import com.hhoa.kline.core.core.tools.ToolSpec;
-import com.hhoa.kline.core.core.tools.specs.WebSearchTool;
+import com.hhoa.kline.core.core.tools.args.WebSearchInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
 import com.hhoa.kline.core.core.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.tools.utils.ToolResultUtils;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.HashMap;
 import java.util.Map;
 import lombok.Getter;
@@ -26,7 +23,7 @@ import lombok.Setter;
  *
  * @author hhoa
  */
-public class WebSearchToolHandler implements StateFullToolHandler {
+public class WebSearchToolHandler implements StateFullToolHandler<WebSearchInput> {
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
 
@@ -34,11 +31,6 @@ public class WebSearchToolHandler implements StateFullToolHandler {
     @Setter
     public static class WebSearchToolState extends ToolState {
         private String query;
-    }
-
-    @Override
-    public String getName() {
-        return ClineDefaultTool.WEB_SEARCH.getValue();
     }
 
     @Override
@@ -53,27 +45,22 @@ public class WebSearchToolHandler implements StateFullToolHandler {
     }
 
     @Override
-    public ToolSpec getToolSpec() {
-        return WebSearchTool.create(ModelFamily.GENERIC);
-    }
-
-    @Override
     public boolean isConcurrencySafe(ToolUse block, ToolContext context) {
         return context != null
                 && context.getCallbacks() != null
-                && Boolean.TRUE.equals(context.getCallbacks().shouldAutoApproveTool(getName()));
+                && Boolean.TRUE.equals(
+                        context.getCallbacks().shouldAutoApproveTool(block.getName()));
     }
 
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
-        String query = HandlerUtils.getStringParam(block, "query");
+    public void handlePartialBlock(WebSearchInput input, ToolContext context, ToolUse block) {
+        UIHelpers ui = UIHelpers.create(context);
+        String query = input.query();
         String message = buildMessage(query);
         ui.ask(ClineAsk.TOOL, message, block.isPartial(), ClineMessageFormat.JSON);
     }
 
-    @Override
-    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
-        String query = HandlerUtils.getStringParam(block, "query");
+    public ToolExecuteResult execute(WebSearchInput input, ToolContext context, ToolUse block) {
+        String query = input.query();
 
         String message = buildMessage(query);
 

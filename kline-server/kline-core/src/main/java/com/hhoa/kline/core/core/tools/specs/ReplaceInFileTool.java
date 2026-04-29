@@ -2,11 +2,15 @@ package com.hhoa.kline.core.core.tools.specs;
 
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
-import com.hhoa.kline.core.core.tools.ToolSpec;
+import com.hhoa.kline.core.core.tools.ToolSpecProvider;
+import com.hhoa.kline.core.core.tools.args.ReplaceInFileInput;
+import com.hhoa.kline.core.core.tools.handlers.ToolHandler;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 /**
@@ -14,7 +18,8 @@ import java.util.function.Function;
  *
  * @author hhoa
  */
-public class ReplaceInFileTool extends BaseToolSpec {
+public final class ReplaceInFileTool extends BaseToolSpec
+        implements ToolSpecProvider<ReplaceInFileInput, ToolHandler> {
 
     private static final String GENERIC_DESCRIPTION =
             "Request to replace sections of content in an existing file using SEARCH/REPLACE blocks that define exact changes to specific parts of the file. This tool should be used when you need to make targeted changes to specific parts of a file.";
@@ -101,54 +106,45 @@ public class ReplaceInFileTool extends BaseToolSpec {
         return result;
     }
 
-    public static ToolSpec create(ModelFamily modelFamily) {
-        if (modelFamily == ModelFamily.NATIVE_GPT_5
-                || modelFamily == ModelFamily.NATIVE_GPT_5_1
-                || modelFamily == ModelFamily.NATIVE_NEXT_GEN) {
-            return createNativeVariant(modelFamily);
+    @Override
+    public String id() {
+        return ClineDefaultTool.FILE_EDIT.getValue();
+    }
+
+    @Override
+    public String description(ModelFamily family) {
+        return switch (family) {
+            case NATIVE_GPT_5, NATIVE_GPT_5_1, NATIVE_NEXT_GEN -> NATIVE_DESCRIPTION;
+            default -> GENERIC_DESCRIPTION;
+        };
+    }
+
+    @Override
+    public void customizeInputSchema(ModelFamily family, Map<String, Object> inputSchema) {
+        require(inputSchema, "diff");
+        instructionFn(inputSchema, "diff", DIFF_INSTRUCTION_FN);
+        if (isNative(family)) {
+            require(inputSchema, "absolutePath");
+            describe(inputSchema, "absolutePath", "The absolute path to the file to write to.");
+            return;
         }
-
-        return createGenericVariant(modelFamily);
+        require(inputSchema, "path");
+        describe(
+                inputSchema,
+                "path",
+                "The path of the file to modify (relative to the current working directory {{CWD}})");
+        usage(inputSchema, "path", "File path here");
+        usage(inputSchema, "diff", "Search and replace blocks here");
     }
 
-    private static ToolSpec createGenericVariant(ModelFamily modelFamily) {
-        return ToolSpec.builder()
-                .variant(modelFamily)
-                .id(ClineDefaultTool.FILE_EDIT.getValue())
-                .name(ClineDefaultTool.FILE_EDIT.getValue())
-                .description(GENERIC_DESCRIPTION)
-                .parameters(
-                        List.of(
-                                createParameter(
-                                        "path",
-                                        true,
-                                        "The path of the file to modify (relative to the current working directory {{CWD}})",
-                                        "File path here"),
-                                createParameterWithInstructionFn(
-                                        "diff",
-                                        true,
-                                        DIFF_INSTRUCTION_FN,
-                                        "Search and replace blocks here"),
-                                createTaskProgressParameter()))
-                .build();
+    @Override
+    public Set<String> excludedParameters(ModelFamily family) {
+        return isNative(family) ? Set.of("path") : Set.of("absolutePath");
     }
 
-    private static ToolSpec createNativeVariant(ModelFamily modelFamily) {
-        return ToolSpec.builder()
-                .variant(modelFamily)
-                .id(ClineDefaultTool.FILE_EDIT.getValue())
-                .name(ClineDefaultTool.FILE_EDIT.getValue())
-                .description(NATIVE_DESCRIPTION)
-                .parameters(
-                        List.of(
-                                createParameter(
-                                        "absolutePath",
-                                        true,
-                                        "The absolute path to the file to write to.",
-                                        null),
-                                createParameterWithInstructionFn(
-                                        "diff", true, DIFF_INSTRUCTION_FN, null),
-                                createTaskProgressParameter()))
-                .build();
+    private static boolean isNative(ModelFamily family) {
+        return family == ModelFamily.NATIVE_GPT_5
+                || family == ModelFamily.NATIVE_GPT_5_1
+                || family == ModelFamily.NATIVE_NEXT_GEN;
     }
 }

@@ -3,6 +3,7 @@ package com.hhoa.kline.core.core.tools.subagent;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
 import com.hhoa.kline.core.core.task.TaskState;
+import com.hhoa.kline.core.core.tools.ToolHandlerInvocationSupport;
 import com.hhoa.kline.core.core.tools.handlers.ToolHandler;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
@@ -205,7 +206,8 @@ public class SubagentRunner {
                             toolUseBlock.setPartial(false);
 
                             ToolExecuteResult execResult =
-                                    handler.execute(subagentConfig, toolUseBlock);
+                                    ToolHandlerInvocationSupport.invoke(
+                                            handler, subagentConfig, toolUseBlock);
                             toolResult = serializeToolResult(execResult);
                         } catch (Exception e) {
                             toolResult = formatResponse.toolError(e.getMessage());

@@ -1,16 +1,20 @@
 package com.hhoa.kline.core.core.tools.specs;
 
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
-import com.hhoa.kline.core.core.tools.ToolSpec;
+import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
+import com.hhoa.kline.core.core.tools.ToolSpecProvider;
+import com.hhoa.kline.core.core.tools.args.ApplyPatchInput;
+import com.hhoa.kline.core.core.tools.handlers.ApplyPatchHandler;
 import com.hhoa.kline.core.enums.ClineDefaultTool;
-import java.util.List;
+import java.util.function.Function;
 
 /**
  * Apply Patch 工具规格 - V4A diff 格式的文件补丁工具
  *
  * @author hhoa
  */
-public class ApplyPatchTool extends BaseToolSpec {
+public final class ApplyPatchTool extends BaseToolSpec
+        implements ToolSpecProvider<ApplyPatchInput, ApplyPatchHandler> {
 
     private static final String DESCRIPTION =
             """
@@ -84,36 +88,32 @@ public class ApplyPatchTool extends BaseToolSpec {
             *** End Patch
             EOF""";
 
-    public static ToolSpec create(ModelFamily modelFamily) {
-        if (modelFamily != ModelFamily.NATIVE_GPT_5
-                && modelFamily != ModelFamily.NATIVE_GPT_5_1
-                && modelFamily != ModelFamily.GPT_5) {
-            return null;
-        }
+    @Override
+    public String id() {
+        return ClineDefaultTool.APPLY_PATCH.getValue();
+    }
 
-        return ToolSpec.builder()
-                .variant(modelFamily)
-                .id(ClineDefaultTool.APPLY_PATCH.getValue())
-                .name(ClineDefaultTool.APPLY_PATCH.getValue())
-                .description(DESCRIPTION)
-                .contextRequirements(
-                        context -> {
-                            if (context.getProviderInfo() == null
-                                    || context.getProviderInfo().getModel() == null) {
-                                return false;
-                            }
-                            String modelId = context.getProviderInfo().getModel().getId();
-                            return ModelFamily.isGPT5ModelFamily(modelId)
-                                    || ModelFamily.isGptOssModelFamily(modelId);
-                        })
-                .parameters(
-                        List.of(
-                                createParameter(
-                                        "input",
-                                        true,
-                                        "The apply_patch command that you wish to execute.",
-                                        null),
-                                createTaskProgressParameter()))
-                .build();
+    @Override
+    public String description(ModelFamily family) {
+        return DESCRIPTION;
+    }
+
+    @Override
+    public boolean enabled(ModelFamily family) {
+        return family == ModelFamily.NATIVE_GPT_5
+                || family == ModelFamily.NATIVE_GPT_5_1
+                || family == ModelFamily.GPT_5;
+    }
+
+    @Override
+    public Function<SystemPromptContext, Boolean> contextRequirements(ModelFamily family) {
+        return context -> {
+            if (context.getProviderInfo() == null || context.getProviderInfo().getModel() == null) {
+                return false;
+            }
+            String modelId = context.getProviderInfo().getModel().getId();
+            return ModelFamily.isGPT5ModelFamily(modelId)
+                    || ModelFamily.isGptOssModelFamily(modelId);
+        };
     }
 }

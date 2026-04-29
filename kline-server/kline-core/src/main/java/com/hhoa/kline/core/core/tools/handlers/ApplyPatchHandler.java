@@ -5,13 +5,11 @@ import com.hhoa.kline.core.core.prompts.ResponseFormatter;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
-import com.hhoa.kline.core.core.tools.ToolSpec;
+import com.hhoa.kline.core.core.tools.args.ApplyPatchInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
-import com.hhoa.kline.core.core.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.tools.utils.ToolResultUtils;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -25,7 +23,7 @@ import lombok.extern.slf4j.Slf4j;
  * <p>对应 Cline TS 版本的 ApplyPatchHandler.ts。 处理统一 diff 格式的补丁应用，支持 ADD / UPDATE / DELETE 三种操作。
  */
 @Slf4j
-public class ApplyPatchHandler implements StateFullToolHandler {
+public class ApplyPatchHandler implements StateFullToolHandler<ApplyPatchInput> {
 
     private static final String PATCH_BEGIN = "*** Begin Patch";
     private static final String PATCH_END = "*** End Patch";
@@ -48,23 +46,13 @@ public class ApplyPatchHandler implements StateFullToolHandler {
     }
 
     @Override
-    public String getName() {
-        return ClineDefaultTool.APPLY_PATCH.getValue();
-    }
-
-    @Override
     public String getDescription(ToolUse block) {
-        return "[" + getName() + " for patch application]";
+        return "[" + block.getName() + " for patch application]";
     }
 
     @Override
-    public ToolSpec getToolSpec() {
-        return null;
-    }
-
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers uiHelpers) {
-        String rawInput = HandlerUtils.getStringParam(block, "input");
+    public void handlePartialBlock(ApplyPatchInput input, ToolContext context, ToolUse block) {
+        String rawInput = input.input();
         if (rawInput == null || rawInput.isEmpty()) {
             return;
         }
@@ -75,28 +63,29 @@ public class ApplyPatchHandler implements StateFullToolHandler {
                 return;
             }
             // 流式预览第一个文件
-            uiHelpers.say(
-                    ClineSay.TOOL,
-                    "{\"tool\":\"editedExistingFile\",\"path\":\""
-                            + allFiles.get(0)
-                            + "\",\"content\":\""
-                            + escapeJson(rawInput)
-                            + "\"}",
-                    null,
-                    null,
-                    true,
-                    null);
+            context.getCallbacks()
+                    .say(
+                            ClineSay.TOOL,
+                            "{\"tool\":\"editedExistingFile\",\"path\":\""
+                                    + allFiles.get(0)
+                                    + "\",\"content\":\""
+                                    + escapeJson(rawInput)
+                                    + "\"}",
+                            null,
+                            null,
+                            true,
+                            null);
         } catch (Exception e) {
             // 等待更多数据
         }
     }
 
     @Override
-    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
-        String rawInput = HandlerUtils.getStringParam(block, "input");
+    public ToolExecuteResult execute(ApplyPatchInput input, ToolContext context, ToolUse block) {
+        String rawInput = input.input();
 
         try {
-            List<String> lines = preprocessLines(rawInput);
+            preprocessLines(rawInput);
             List<String> changedFiles = extractAllFiles(rawInput);
 
             if (changedFiles.isEmpty()) {

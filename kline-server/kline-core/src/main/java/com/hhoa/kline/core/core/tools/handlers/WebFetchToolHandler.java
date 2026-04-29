@@ -3,14 +3,12 @@ package com.hhoa.kline.core.core.tools.handlers;
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.TaskUtils;
-import com.hhoa.kline.core.core.tools.ToolSpec;
-import com.hhoa.kline.core.core.tools.specs.WebFetchTool;
+import com.hhoa.kline.core.core.tools.args.WebFetchInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
@@ -25,7 +23,7 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
-public class WebFetchToolHandler implements StateFullToolHandler {
+public class WebFetchToolHandler implements StateFullToolHandler<WebFetchInput> {
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
 
@@ -34,11 +32,6 @@ public class WebFetchToolHandler implements StateFullToolHandler {
     public static class WebFetchToolState extends ToolState {
         private String url;
         private String prompt;
-    }
-
-    @Override
-    public String getName() {
-        return ClineDefaultTool.WEB_FETCH.getValue();
     }
 
     @Override
@@ -52,20 +45,16 @@ public class WebFetchToolHandler implements StateFullToolHandler {
     }
 
     @Override
-    public ToolSpec getToolSpec() {
-        return WebFetchTool.create(ModelFamily.GENERIC);
-    }
-
-    @Override
     public boolean isConcurrencySafe(ToolUse block, ToolContext context) {
         return context != null
                 && context.getCallbacks() != null
-                && Boolean.TRUE.equals(context.getCallbacks().shouldAutoApproveTool(getName()));
+                && Boolean.TRUE.equals(
+                        context.getCallbacks().shouldAutoApproveTool(block.getName()));
     }
 
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
-        String url = HandlerUtils.getStringParam(block, "url");
+    public void handlePartialBlock(WebFetchInput input, ToolContext context, ToolUse block) {
+        UIHelpers ui = UIHelpers.create(context);
+        String url = input.url();
         Map<String, Object> messageProps = new HashMap<>();
         messageProps.put("tool", "webFetch");
         messageProps.put("path", url);
@@ -76,10 +65,9 @@ public class WebFetchToolHandler implements StateFullToolHandler {
         ui.ask(ClineAsk.TOOL, message, block.isPartial(), ClineMessageFormat.JSON);
     }
 
-    @Override
-    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
-        String url = HandlerUtils.getStringParam(block, "url");
-        String prompt = HandlerUtils.getStringParam(block, "prompt");
+    public ToolExecuteResult execute(WebFetchInput input, ToolContext context, ToolUse block) {
+        String url = input.url();
+        String prompt = input.prompt();
 
         Map<String, Object> messageProps = new HashMap<>();
         messageProps.put("tool", "webFetch");

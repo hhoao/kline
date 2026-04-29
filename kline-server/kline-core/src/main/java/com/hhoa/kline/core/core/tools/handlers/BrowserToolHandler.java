@@ -5,13 +5,12 @@ import com.hhoa.kline.core.core.prompts.ResponseFormatter;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
-import com.hhoa.kline.core.core.tools.ToolSpec;
+import com.hhoa.kline.core.core.tools.args.BrowserActionInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
 import com.hhoa.kline.core.core.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.tools.utils.ToolResultUtils;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.util.Set;
 import lombok.Getter;
 import lombok.Setter;
@@ -24,7 +23,7 @@ import lombok.extern.slf4j.Slf4j;
  * close 等浏览器操作。
  */
 @Slf4j
-public class BrowserToolHandler implements StateFullToolHandler {
+public class BrowserToolHandler implements StateFullToolHandler<BrowserActionInput> {
 
     private static final Set<String> VALID_ACTIONS =
             Set.of("launch", "click", "type", "scroll_down", "scroll_up", "close");
@@ -42,19 +41,9 @@ public class BrowserToolHandler implements StateFullToolHandler {
     }
 
     @Override
-    public String getName() {
-        return ClineDefaultTool.BROWSER.getValue();
-    }
-
-    @Override
     public String getDescription(ToolUse block) {
         String action = HandlerUtils.getStringParam(block, "action");
         return "[" + block.getName() + " for '" + (action != null ? action : "unknown") + "']";
-    }
-
-    @Override
-    public ToolSpec getToolSpec() {
-        return null;
     }
 
     @Override
@@ -62,12 +51,12 @@ public class BrowserToolHandler implements StateFullToolHandler {
         return new BrowserToolState();
     }
 
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers uiHelpers) {
-        String action = HandlerUtils.getStringParam(block, "action");
-        String url = HandlerUtils.getStringParam(block, "url");
-        String coordinate = HandlerUtils.getStringParam(block, "coordinate");
-        String text = HandlerUtils.getStringParam(block, "text");
+    public void handlePartialBlock(BrowserActionInput input, ToolContext context, ToolUse block) {
+        UIHelpers uiHelpers = UIHelpers.create(context);
+        String action = input.action();
+        String url = input.url();
+        String coordinate = input.coordinate();
+        String text = input.text();
 
         if (action == null || !VALID_ACTIONS.contains(action)) {
             return;
@@ -93,14 +82,13 @@ public class BrowserToolHandler implements StateFullToolHandler {
         }
     }
 
-    @Override
-    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
-        String action = HandlerUtils.getStringParam(block, "action");
-        String url = HandlerUtils.getStringParam(block, "url");
-        String coordinate = HandlerUtils.getStringParam(block, "coordinate");
-        String text = HandlerUtils.getStringParam(block, "text");
+    public ToolExecuteResult execute(BrowserActionInput input, ToolContext context, ToolUse block) {
+        String action = input.action();
+        String url = input.url();
+        String coordinate = input.coordinate();
+        String text = input.text();
 
-        if (!VALID_ACTIONS.contains(action)) {
+        if (action == null || !VALID_ACTIONS.contains(action)) {
             context.getTaskState()
                     .getApiTurnState()
                     .setConsecutiveMistakeCount(
@@ -109,7 +97,7 @@ public class BrowserToolHandler implements StateFullToolHandler {
             return new ToolExecuteResult.Immediate(
                     HandlerUtils.createTextBlocks(
                             context.getCallbacks()
-                                    .sayAndCreateMissingParamError(getName(), "action")));
+                                    .sayAndCreateMissingParamError(block.getName(), "action")));
         }
 
         if ("launch".equals(action)) {
@@ -124,7 +112,7 @@ public class BrowserToolHandler implements StateFullToolHandler {
                 return new ToolExecuteResult.Immediate(
                         HandlerUtils.createTextBlocks(
                                 context.getCallbacks()
-                                        .sayAndCreateMissingParamError(getName(), "url")));
+                                        .sayAndCreateMissingParamError(block.getName(), "url")));
             }
             context.getTaskState().getApiTurnState().setConsecutiveMistakeCount(0);
 
@@ -163,7 +151,7 @@ public class BrowserToolHandler implements StateFullToolHandler {
             return new ToolExecuteResult.Immediate(
                     HandlerUtils.createTextBlocks(
                             context.getCallbacks()
-                                    .sayAndCreateMissingParamError(getName(), "coordinate")));
+                                    .sayAndCreateMissingParamError(block.getName(), "coordinate")));
         }
         if ("type".equals(action) && (text == null || text.isEmpty())) {
             context.getTaskState()
@@ -174,7 +162,7 @@ public class BrowserToolHandler implements StateFullToolHandler {
             return new ToolExecuteResult.Immediate(
                     HandlerUtils.createTextBlocks(
                             context.getCallbacks()
-                                    .sayAndCreateMissingParamError(getName(), "text")));
+                                    .sayAndCreateMissingParamError(block.getName(), "text")));
         }
 
         context.getTaskState().getApiTurnState().setConsecutiveMistakeCount(0);

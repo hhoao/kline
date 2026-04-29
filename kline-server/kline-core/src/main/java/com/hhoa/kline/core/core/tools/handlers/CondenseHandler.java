@@ -10,12 +10,10 @@ import com.hhoa.kline.core.core.prompts.ResponseFormatter;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
-import com.hhoa.kline.core.core.tools.ToolParameterSpec;
-import com.hhoa.kline.core.core.tools.ToolSpec;
+import com.hhoa.kline.core.core.tools.args.CondenseInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
-import com.hhoa.kline.core.core.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.tools.utils.ToolResultUtils;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -24,7 +22,7 @@ import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
 
-public class CondenseHandler implements StateFullToolHandler {
+public class CondenseHandler implements StateFullToolHandler<CondenseInput> {
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
 
@@ -40,39 +38,22 @@ public class CondenseHandler implements StateFullToolHandler {
     }
 
     @Override
-    public String getName() {
-        return ClineAsk.CONDENSE.getValue();
-    }
-
-    @Override
     public String getDescription(ToolUse block) {
         return "[" + block.getName() + "]";
     }
 
-    @Override
-    public ToolSpec getToolSpec() {
-        return ToolSpec.builder()
-                .name(ClineAsk.CONDENSE.getValue())
-                .parameters(
-                        List.of(
-                                ToolParameterSpec.builder()
-                                        .name("context")
-                                        .required(true)
-                                        .instruction("")
-                                        .usage("")
-                                        .build()))
-                .build();
+    public void handlePartialBlock(CondenseInput input, ToolContext toolContext, ToolUse block) {
+        toolContext
+                .getCallbacks()
+                .ask(
+                        ClineAsk.CONDENSE,
+                        input.context() == null ? "" : input.context(),
+                        block.isPartial(),
+                        null);
     }
 
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
-        String context = HandlerUtils.getStringParam(block, "context");
-        ui.ask(ClineAsk.CONDENSE, context == null ? "" : context, block.isPartial(), null);
-    }
-
-    @Override
-    public ToolExecuteResult execute(ToolContext toolContext, ToolUse block) {
-        String context = HandlerUtils.getStringParam(block, "context");
+    public ToolExecuteResult execute(CondenseInput input, ToolContext toolContext, ToolUse block) {
+        String context = input.context();
 
         if (toolContext.getAutoApprovalSettings() != null
                 && toolContext.getAutoApprovalSettings().isEnabled()

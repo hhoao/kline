@@ -2,52 +2,38 @@ package com.hhoa.kline.core.core.tools.handlers;
 
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.shared.storage.types.Mode;
-import com.hhoa.kline.core.core.tools.ToolSpec;
-import com.hhoa.kline.core.core.tools.specs.ActModeRespondTool;
+import com.hhoa.kline.core.core.tools.args.ActModeRespondInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.UIHelpers;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
 
 /**
  * Act Mode Respond 工具处理器 - 在 ACT MODE 执行期间提供进度更新
  *
  * @author hhoa
  */
-public class ActModeRespondToolHandler implements ToolHandler {
+public class ActModeRespondToolHandler implements ToolHandler<ActModeRespondInput> {
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
-
-    @Override
-    public String getName() {
-        return ClineDefaultTool.ACT_MODE.getValue();
-    }
 
     @Override
     public String getDescription(ToolUse block) {
         return "[" + block.getName() + "]";
     }
 
-    @Override
-    public ToolSpec getToolSpec() {
-        return ActModeRespondTool.create(ModelFamily.NATIVE_GPT_5);
-    }
-
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
-        String response = HandlerUtils.getStringParam(block, "response");
+    public void handlePartialBlock(ActModeRespondInput input, ToolContext context, ToolUse block) {
+        UIHelpers ui = UIHelpers.create(context);
+        String response = input.response();
         if (response != null) {
             ui.say(ClineSay.TEXT, response, null, null, true, null);
         }
     }
 
-    @Override
-    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
-        String response = HandlerUtils.getStringParam(block, "response");
-        String taskProgress = HandlerUtils.getStringParam(block, "task_progress");
+    public ToolExecuteResult execute(ActModeRespondInput input, ToolContext context, ToolUse block) {
+        String response = input.response();
+        String taskProgress = input.taskProgress();
 
         // Only available in ACT mode
         if (!Mode.ACT.equals(context.getMode())) {

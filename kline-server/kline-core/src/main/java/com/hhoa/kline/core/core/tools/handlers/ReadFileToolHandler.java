@@ -6,7 +6,6 @@ import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.ignore.ClineIgnoreController;
 import com.hhoa.kline.core.core.integrations.FileContentExtractor;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.services.telemetry.TelemetryService;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
@@ -14,8 +13,7 @@ import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.TaskState;
 import com.hhoa.kline.core.core.task.TaskUtils;
-import com.hhoa.kline.core.core.tools.ToolSpec;
-import com.hhoa.kline.core.core.tools.specs.ReadFileTool;
+import com.hhoa.kline.core.core.tools.args.ReadFileInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
@@ -23,7 +21,6 @@ import com.hhoa.kline.core.core.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.tools.utils.ToolResultUtils;
 import com.hhoa.kline.core.core.workspace.WorkspaceConfig;
 import com.hhoa.kline.core.core.workspace.WorkspaceResolver;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
@@ -36,7 +33,7 @@ import lombok.Setter;
  *
  * @author hhoa
  */
-public class ReadFileToolHandler implements StateFullToolHandler {
+public class ReadFileToolHandler implements StateFullToolHandler<ReadFileInput> {
 
     private static final int MAX_LINES_WITHOUT_RANGE = 500;
 
@@ -49,6 +46,8 @@ public class ReadFileToolHandler implements StateFullToolHandler {
         private String relPath;
         private String absolutePath;
         private String displayPath;
+        private Integer startLine;
+        private Integer endLine;
         private TelemetryService.WorkspaceContext workspaceContext;
     }
 
@@ -65,18 +64,6 @@ public class ReadFileToolHandler implements StateFullToolHandler {
         }
         Object v = block.getParams().get(key);
         return v == null ? null : String.valueOf(v);
-    }
-
-    private static Integer getIntParam(ToolUse block, String key) {
-        String strValue = getStringParam(block, key);
-        if (strValue == null || strValue.trim().isEmpty()) {
-            return null;
-        }
-        try {
-            return Integer.parseInt(strValue.trim());
-        } catch (NumberFormatException e) {
-            return null;
-        }
     }
 
     private static String extractLineRange(String content, Integer startLine, Integer endLine) {
@@ -136,11 +123,6 @@ public class ReadFileToolHandler implements StateFullToolHandler {
     }
 
     @Override
-    public String getName() {
-        return ClineDefaultTool.FILE_READ.getValue();
-    }
-
-    @Override
     public ToolState createToolState() {
         return new ReadFileToolState();
     }
@@ -152,22 +134,18 @@ public class ReadFileToolHandler implements StateFullToolHandler {
     }
 
     @Override
-    public ToolSpec getToolSpec() {
-        return ReadFileTool.create(ModelFamily.GENERIC);
-    }
-
-    @Override
     public boolean isConcurrencySafe(ToolUse block, ToolContext context) {
         String path = getStringParam(block, "path");
         return context != null
                 && context.getCallbacks() != null
                 && Boolean.TRUE.equals(
-                        context.getCallbacks().shouldAutoApproveToolWithPath(getName(), path));
+                        context.getCallbacks()
+                                .shouldAutoApproveToolWithPath(block.getName(), path));
     }
 
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
-        String partialPath = getStringParam(block, "path");
+    public void handlePartialBlock(ReadFileInput input, ToolContext context, ToolUse block) {
+        UIHelpers ui = UIHelpers.create(context);
+        String partialPath = input.path();
         ToolContext config = ui.getContext();
 
         Map<String, Object> messageMap = new HashMap<>();
@@ -187,9 +165,8 @@ public class ReadFileToolHandler implements StateFullToolHandler {
         }
     }
 
-    @Override
-    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
-        String relPath = getStringParam(block, "path");
+    public ToolExecuteResult execute(ReadFileInput input, ToolContext context, ToolUse block) {
+        String relPath = input.path();
 
         ClineIgnoreController controller = context.getServices().getClineIgnoreController();
         if (controller != null && !controller.validateAccess(relPath)) {
@@ -233,7 +210,13 @@ public class ReadFileToolHandler implements StateFullToolHandler {
                             ClineMessageFormat.JSON);
 
             captureTelemetry(context, block, true, true, workspaceContext);
-            return executeReadFile(context, block, relPath, absolutePath.toString(), displayPath);
+            return executeReadFile(
+                    context,
+                    relPath,
+                    absolutePath.toString(),
+                    displayPath,
+                    input.startLine(),
+                    input.endLine());
         }
 
         // 需要 ask 用户 —— 保存状态并返回 PendingAsk
@@ -254,6 +237,8 @@ public class ReadFileToolHandler implements StateFullToolHandler {
         state.setRelPath(relPath);
         state.setAbsolutePath(absolutePath.toString());
         state.setDisplayPath(displayPath);
+        state.setStartLine(input.startLine());
+        state.setEndLine(input.endLine());
         state.setWorkspaceContext(workspaceContext);
 
         var token =
@@ -281,18 +266,20 @@ public class ReadFileToolHandler implements StateFullToolHandler {
         captureTelemetry(context, block, false, true, state.getWorkspaceContext());
         return executeReadFile(
                 context,
-                block,
                 state.getRelPath(),
                 state.getAbsolutePath(),
-                state.getDisplayPath());
+                state.getDisplayPath(),
+                state.getStartLine(),
+                state.getEndLine());
     }
 
     private ToolExecuteResult executeReadFile(
             ToolContext context,
-            ToolUse block,
             String relPath,
             String absolutePathStr,
-            String displayPath) {
+            String displayPath,
+            Integer startLine,
+            Integer endLine) {
         Path absolutePath = Paths.get(absolutePathStr);
         boolean supportsImages = false;
         try {
@@ -306,9 +293,6 @@ public class ReadFileToolHandler implements StateFullToolHandler {
         } catch (Exception ignored) {
             // fallback to false
         }
-
-        Integer startLine = getIntParam(block, "start_line");
-        Integer endLine = getIntParam(block, "end_line");
 
         // === File Read Deduplication ===
         // Check if we've already read this exact file in this task.

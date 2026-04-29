@@ -3,20 +3,17 @@ package com.hhoa.kline.core.core.tools.handlers;
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
-import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.TaskUtils;
-import com.hhoa.kline.core.core.tools.ToolSpec;
-import com.hhoa.kline.core.core.tools.specs.AccessMcpResourceTool;
+import com.hhoa.kline.core.core.tools.args.AccessMcpResourceInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
 import com.hhoa.kline.core.core.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.tools.utils.ToolResultUtils;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
 import io.modelcontextprotocol.spec.McpSchema;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -26,7 +23,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 /** 访问 MCP 资源的工具处理器。 */
-public class AccessMcpResourceHandler implements StateFullToolHandler {
+public class AccessMcpResourceHandler implements StateFullToolHandler<AccessMcpResourceInput> {
 
     private final ResponseFormatter formatResponse = new ResponseFormatter();
 
@@ -36,11 +33,6 @@ public class AccessMcpResourceHandler implements StateFullToolHandler {
     public static class AccessMcpToolState extends ToolState {
         private String serverName;
         private String uri;
-    }
-
-    @Override
-    public String getName() {
-        return ClineDefaultTool.MCP_ACCESS.getValue();
     }
 
     @Override
@@ -54,15 +46,11 @@ public class AccessMcpResourceHandler implements StateFullToolHandler {
         return "[" + block.getName() + " for '" + (serverName == null ? "" : serverName) + "']";
     }
 
-    @Override
-    public ToolSpec getToolSpec() {
-        return AccessMcpResourceTool.create(ModelFamily.GENERIC);
-    }
-
-    @Override
-    public void handlePartialBlock(ToolUse block, UIHelpers ui) {
-        String serverName = HandlerUtils.getStringParam(block, "server_name");
-        String uri = HandlerUtils.getStringParam(block, "uri");
+    public void handlePartialBlock(
+            AccessMcpResourceInput input, ToolContext context, ToolUse block) {
+        UIHelpers ui = UIHelpers.create(context);
+        String serverName = input.serverName();
+        String uri = input.uri();
 
         Map<String, Object> partialMessageMap = new HashMap<>();
         partialMessageMap.put("type", "access_mcp_resource");
@@ -87,10 +75,10 @@ public class AccessMcpResourceHandler implements StateFullToolHandler {
         }
     }
 
-    @Override
-    public ToolExecuteResult execute(ToolContext context, ToolUse block) {
-        String serverName = HandlerUtils.getStringParam(block, "server_name");
-        String uri = HandlerUtils.getStringParam(block, "uri");
+    public ToolExecuteResult execute(
+            AccessMcpResourceInput input, ToolContext context, ToolUse block) {
+        String serverName = input.serverName();
+        String uri = input.uri();
 
         Map<String, Object> completeMessageMap = new HashMap<>();
         completeMessageMap.put("type", "access_mcp_resource");
