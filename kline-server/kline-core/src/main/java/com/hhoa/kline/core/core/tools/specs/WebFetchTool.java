@@ -4,8 +4,9 @@ import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
 import com.hhoa.kline.core.core.tools.ToolSpecProvider;
 import com.hhoa.kline.core.core.tools.args.WebFetchInput;
+import com.hhoa.kline.core.core.tools.handlers.ToolHandler;
 import com.hhoa.kline.core.core.tools.handlers.WebFetchToolHandler;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
+import com.hhoa.kline.core.core.tools.ClineDefaultTool;
 import java.util.function.Function;
 
 /**
@@ -13,10 +14,13 @@ import java.util.function.Function;
  *
  * @author hhoa
  */
-public final class WebFetchTool extends BaseToolSpec
-        implements ToolSpecProvider<WebFetchInput, WebFetchToolHandler> {
+public final class WebFetchTool implements ToolSpecProvider<WebFetchInput> {
 
-    private static final String GENERIC_DESCRIPTION =
+    private static final WebFetchToolHandler HANDLER = new WebFetchToolHandler();
+
+    private static final String DESCRIPTION = "Fetch and analyze content from a URL.";
+
+    private static final String GENERIC_PROMPT =
             "Fetches content from a specified URL and analyzes it using your prompt\n"
                     + "- Takes a URL and analysis prompt as input\n"
                     + "- Fetches the URL content and processes based on your prompt\n"
@@ -27,21 +31,26 @@ public final class WebFetchTool extends BaseToolSpec
                     + "- HTTP URLs will be automatically upgraded to HTTPS\n"
                     + "- This tool is read-only and does not modify any files";
 
-    private static final String CONCISE_DESCRIPTION =
+    private static final String CONCISE_PROMPT =
             "Fetches and analyzes content from a specified URL. "
                     + "IMPORTANT: If an MCP-provided web fetch tool is available, prefer using that tool "
                     + "instead of this one, as it may have fewer restrictions.";
 
     @Override
-    public String id() {
+    public String name() {
         return ClineDefaultTool.WEB_FETCH.getValue();
     }
 
     @Override
     public String description(ModelFamily family) {
+        return DESCRIPTION;
+    }
+
+    @Override
+    public String prompt(ModelFamily family) {
         return switch (family) {
-            case NATIVE_GPT_5, NATIVE_NEXT_GEN -> CONCISE_DESCRIPTION;
-            default -> GENERIC_DESCRIPTION;
+            case NATIVE_GPT_5, NATIVE_NEXT_GEN -> CONCISE_PROMPT;
+            default -> GENERIC_PROMPT;
         };
     }
 
@@ -50,5 +59,15 @@ public final class WebFetchTool extends BaseToolSpec
         return context ->
                 "cline".equals(context.getProviderId())
                         && Boolean.TRUE.equals(context.getClineWebToolsEnabled());
+    }
+
+    @Override
+    public Class<WebFetchInput> inputType(ModelFamily family) {
+        return WebFetchInput.class;
+    }
+
+    @Override
+    public ToolHandler<WebFetchInput> handler(ModelFamily family) {
+        return HANDLER;
     }
 }

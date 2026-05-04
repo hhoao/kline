@@ -28,7 +28,6 @@ public enum ClineAsk {
     CONDENSE("condense"),
     SUMMARIZE_TASK("summarize_task"),
     REPORT_BUG("report_bug"),
-    USE_SUBAGENTS("use_subagents"),
     ACT_MODE_RESPOND("act_mode_respond");
 
     private final String value;

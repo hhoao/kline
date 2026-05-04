@@ -64,14 +64,14 @@ public final class NativeGpt51ComponentOverrides {
 
             ## Tool-Calling Convention and Preambles
 
-            When switching domains or task_progress steps, you may want to provide a brief \
+            When switching domains or TodoWrite steps, you may want to provide a brief \
             preamble explaining:
 
             - **What tool** you are about to use
             - **Why** you are using it (what problem it solves or what information it will provide)
             - **What result** you expect from the tool call
 
-            Format: "Now that we have [very brief summary of last task_progress items that was \
+            Format: "Now that we have [very brief summary of last TodoWrite items that were \
             completed], I will use [ToolName] to [specific action/goal]"
 
             After receiving the tool result, briefly reflect on whether the result matches your \
@@ -156,7 +156,7 @@ public final class NativeGpt51ComponentOverrides {
                 constraints? (e.g., must not modify core interfaces, must maintain backward \
                 compatibility, must follow existing patterns)
 
-                Report progress via task_progress parameter throughout the task to maintain \
+                Report progress via the TodoWrite tool throughout the task to maintain \
                 visibility into what's been accomplished and what remains.
 
                 ## Context Boundaries and Clarification
@@ -186,8 +186,8 @@ public final class NativeGpt51ComponentOverrides {
                 You will be informed on the work completed and what's remaining as you go. \
 
                    **IMPORTANT: In ACT MODE, make use of the act_mode_respond tool when \
-                switching domains or task_progress steps to keep the conversation informative:**
-                   - ALWAYS use act_mode_respond when switching domains or task_progress steps \
+                switching domains or TodoWrite steps to keep the conversation informative:**
+                   - ALWAYS use act_mode_respond when switching domains or TodoWrite steps \
                 to briefly explain your progress and intended changes
                    - Use act_mode_respond when starting a new logical phase of work (e.g., \
                 moving from backend to frontend, or from one feature to another)

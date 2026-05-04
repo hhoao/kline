@@ -30,11 +30,11 @@ class ToolCallValidatorTest {
     }
 
     @Test
-    void normalizesBooleanIntegerAndNumberStringParameters() {
+    void validatesNativeBooleanIntegerAndNumberParameters() {
         Map<String, Object> params = new HashMap<>();
-        params.put("requires_approval", "true");
-        params.put("timeout", "30");
-        params.put("ratio", "1.5");
+        params.put("requires_approval", true);
+        params.put("timeout", 30);
+        params.put("ratio", 1.5d);
         ToolUse toolUse = toolUse("execute_command", params);
         ToolSpec spec =
                 ToolSpec.builder()
@@ -58,6 +58,35 @@ class ToolCallValidatorTest {
         assertEquals(Boolean.TRUE, toolUse.getParams().get("requires_approval"));
         assertEquals(30, toolUse.getParams().get("timeout"));
         assertEquals(1.5d, toolUse.getParams().get("ratio"));
+    }
+
+    @Test
+    void failsWhenPrimitiveTypesAreProvidedAsStrings() {
+        Map<String, Object> params = new HashMap<>();
+        params.put("requires_approval", "true");
+        params.put("timeout", "30");
+        params.put("ratio", "1.5");
+        ToolUse toolUse = toolUse("execute_command", params);
+        ToolSpec spec =
+                ToolSpec.builder()
+                        .name("execute_command")
+                        .inputSchema(
+                                schema(
+                                        Map.of(
+                                                "requires_approval",
+                                                property("boolean"),
+                                                "timeout",
+                                                property("integer"),
+                                                "ratio",
+                                                property("number")),
+                                        "requires_approval"))
+                        .build();
+
+        ToolCallValidator.ValidationResult result =
+                ToolCallValidator.validate(spec, toolUse, context());
+
+        assertFalse(result.isValid());
+        assertEquals(ToolCallValidator.ErrorCode.INVALID_PARAMETER_TYPE, result.errorCode());
     }
 
     @Test
@@ -97,30 +126,6 @@ class ToolCallValidatorTest {
     }
 
     @Test
-    void skipsParametersDisabledByContextRequirements() {
-        ToolSpec spec =
-                ToolSpec.builder()
-                        .name("execute_command")
-                        .inputSchema(
-                                schema(
-                                        Map.of(
-                                                "timeout",
-                                                property(
-                                                        "integer",
-                                                        context ->
-                                                                Boolean.TRUE.equals(
-                                                                        context
-                                                                                .getYoloModeToggled()))),
-                                        "timeout"))
-                        .build();
-
-        ToolCallValidator.ValidationResult result =
-                ToolCallValidator.validate(spec, toolUse("execute_command", Map.of()), context());
-
-        assertTrue(result.isValid());
-    }
-
-    @Test
     void failsWhenToolIsDisabledByContextRequirements() {
         ToolSpec spec =
                 ToolSpec.builder()
@@ -151,14 +156,6 @@ class ToolCallValidatorTest {
     private static Map<String, Object> property(String type) {
         Map<String, Object> property = new LinkedHashMap<>();
         property.put("type", type);
-        return property;
-    }
-
-    private static Map<String, Object> property(
-            String type,
-            java.util.function.Function<SystemPromptContext, Boolean> contextRequirements) {
-        Map<String, Object> property = property(type);
-        property.put(ToolSchema.X_CONTEXT_REQUIREMENTS, contextRequirements);
         return property;
     }
 

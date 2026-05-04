@@ -40,6 +40,7 @@ import com.hhoa.kline.core.core.task.event.StartTaskEvent;
 import com.hhoa.kline.core.core.task.event.UserRespondedEvent;
 import com.hhoa.kline.core.core.task.focuschain.FocusChainManagerFactory;
 import com.hhoa.kline.core.core.tools.ToolExecutor;
+import com.hhoa.kline.core.core.tools.ToolRegistry;
 import com.hhoa.kline.core.core.workspace.WorkspaceDetection;
 import com.hhoa.kline.core.core.workspace.WorkspaceRootManager;
 import com.hhoa.kline.core.core.workspace.WorkspaceSetup;
@@ -72,6 +73,7 @@ public class DefaultTaskManager implements TaskManager {
     private final ContextManager contextManager;
 
     private final ToolExecutor toolExecutor;
+    private final ToolRegistry toolRegistry;
 
     private final ApiHandler apiHandler;
 
@@ -95,6 +97,7 @@ public class DefaultTaskManager implements TaskManager {
             SystemPromptService systemPromptService,
             ContextManager contextManager,
             ToolExecutor toolExecutor,
+            ToolRegistry toolRegistry,
             ApiHandler apiHandler,
             FocusChainManagerFactory focusChainManagerFactory,
             ContextFactory contextFactory,
@@ -104,6 +107,7 @@ public class DefaultTaskManager implements TaskManager {
         this.systemPromptService = systemPromptService;
         this.contextManager = contextManager;
         this.toolExecutor = toolExecutor;
+        this.toolRegistry = toolRegistry;
         this.apiHandler = apiHandler;
         this.contextFactory = contextFactory;
         this.messageSender = messageSender;
@@ -192,6 +196,7 @@ public class DefaultTaskManager implements TaskManager {
                                     toolExecutor,
                                     taskContext,
                                     contextFactory)
+                            .toolRegistry(toolRegistry)
                             .taskId(taskId)
                             .cwd(cwd)
                             .mcpHub(mcpHub)

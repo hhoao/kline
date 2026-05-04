@@ -4,8 +4,9 @@ import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
 import com.hhoa.kline.core.core.tools.ToolSpecProvider;
 import com.hhoa.kline.core.core.tools.args.WebSearchInput;
+import com.hhoa.kline.core.core.tools.handlers.ToolHandler;
 import com.hhoa.kline.core.core.tools.handlers.WebSearchToolHandler;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
+import com.hhoa.kline.core.core.tools.ClineDefaultTool;
 import java.util.function.Function;
 
 /**
@@ -13,10 +14,13 @@ import java.util.function.Function;
  *
  * @author hhoa
  */
-public final class WebSearchTool extends BaseToolSpec
-        implements ToolSpecProvider<WebSearchInput, WebSearchToolHandler> {
+public final class WebSearchTool implements ToolSpecProvider<WebSearchInput> {
 
-    private static final String GENERIC_DESCRIPTION =
+    private static final WebSearchToolHandler HANDLER = new WebSearchToolHandler();
+
+    private static final String DESCRIPTION = "Search the web and return relevant results.";
+
+    private static final String GENERIC_PROMPT =
             "Performs a web search and returns relevant results\n"
                     + "- Takes a search query as input and returns search results with titles and URLs\n"
                     + "- Optionally filter results by allowed or blocked domains\n"
@@ -28,21 +32,26 @@ public final class WebSearchTool extends BaseToolSpec
                     + "- Domains should be provided as a JSON array of strings\n"
                     + "- This tool is read-only and does not modify any files";
 
-    private static final String CONCISE_DESCRIPTION =
+    private static final String CONCISE_PROMPT =
             "Performs a web search and returns relevant results with titles and URLs. "
                     + "IMPORTANT: If an MCP-provided web search tool is available, prefer using that tool "
                     + "instead of this one, as it may have fewer restrictions.";
 
     @Override
-    public String id() {
+    public String name() {
         return ClineDefaultTool.WEB_SEARCH.getValue();
     }
 
     @Override
     public String description(ModelFamily family) {
+        return DESCRIPTION;
+    }
+
+    @Override
+    public String prompt(ModelFamily family) {
         return switch (family) {
-            case NATIVE_GPT_5, NATIVE_NEXT_GEN -> CONCISE_DESCRIPTION;
-            default -> GENERIC_DESCRIPTION;
+            case NATIVE_GPT_5, NATIVE_NEXT_GEN -> CONCISE_PROMPT;
+            default -> GENERIC_PROMPT;
         };
     }
 
@@ -51,5 +60,15 @@ public final class WebSearchTool extends BaseToolSpec
         return context ->
                 "cline".equals(context.getProviderId())
                         && Boolean.TRUE.equals(context.getClineWebToolsEnabled());
+    }
+
+    @Override
+    public Class<WebSearchInput> inputType(ModelFamily family) {
+        return WebSearchInput.class;
+    }
+
+    @Override
+    public ToolHandler<WebSearchInput> handler(ModelFamily family) {
+        return HANDLER;
     }
 }

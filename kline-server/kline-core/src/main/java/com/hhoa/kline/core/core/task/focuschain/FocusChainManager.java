@@ -19,9 +19,9 @@ public interface FocusChainManager {
     /**
      * 从工具响应更新 Focus Chain 列表
      *
-     * @param taskProgress 任务进度文本
+     * @param todoList 任务进度文本
      */
-    void updateFCListFromToolResponse(String taskProgress);
+    void updateFCListFromToolResponse(String todoList);
 
     /** 设置文件监听器以监控 Focus Chain 列表 markdown 文件的变化 当文件被创建、修改或删除时自动更新 UI */
     void setupFocusChain();

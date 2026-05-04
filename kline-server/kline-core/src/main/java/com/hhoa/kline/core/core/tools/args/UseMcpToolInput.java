@@ -12,8 +12,4 @@ public record UseMcpToolInput(
                 String toolName,
         @JsonProperty(value = "arguments", required = true)
                 @JsonPropertyDescription("A JSON object containing the tool's input parameters.")
-                String arguments,
-        @JsonProperty(value = "task_progress", required = false)
-                @JsonPropertyDescription(
-                        "A checklist showing task progress after this tool use is completed.")
-                String taskProgress) {}
+                String arguments) {}

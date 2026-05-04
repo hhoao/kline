@@ -7,7 +7,7 @@ import com.hhoa.kline.core.core.prompts.systemprompt.PromptConfig;
 import com.hhoa.kline.core.core.prompts.systemprompt.PromptVariant;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptSection;
 import com.hhoa.kline.core.core.prompts.systemprompt.variants.ConfigTemplate;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
+import com.hhoa.kline.core.core.tools.ClineDefaultTool;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -59,7 +59,7 @@ public class NativeNextGenVariantConfig {
                             ClineDefaultTool.TODO,
                             ClineDefaultTool.GENERATE_EXPLANATION,
                             ClineDefaultTool.USE_SKILL,
-                            ClineDefaultTool.USE_SUBAGENTS)
+                            ClineDefaultTool.AGENT)
                     .map(ClineDefaultTool::getValue)
                     .collect(Collectors.toList());
 

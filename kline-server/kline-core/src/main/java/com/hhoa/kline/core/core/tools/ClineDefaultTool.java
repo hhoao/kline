@@ -1,4 +1,4 @@
-package com.hhoa.kline.core.enums;
+package com.hhoa.kline.core.core.tools;
 
 /**
  * @author hhoa
@@ -19,7 +19,7 @@ public enum ClineDefaultTool {
     MCP_DOCS("load_mcp_documentation"),
     NEW_TASK("new_task"),
     PLAN_MODE("plan_mode_respond"),
-    TODO("focus_chain"),
+    TODO("TodoWrite"),
     WEB_FETCH("web_fetch"),
     CONDENSE("condense"),
     SUMMARIZE_TASK("summarize_task"),
@@ -29,7 +29,8 @@ public enum ClineDefaultTool {
     APPLY_PATCH("apply_patch"),
     USE_SKILL("use_skill"),
     WEB_SEARCH("web_search"),
-    USE_SUBAGENTS("use_subagents"),
+    AGENT("Agent"),
+    TASK("Task"),
     GENERATE_EXPLANATION("generate_explanation");
 
     private final String value;

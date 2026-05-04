@@ -24,18 +24,30 @@ class ToolSpecProviderTest {
                         .anyMatch(method -> "create".equals(method.getName())));
         assertFalse(
                 Arrays.stream(ToolSpecProvider.class.getDeclaredMethods())
-                        .anyMatch(method -> "inputType".equals(method.getName())));
+                        .anyMatch(method -> "customizeInputSchema".equals(method.getName())));
+        assertFalse(
+                Arrays.stream(ToolSpecProvider.class.getDeclaredMethods())
+                        .anyMatch(method -> "excludedParameters".equals(method.getName())));
+        assertFalse(
+                Arrays.stream(ToolSpecProvider.class.getDeclaredMethods())
+                        .anyMatch(method -> "customizeInput".equals(method.getName())));
+        assertFalse(
+                Arrays.stream(ToolSpecProvider.class.getDeclaredMethods())
+                        .anyMatch(method -> "parameterHints".equals(method.getName())));
+        assertFalse(
+                Arrays.stream(ToolSpecProvider.class.getDeclaredMethods())
+                        .anyMatch(method -> "instruction".equals(method.getName())));
     }
 
     @Test
     void resolverCreatesToolSpecFromProviderMetadataAndHandlerInputSchema() {
         SampleToolSpecProvider provider = new SampleToolSpecProvider();
-        ToolSpec spec =
-                ToolSpecResolver.resolve(provider, ModelFamily.GENERIC, new SampleHandler());
+        ToolSpec spec = ToolSpecResolver.resolve(provider, ModelFamily.GENERIC);
 
-        assertEquals("sample_tool", spec.getId());
+        assertEquals("sample_tool", spec.getName());
         assertEquals("sample_tool", spec.getName());
         assertEquals("Generic description.", spec.getDescription());
+        assertEquals("Use sample_tool when you need the sample prompt.", spec.getPrompt());
         assertEquals(SampleInput.class, spec.getInputType());
 
         Map<String, Object> path = parameter(spec, "path");
@@ -59,15 +71,33 @@ class ToolSpecProviderTest {
         return (List<String>) spec.getInputSchema().get("required");
     }
 
-    static class SampleToolSpecProvider implements ToolSpecProvider<SampleInput, SampleHandler> {
+    static class SampleToolSpecProvider implements ToolSpecProvider<SampleInput> {
+
+        private static final SampleHandler HANDLER = new SampleHandler();
+
         @Override
-        public String id() {
+        public String name() {
             return "sample_tool";
         }
 
         @Override
         public String description(ModelFamily family) {
             return "Generic description.";
+        }
+
+        @Override
+        public String prompt(ModelFamily family) {
+            return "Use sample_tool when you need the sample prompt.";
+        }
+
+        @Override
+        public Class<SampleInput> inputType(ModelFamily family) {
+            return SampleInput.class;
+        }
+
+        @Override
+        public ToolHandler<SampleInput> handler(ModelFamily family) {
+            return HANDLER;
         }
     }
 
@@ -78,24 +108,32 @@ class ToolSpecProviderTest {
             @JsonProperty("recursive") @JsonPropertyDescription("Whether to recurse.")
                     Boolean recursive) {}
 
-    static class SampleHandler implements ToolHandler {
+    static class SampleHandler implements ToolHandler<SampleInput> {
         @Override
         public String getDescription(ToolUse block) {
             return "sample";
         }
 
-        public ToolExecuteResult execute(SampleInput input, ToolContext context) {
+        @Override
+        public void handlePartialBlock(SampleInput input, ToolContext context, ToolUse block) {}
+
+        @Override
+        public ToolExecuteResult execute(SampleInput input, ToolContext context, ToolUse block) {
             return new ToolExecuteResult.Immediate(List.of());
         }
     }
 
-    static class WrongInputHandler implements ToolHandler {
+    static class WrongInputHandler implements ToolHandler<WrongInput> {
         @Override
         public String getDescription(ToolUse block) {
             return "sample";
         }
 
-        public ToolExecuteResult execute(WrongInput input, ToolContext context) {
+        @Override
+        public void handlePartialBlock(WrongInput input, ToolContext context, ToolUse block) {}
+
+        @Override
+        public ToolExecuteResult execute(WrongInput input, ToolContext context, ToolUse block) {
             return new ToolExecuteResult.Immediate(List.of());
         }
     }

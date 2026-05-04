@@ -1,9 +1,5 @@
 package com.hhoa.kline.core.core.tools;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import com.hhoa.kline.core.core.assistant.TextContentBlock;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.assistant.UserContentBlock;
@@ -15,13 +11,16 @@ import com.hhoa.kline.core.core.tools.types.PendingAskToken;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 import com.hhoa.kline.core.core.tools.types.ToolState;
+import org.junit.jupiter.api.Test;
+
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
-import java.util.stream.IntStream;
-import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ToolExecutionBatchCoordinatorTest {
     @Test
@@ -137,13 +136,12 @@ class ToolExecutionBatchCoordinatorTest {
     }
 
     private static List<String> texts(ToolExecutionBatchCoordinator.BatchResult result) {
-        return IntStream.range(0, result.completed().size())
-                .mapToObj(i -> text(result.completed().get(i).result()))
+        return result.completed().stream().map(executionResult -> text(executionResult.result()))
                 .toList();
     }
 
     private static final class FakeToolExecutor implements ToolExecutor {
-        private final Map<String, ToolHandler> handlers = new ConcurrentHashMap<>();
+        private final Map<String, ToolHandler<?>> handlers = new ConcurrentHashMap<>();
 
         private FakeToolExecutor(NamedTestToolHandler... handlers) {
             for (NamedTestToolHandler handler : handlers) {
@@ -155,7 +153,7 @@ class ToolExecutionBatchCoordinatorTest {
         public ToolRegistry getRegistry() {
             return new ToolRegistry() {
                 @Override
-                public ToolHandler getHandler(String toolName) {
+                public ToolHandler<?> getToolHandler(String toolName) {
                     return handlers.get(toolName);
                 }
 
@@ -165,37 +163,23 @@ class ToolExecutionBatchCoordinatorTest {
                 }
 
                 @Override
-                public ToolSpec getSpec(String toolName, ModelFamily family) {
+                public List<ToolSpec> getToolSpecs(ModelFamily variant, SystemPromptContext context, Boolean enabled) {
+                    return List.of();
+                }
+
+                @Override
+                public List<ToolSpec> getToolSpecs(ModelFamily variant, SystemPromptContext context, List<String> names, Boolean enabled) {
+                    return List.of();
+                }
+
+                @Override
+                public <T> DefaultToolRegistry register(ToolSpecProvider<T> specProvider) {
                     return null;
                 }
 
                 @Override
-                public List<ToolSpec> getToolSpecs(
-                        ModelFamily variant, SystemPromptContext context) {
-                    return List.of();
-                }
-
-                @Override
-                public List<ToolSpec> getToolsForVariantWithFallback(
-                        ModelFamily variant,
-                        List<String> requestedIds,
-                        SystemPromptContext context) {
-                    return List.of();
-                }
-
-                @Override
-                public List<ToolSpec> getEnabledTools(
-                        ModelFamily variant, SystemPromptContext context) {
-                    return List.of();
-                }
-
-                @Override
-                public List<Map<String, Object>> getNativeTools(
-                        ModelFamily variant,
-                        SystemPromptContext context,
-                        Function<ToolSpecConverter.ToolConversionInput, Map<String, Object>>
-                                converter) {
-                    return List.of();
+                public ToolSpec getToolSpec(String toolName, ModelFamily family) {
+                    return null;
                 }
             };
         }
@@ -218,7 +202,7 @@ class ToolExecutionBatchCoordinatorTest {
         }
     }
 
-    private interface NamedTestToolHandler extends ToolHandler {
+    private interface NamedTestToolHandler extends ToolHandler<BatchInput> {
         String registryName();
     }
 
@@ -243,6 +227,10 @@ class ToolExecutionBatchCoordinatorTest {
             return name;
         }
 
+        @Override
+        public void handlePartialBlock(BatchInput input, ToolContext context, ToolUse block) {}
+
+        @Override
         public ToolExecuteResult execute(BatchInput input, ToolContext context, ToolUse block) {
             int running = active.incrementAndGet();
             maxActive.accumulateAndGet(running, Math::max);
@@ -273,6 +261,10 @@ class ToolExecutionBatchCoordinatorTest {
             return "pending";
         }
 
+        @Override
+        public void handlePartialBlock(BatchInput input, ToolContext context, ToolUse block) {}
+
+        @Override
         public ToolExecuteResult execute(BatchInput input, ToolContext context, ToolUse block) {
             return new ToolExecuteResult.PendingAsk(
                     new PendingAskToken.ToolUsePendingAskToken(
@@ -315,6 +307,10 @@ class ToolExecutionBatchCoordinatorTest {
             return "later";
         }
 
+        @Override
+        public void handlePartialBlock(BatchInput input, ToolContext context, ToolUse block) {}
+
+        @Override
         public ToolExecuteResult execute(BatchInput input, ToolContext context, ToolUse block) {
             count.incrementAndGet();
             return new ToolExecuteResult.Immediate(List.of(new TextContentBlock("later result")));
@@ -343,6 +339,10 @@ class ToolExecutionBatchCoordinatorTest {
             return name;
         }
 
+        @Override
+        public void handlePartialBlock(BatchInput input, ToolContext context, ToolUse block) {}
+
+        @Override
         public ToolExecuteResult execute(BatchInput input, ToolContext context, ToolUse block) {
             throw new IllegalStateException("boom");
         }

@@ -83,25 +83,10 @@ public class Commands {
         String taskProgressParam =
                 enabled
                         ? """
-                - task_progress: (required) The current state of the task_progress list, with completed items marked. Important information on this parameter is as follows:
-                  1. XML schema matches that of prior task_progress lists.
-                  2. All items are retained, with the exact same desciptive content as in prior occurences.
-                  3. All completed items are marked as completed.
-                  4. The only compenent of this list that can be changed is the completion state of invidiual items in the list"""
-                        : "";
-
-        String taskProgressUsage =
-                enabled ? "\n<task_progress>task_progress list here</task_progress>" : "";
-
-        String taskProgressExample =
-                enabled
-                        ? """
-                <task_progress>
-                - [x] Set up project structure
-                - [x] Install dependencies
-                - [ ] Create components
-                - [ ] Test application
-                </task_progress>"""
+                - Todo list state: If a TodoWrite list exists, include the current items and statuses in Context.
+                  1. Retain all items, with the same descriptive content as prior occurrences.
+                  2. Mark completed items as completed.
+                  3. The only component that should change is each item's status unless the task scope changed."""
                         : "";
 
         return String.format(
@@ -129,7 +114,7 @@ public class Commands {
 
                 Usage:
                 <condense>
-                <context>Your detailed summary</context>%s
+                <context>Your detailed summary</context>
                 </condense>
 
                 Example:
@@ -163,39 +148,31 @@ public class Commands {
                   - [Task 2 details & next steps]
                   - [...]
                 </context>
-                %s
                 </condense>
 
                 </explicit_instructions>
                 """,
-                taskProgressParam, taskProgressUsage, taskProgressExample);
+                taskProgressParam);
     }
 
     public static String focusChainToolResponse() {
         return """
-                <explicit_instructions type="focus_chain">
-                The user has explicitly asked you to create a detailed summary of the conversation so far, which will be used to compact the current context window while retaining key information. The user may have provided instructions or additional information for you to consider when summarizing the conversation.
-                Irrespective of whether additional information or instructions are given, you are only allowed to respond to this message by calling the focus_chain tool.
+                <explicit_instructions type="TodoWrite">
+                The user has explicitly asked you to create or update the current todo list. The user may have provided instructions or additional information for you to consider when updating the list.
+                Irrespective of whether additional information or instructions are given, you are only allowed to respond to this message by calling the TodoWrite tool.
 
-                The focus_chain tool is defined below:
+                The TodoWrite tool is defined below:
 
                 Description:
-                Your task is to create a detailed summary of the conversation so far, paying close attention to the user's explicit requests and your previous actions. This summary should be thorough in capturing technical details, code patterns, and architectural decisions that would be essential for continuing with the conversation and supporting any continuing tasks.
-                The user will be presented with a preview of your generated summary and can choose to use it to compact their context window or keep chatting in the current conversation.
+                Your task is to update the structured todo list for the current session. Keep the list focused on meaningful progress milestones and use status pending, in_progress, or completed.
 
                 Parameters:
-                - Context: (required) The context to continue the conversation with. If applicable based on the current task, this should include:
-                  1. Previous Conversation: High level details about what was discussed throughout the entire conversation with the user. This should be written to allow someone to be able to follow the general overarching conversation flow.
-                  2. Current Work: Describe in detail what was being worked on prior to this request to compact the context window. Pay special attention to the more recent messages / conversation.
-                  3. Key Technical Concepts: List all important technical concepts, technologies, coding conventions, and frameworks discussed, which might be relevant for continuing with this work.
-                  4. Relevant Files and Code: If applicable, enumerate specific files and code sections examined, modified, or created for the task continuation. Pay special attention to the most recent messages and changes.
-                  5. Problem Solving: Document problems solved thus far and any ongoing troubleshooting efforts.
-                  6. Pending Tasks and Next Steps: Outline all pending tasks that you have explicitly been asked to work on, as well as list the next steps you will take for all outstanding work, if applicable. Include code snippets where they add clarity. For any next steps, include direct quotes from the most recent conversation showing exactly what task you were working on and where you left off. This should be verbatim to ensure there's no information loss in context between tasks.
+                - todos: (required) The updated todo list. Each item includes content, status, and activeForm.
 
                 Usage:
-                <focus_chain>
-                <context>context to continue conversation with</context>
-                </focus_chain>
+                <TodoWrite>
+                <todos>[{"content":"Example task","status":"in_progress","activeForm":"Working on example task"}]</todos>
+                </TodoWrite>
                 </explicit_instructions>
                 """;
     }

@@ -65,6 +65,21 @@ class ToolHandlerInvocationSupportTest {
     }
 
     @Test
+    void invokesTypedHandlerThroughGenericInterfaceNotPublicOverloads() {
+        OverloadedHandler handler = new OverloadedHandler();
+        ToolContext context = ToolContext.builder().build();
+        Map<String, Object> params = new HashMap<>();
+        params.put("command", "pwd");
+        params.put("requires_approval", Boolean.FALSE);
+        ToolUse toolUse = new ToolUse("execute_command", params, false);
+
+        ToolHandlerInvocationSupport.invoke(handler, context, toolUse);
+
+        assertEquals("pwd", handler.arguments.command());
+        assertEquals(Boolean.FALSE, handler.arguments.requiresApproval());
+    }
+
+    @Test
     void invokesTypedPartialHandlerWithMappedArguments() {
         CapturingHandler handler = new CapturingHandler();
         ToolContext context = ToolContext.builder().build();
@@ -78,22 +93,7 @@ class ToolHandlerInvocationSupportTest {
         assertEquals(context, handler.partialContext);
     }
 
-    @Test
-    void delegatingHandlerMapsDynamicPromptToSubagentPromptOne() {
-        PromptCapturingHandler delegate = new PromptCapturingHandler();
-        DelegatingToolHandler handler =
-                new DelegatingToolHandler(
-                        "use_subagent_writer", delegate, ToolSpec.builder().build());
-        Map<String, Object> params = new HashMap<>();
-        params.put("prompt", "write tests");
-        ToolUse toolUse = new ToolUse("use_subagent_writer", params, false);
-
-        ToolHandlerInvocationSupport.invoke(handler, ToolContext.builder().build(), toolUse);
-
-        assertEquals("write tests", delegate.input.prompt1());
-    }
-
-    static class CapturingHandler implements ToolHandler {
+    static class CapturingHandler implements ToolHandler<CommandArgs> {
         private CommandArgs arguments;
         private ToolContext context;
         private CommandArgs partialArguments;
@@ -104,13 +104,15 @@ class ToolHandlerInvocationSupportTest {
             return "execute";
         }
 
-        public ToolExecuteResult execute(CommandArgs input, ToolContext context) {
+        @Override
+        public ToolExecuteResult execute(CommandArgs input, ToolContext context, ToolUse block) {
             this.arguments = input;
             this.context = context;
             return new ToolExecuteResult.Immediate(java.util.List.of());
         }
 
-        public void handlePartialBlock(CommandArgs input, ToolContext context) {
+        @Override
+        public void handlePartialBlock(CommandArgs input, ToolContext context, ToolUse block) {
             this.partialArguments = input;
             this.partialContext = context;
         }
@@ -121,19 +123,29 @@ class ToolHandlerInvocationSupportTest {
             @JsonProperty("requires_approval") Boolean requiresApproval,
             Integer timeout) {}
 
-    static class PromptCapturingHandler implements ToolHandler {
-        private PromptInput input;
+    static class OverloadedHandler implements ToolHandler<CommandArgs> {
+        private CommandArgs arguments;
 
         @Override
         public String getDescription(ToolUse block) {
-            return "subagent";
+            return "execute";
         }
 
-        public ToolExecuteResult execute(PromptInput input, ToolContext context) {
-            this.input = input;
+        @Override
+        public void handlePartialBlock(CommandArgs input, ToolContext context, ToolUse block) {}
+
+        @Override
+        public ToolExecuteResult execute(CommandArgs input, ToolContext context, ToolUse block) {
+            this.arguments = input;
             return new ToolExecuteResult.Immediate(java.util.List.of());
         }
-    }
 
-    record PromptInput(@JsonProperty("prompt_1") String prompt1) {}
+        public ToolExecuteResult execute(
+                @JsonProperty("command") String command,
+                ToolContext context,
+                ToolUse block,
+                String ignored) {
+            throw new AssertionError("invocation must not use public overloads");
+        }
+    }
 }

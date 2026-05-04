@@ -12,8 +12,8 @@ import com.hhoa.kline.core.core.tools.types.ToolState;
 public interface ToolExecutor {
     ToolRegistry getRegistry();
 
-    default ToolHandler getHandler(String toolName) {
-        return getRegistry().getHandler(toolName);
+    default ToolHandler<?> getHandler(String toolName) {
+        return getRegistry().getToolHandler(toolName);
     }
 
     ToolExecuteResult executeTool(ToolUse block, ToolContext config);

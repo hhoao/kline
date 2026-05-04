@@ -12,8 +12,4 @@ public record ReadFileInput(
                 Integer startLine,
         @JsonProperty(value = "end_line", required = false)
                 @JsonPropertyDescription("The ending line number to read to.")
-                Integer endLine,
-        @JsonProperty(value = "task_progress", required = false)
-                @JsonPropertyDescription(
-                        "A checklist showing task progress after this tool use is completed.")
-                String taskProgress) {}
+                Integer endLine) {}

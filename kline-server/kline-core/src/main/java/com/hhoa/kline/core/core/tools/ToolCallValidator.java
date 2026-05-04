@@ -3,10 +3,11 @@ package com.hhoa.kline.core.core.tools;
 import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
+import com.networknt.schema.Error;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Validates and normalizes tool call inputs before handler execution. */
 public final class ToolCallValidator {
@@ -21,7 +22,7 @@ public final class ToolCallValidator {
             return ValidationResult.valid();
         }
         SystemPromptContext promptContext = resolvePromptContext(context);
-        if (!isContextEnabled(spec.getContextRequirements(), promptContext)) {
+        if (!isContextEnabled(spec.getEnabled(), promptContext)) {
             return ValidationResult.invalid(
                     ErrorCode.TOOL_DISABLED,
                     null,
@@ -35,42 +36,13 @@ public final class ToolCallValidator {
             toolUse.setParams(params);
         }
 
-        Map<String, Map<String, Object>> availableParams =
-                availableParameters(inputSchema, promptContext);
-        for (String paramName : params.keySet()) {
-            if (!availableParams.containsKey(paramName)) {
-                return ValidationResult.invalid(
-                        ErrorCode.UNKNOWN_PARAMETER,
-                        paramName,
-                        "Tool '%s' does not accept parameter '%s'."
-                                .formatted(toolUse.getName(), paramName));
+        String key = JsonSchemaValidationSupport.cacheKey(toolUse.getName(), inputSchema);
+        for (Error message :
+                JsonSchemaValidationSupport.validate(key, inputSchema, params)) {
+            ValidationResult result = mapValidationFailure(message);
+            if (!result.isValid()) {
+                return result;
             }
-        }
-
-        Set<String> required = ToolSchema.required(inputSchema);
-        for (Map.Entry<String, Map<String, Object>> entry : availableParams.entrySet()) {
-            String paramName = entry.getKey();
-            Map<String, Object> parameter = entry.getValue();
-            Object value = params.get(paramName);
-            if (isMissing(value)) {
-                if (required.contains(paramName)) {
-                    return ValidationResult.invalid(
-                            ErrorCode.MISSING_REQUIRED_PARAMETER,
-                            paramName,
-                            "Missing required parameter '%s'.".formatted(paramName));
-                }
-                continue;
-            }
-
-            Object normalized = normalizeValue(parameter, value);
-            if (normalized == INVALID_VALUE) {
-                return ValidationResult.invalid(
-                        ErrorCode.INVALID_PARAMETER_TYPE,
-                        paramName,
-                        "Parameter '%s' must be %s."
-                                .formatted(paramName, ToolSchema.type(parameter)));
-            }
-            params.put(paramName, normalized);
         }
 
         return ValidationResult.valid();
@@ -89,22 +61,6 @@ public final class ToolCallValidator {
         return promptContext;
     }
 
-    private static Map<String, Map<String, Object>> availableParameters(
-            Map<String, Object> inputSchema, SystemPromptContext context) {
-        Map<String, Map<String, Object>> available = new LinkedHashMap<>();
-        for (Map.Entry<String, Map<String, Object>> entry :
-                ToolSchema.properties(inputSchema).entrySet()) {
-            if (entry.getKey() == null || entry.getKey().isBlank()) {
-                continue;
-            }
-            if (!ToolSchema.parameterEnabled(entry.getValue(), context, null)) {
-                continue;
-            }
-            available.put(entry.getKey(), entry.getValue());
-        }
-        return available;
-    }
-
     private static boolean isContextEnabled(
             java.util.function.Function<SystemPromptContext, Boolean> requirement,
             SystemPromptContext context) {
@@ -118,71 +74,58 @@ public final class ToolCallValidator {
         }
     }
 
-    private static boolean isMissing(Object value) {
-        return value == null || (value instanceof String text && text.trim().isEmpty());
+    private static final Pattern UNKNOWN_PARAM_PATTERN = Pattern.compile("'([^']+)'");
+    private static final Pattern REQUIRED_PARAM_PATTERN = Pattern.compile("'([^']+)'");
+
+    private static ValidationResult mapValidationFailure(Error message) {
+        String messageKey = message.getKeyword();
+        String details = message.getMessage();
+        String paramName = extractParamName(message);
+
+        if ("additionalProperties".equals(messageKey)) {
+            return ValidationResult.invalid(
+                    ErrorCode.UNKNOWN_PARAMETER,
+                    paramName,
+                    "Tool does not accept parameter '%s'.".formatted(paramName));
+        }
+        if ("required".equals(messageKey)) {
+            return ValidationResult.invalid(
+                    ErrorCode.MISSING_REQUIRED_PARAMETER,
+                    paramName,
+                    "Missing required parameter '%s'.".formatted(paramName));
+        }
+        if ("type".equals(messageKey)) {
+            return ValidationResult.invalid(
+                    ErrorCode.INVALID_PARAMETER_TYPE,
+                    paramName,
+                    "Parameter '%s' has invalid type.".formatted(paramName));
+        }
+        return ValidationResult.invalid(
+                ErrorCode.INVALID_PARAMETER_TYPE,
+                paramName,
+                details != null && !details.isBlank() ? details : "Invalid tool parameters.");
     }
 
-    private static final Object INVALID_VALUE = new Object();
-
-    private static Object normalizeValue(Map<String, Object> parameter, Object value) {
-        String type = ToolSchema.type(parameter);
-        return switch (type) {
-            case "boolean" -> normalizeBoolean(value);
-            case "integer" -> normalizeInteger(value);
-            case "number" -> normalizeNumber(value);
-            case "array" -> value instanceof List<?> ? value : INVALID_VALUE;
-            case "object" -> value instanceof Map<?, ?> ? value : INVALID_VALUE;
-            case "string" -> value instanceof String ? value : INVALID_VALUE;
-            default -> value;
-        };
-    }
-
-    private static Object normalizeBoolean(Object value) {
-        if (value instanceof Boolean) {
-            return value;
+    private static String extractParamName(Error message) {
+        String messageKey = message.getKeyword();
+        String details = message.getMessage();
+        if (details == null) {
+            return null;
         }
-        if (value instanceof String text) {
-            String normalized = text.trim().toLowerCase();
-            if ("true".equals(normalized)) {
-                return Boolean.TRUE;
-            }
-            if ("false".equals(normalized)) {
-                return Boolean.FALSE;
-            }
+        Pattern pattern =
+                "required".equals(messageKey) ? REQUIRED_PARAM_PATTERN : UNKNOWN_PARAM_PATTERN;
+        Matcher matcher = pattern.matcher(details);
+        if (matcher.find()) {
+            return matcher.group(1);
         }
-        return INVALID_VALUE;
-    }
-
-    private static Object normalizeInteger(Object value) {
-        if (value instanceof Integer) {
-            return value;
+        String instanceLocation =
+                message.getInstanceLocation() != null
+                        ? message.getInstanceLocation().toString()
+                        : null;
+        if (instanceLocation != null && instanceLocation.startsWith("/")) {
+            return instanceLocation.substring(1);
         }
-        if (value instanceof Number number
-                && Math.rint(number.doubleValue()) == number.doubleValue()) {
-            return number.intValue();
-        }
-        if (value instanceof String text) {
-            try {
-                return Integer.parseInt(text.trim());
-            } catch (NumberFormatException ignored) {
-                return INVALID_VALUE;
-            }
-        }
-        return INVALID_VALUE;
-    }
-
-    private static Object normalizeNumber(Object value) {
-        if (value instanceof Number) {
-            return value;
-        }
-        if (value instanceof String text) {
-            try {
-                return Double.parseDouble(text.trim());
-            } catch (NumberFormatException ignored) {
-                return INVALID_VALUE;
-            }
-        }
-        return INVALID_VALUE;
+        return message.getProperty();
     }
 
     public enum ErrorCode {

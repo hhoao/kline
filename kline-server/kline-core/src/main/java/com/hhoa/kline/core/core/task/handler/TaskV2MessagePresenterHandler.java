@@ -175,6 +175,7 @@ public final class TaskV2MessagePresenterHandler {
                         .autoApprovalSettings(autoApprovalSettings)
                         .callbacks(buildCallbacks(autoApprover))
                         .coordinator(toolExecutor)
+                        .apiHandler(apiHandler)
                         .yoloModeToggled(yoloModeToggled)
                         .enableParallelToolCalling(
                                 taskState.getToolExecutionState().isEnableParallelToolCalling())

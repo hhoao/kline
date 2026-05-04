@@ -12,8 +12,4 @@ public record ReplaceInFileInput(
                 String absolutePath,
         @JsonProperty(value = "diff", required = true)
                 @JsonPropertyDescription("The search and replace blocks to apply.")
-                String diff,
-        @JsonProperty(value = "task_progress", required = false)
-                @JsonPropertyDescription(
-                        "A checklist showing task progress after this tool use is completed.")
-                String taskProgress) {}
+                String diff) {}

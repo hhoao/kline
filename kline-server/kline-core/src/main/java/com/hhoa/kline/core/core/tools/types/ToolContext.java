@@ -17,6 +17,7 @@ import com.hhoa.kline.core.core.shared.api.ModelInfo;
 import com.hhoa.kline.core.core.shared.storage.types.Mode;
 import com.hhoa.kline.core.core.storage.StateManager;
 import com.hhoa.kline.core.core.task.AskPending;
+import com.hhoa.kline.core.core.task.ApiHandler;
 import com.hhoa.kline.core.core.task.MessageStateHandler;
 import com.hhoa.kline.core.core.task.TaskState;
 import com.hhoa.kline.core.core.tools.AutoApprove;
@@ -56,6 +57,8 @@ public class ToolContext {
     private MessageStateHandler messageState;
 
     private Api api;
+
+    private ApiHandler apiHandler;
 
     private TaskState taskState;
 

@@ -22,23 +22,7 @@ public class ContextManagement {
 
         String focusChainText =
                 Boolean.TRUE.equals(focusChainEnabled)
-                        ? "Updating task progress:\nThere is an optional task_progress parameter which you should use to provide an updated checklist to keep the user informed of the latest state of the progress for this task. You should always return the most up to date version of the checklist if there is already an existing checklist. If no task_progress list was included in the previous context, you should NOT create a new task_progress list - do not return a new task_progress list if one does not already exist."
-                        : "";
-
-        String taskProgressUsageTag =
-                Boolean.TRUE.equals(focusChainEnabled)
-                        ? "<task_progress>task_progress list here</task_progress>"
-                        : "";
-
-        String taskProgressExampleTag =
-                Boolean.TRUE.equals(focusChainEnabled)
-                        ? """
-                <task_progress>
-                - [x] Completed task example
-                - [x] Completed task example
-                - [ ] Remaining task example
-                - [ ] Remaining task example
-                </task_progress>"""
+                        ? "Updating task progress:\nIf there is an existing TodoWrite list, include its most up to date state inside the summary context so the next task can continue from it. If no todo list was included in the previous context, do not invent a new todo list."
                         : "";
 
         return String.format(
@@ -47,7 +31,7 @@ public class ContextManagement {
                 The current conversation is rapidly running out of context. Now, your urgent task is to create a comprehensive detailed summary of the conversation so far, paying close attention to the user's explicit requests and your previous actions.
                 This summary should be thorough in capturing technical details, code patterns, and architectural decisions that would be essential for continuing development work without losing context.
 
-                You have only two options: If you are immediately prepared to call the attempt_completion tool, and have completed all items in your task_progress list, you may call attempt_completion at this time. If you are not prepared to call the attempt_completion tool, and have not completed all items in your task_progress list, you must call the summarize_task tool - in this case you must call the summarize_task tool whether you are in PLAN or ACT mode.
+                You have only two options: If you are immediately prepared to call the attempt_completion tool, and have completed all items in your TodoWrite list, you may call attempt_completion at this time. If you are not prepared to call the attempt_completion tool, and have not completed all items in your TodoWrite list, you must call the summarize_task tool - in this case you must call the summarize_task tool whether you are in PLAN or ACT mode.
 
                 You MUST ONLY respond to this message by using either the attempt_completion tool or the summarize_task tool call. When using the summarize_task tool call, you must include ALL information in the summary required for continuing with the task at hand. This is because you will lose access to all messages other than this summary.
 
@@ -84,7 +68,6 @@ public class ContextManagement {
                 Usage:
                 <summarize_task>
                 <context>Your detailed summary</context>
-                %s
                 </summarize_task>
 
                 Here's an example of how your output should be structured:
@@ -123,13 +106,12 @@ public class ContextManagement {
                    - [file path 1]
                    - [file path 2]
                 </context>
-                %s
                 </summarize_task>
                 </example>
 
                 </explicit_instructions>
                 """,
-                CWD, MULTI_ROOT_HINT, focusChainText, taskProgressUsageTag, taskProgressExampleTag);
+                CWD, MULTI_ROOT_HINT, focusChainText);
     }
 
     /** Continuation prompt for resuming conversations */

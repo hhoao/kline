@@ -6,7 +6,7 @@ import com.hhoa.kline.core.core.controller.testsupport.AbstractLocalTaskIntegrat
 import com.hhoa.kline.core.core.controller.testsupport.ScriptedConversationApiHandler;
 import com.hhoa.kline.core.core.task.TaskLockUtils;
 import com.hhoa.kline.core.core.task.TaskV2;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
+import com.hhoa.kline.core.core.tools.ClineDefaultTool;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;

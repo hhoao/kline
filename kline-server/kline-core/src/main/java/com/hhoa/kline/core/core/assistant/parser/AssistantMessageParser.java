@@ -3,14 +3,12 @@ package com.hhoa.kline.core.core.assistant.parser;
 import com.hhoa.kline.core.core.assistant.AssistantMessageContent;
 import com.hhoa.kline.core.core.assistant.TextContent;
 import com.hhoa.kline.core.core.assistant.ToolUse;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
-import com.hhoa.kline.core.enums.ToolParamName;
+import com.hhoa.kline.core.core.tools.ClineDefaultTool;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
@@ -31,12 +29,13 @@ public class AssistantMessageParser {
     // 内部标签名称集合，这些标签会被移除但保留其内容
     private static final Set<String> INTERNAL_TAG_NAMES = Set.of("thinking");
 
-    private static final Map<String, ToolParamName> TOOL_PARAM_NAMES = new HashMap<>();
+    private final Set<String> toolParamNames;
 
-    static {
-        for (ToolParamName paramName : ToolParamName.values()) {
-            TOOL_PARAM_NAMES.put(paramName.getValue(), paramName);
+    public AssistantMessageParser(Set<String> toolParamNames) {
+        if (toolParamNames == null || toolParamNames.isEmpty()) {
+            throw new IllegalArgumentException("toolParamNames must not be null or empty");
         }
+        this.toolParamNames = toolParamNames;
     }
 
     /**
@@ -194,7 +193,7 @@ public class AssistantMessageParser {
             if (currentToolUse != null && currentParamName == null) {
                 if (assistantMessage.charAt(i) == '>') {
                     boolean startedNewParam = false;
-                    for (String paramName : TOOL_PARAM_NAMES.keySet()) {
+                    for (String paramName : toolParamNames) {
                         String tag = "<" + paramName + ">";
                         int expectedStart = i - tag.length() + 1;
                         if (expectedStart >= 0
@@ -341,7 +340,7 @@ public class AssistantMessageParser {
 
                     if (!isIncompleteTag) {
                         // 检查是否是不完整的参数标签
-                        for (String paramName : TOOL_PARAM_NAMES.keySet()) {
+                        for (String paramName : toolParamNames) {
                             if (paramName.startsWith(afterBracket)) {
                                 isIncompleteTag = true;
                                 break;

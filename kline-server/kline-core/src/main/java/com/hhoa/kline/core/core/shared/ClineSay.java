@@ -40,7 +40,6 @@ public enum ClineSay {
     LOAD_MCP_DOCUMENTATION("load_mcp_documentation"),
     INFO("info"),
     TASK_PROGRESS("task_progress"),
-    USE_SUBAGENTS("use_subagents"),
     SUBAGENT("subagent"),
     SUBAGENT_USAGE("subagent_usage"),
     GENERATE_EXPLANATION("generate_explanation"),

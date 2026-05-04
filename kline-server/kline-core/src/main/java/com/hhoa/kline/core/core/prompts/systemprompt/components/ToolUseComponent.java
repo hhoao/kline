@@ -7,8 +7,6 @@ import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptSection;
 import com.hhoa.kline.core.core.prompts.systemprompt.registry.PromptBuilder;
 import com.hhoa.kline.core.core.prompts.systemprompt.templates.TemplateEngine;
 import com.hhoa.kline.core.core.shared.proto.cline.Viewport;
-import com.hhoa.kline.core.core.tools.ToolSchema;
-import com.hhoa.kline.core.core.tools.ToolSpec;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ToolUseComponent implements SystemPromptComponent {
 
     private final TemplateEngine templateEngine;
+    private final PromptBuilder promptBuilder;
 
     private static final String TOOL_USE_TEMPLATE_TEXT =
             """
@@ -55,7 +54,7 @@ public class ToolUseComponent implements SystemPromptComponent {
 
             <read_file>
             <path>src/main.js</path>
-            {{FOCUS_CHAIN_FORMATTING}}</read_file>
+            </read_file>
 
             Or to read a specific range of lines:
 
@@ -63,17 +62,12 @@ public class ToolUseComponent implements SystemPromptComponent {
             <path>src/main.js</path>
             <start_line>0</start_line>
             <end_line>250</end_line>
-            {{FOCUS_CHAIN_FORMATTING}}</read_file>
+            </read_file>
 
             Always adhere to this format for the tool use to ensure proper parsing and execution.
             """;
 
-    private static final String FOCUS_CHAIN_FORMATTING_TEMPLATE =
-            """
-            <task_progress>
-            Checklist here (optional)
-            </task_progress>
-            """;
+    private static final String FOCUS_CHAIN_FORMATTING_TEMPLATE = "";
 
     private static final String TOOL_USE_EXAMPLES_TEMPLATE_TEXT =
             """
@@ -84,7 +78,7 @@ public class ToolUseComponent implements SystemPromptComponent {
             <execute_command>
             <command>npm run dev</command>
             <requires_approval>false</requires_approval>
-            {{FOCUS_CHAIN_EXAMPLE_BASH}}</execute_command>
+            </execute_command>
 
             ## Example 2: Requesting to create a new file
 
@@ -106,9 +100,21 @@ public class ToolUseComponent implements SystemPromptComponent {
               "version": "1.0.0"
             }
             </content>
-            {{FOCUS_CHAIN_EXAMPLE_NEW_FILE}}</write_to_file>
+            </write_to_file>
 
-            ## Example 3: Creating a new task
+            ## Example 3: Updating the todo list
+
+            <TodoWrite>
+            <todos>
+            [
+              {"content":"Inspect project structure","status":"completed","activeForm":"Inspecting project structure"},
+              {"content":"Implement requested change","status":"in_progress","activeForm":"Implementing requested change"},
+              {"content":"Run verification","status":"pending","activeForm":"Running verification"}
+            ]
+            </todos>
+            </TodoWrite>
+
+            ## Example 4: Creating a new task
 
             <new_task>
             <context>
@@ -139,7 +145,7 @@ public class ToolUseComponent implements SystemPromptComponent {
             </context>
             </new_task>
 
-            ## Example 4: Requesting to make targeted edits to a file
+            ## Example 5: Requesting to make targeted edits to a file
 
             <replace_in_file>
             <path>src/components/App.tsx</path>
@@ -172,10 +178,10 @@ public class ToolUseComponent implements SystemPromptComponent {
               <div>
             +++++++ REPLACE
             </diff>
-            {{FOCUS_CHAIN_EXAMPLE_EDIT}}</replace_in_file>
+            </replace_in_file>
 
 
-            ## Example 5: Requesting to use an MCP tool
+            ## Example 6: Requesting to use an MCP tool
 
             <use_mcp_tool>
             <server_name>weather-server</server_name>
@@ -188,7 +194,7 @@ public class ToolUseComponent implements SystemPromptComponent {
             </arguments>
             </use_mcp_tool>
 
-            ## Example 6: Another example of using an MCP tool (where the server name is a unique identifier such as a URL)
+            ## Example 7: Another example of using an MCP tool (where the server name is a unique identifier such as a URL)
 
             <use_mcp_tool>
             <server_name>github.com/modelcontextprotocol/servers/tree/main/src/github</server_name>
@@ -206,35 +212,11 @@ public class ToolUseComponent implements SystemPromptComponent {
             </use_mcp_tool>
             """;
 
-    private static final String FOCUS_CHAIN_EXAMPLE_BASH =
-            """
-            <task_progress>
-            - [x] Set up project structure
-            - [x] Install dependencies
-            - [ ] Run command to start server
-            - [ ] Test application
-            </task_progress>
-            """;
+    private static final String FOCUS_CHAIN_EXAMPLE_BASH = "";
 
-    private static final String FOCUS_CHAIN_EXAMPLE_NEW_FILE =
-            """
-            <task_progress>
-            - [x] Set up project structure
-            - [x] Install dependencies
-            - [ ] Create components
-            - [ ] Test application
-            </task_progress>
-            """;
+    private static final String FOCUS_CHAIN_EXAMPLE_NEW_FILE = "";
 
-    private static final String FOCUS_CHAIN_EXAMPLE_EDIT =
-            """
-            <task_progress>
-            - [x] Set up project structure
-            - [x] Install dependencies
-            - [ ] Create components
-            - [ ] Test application
-            </task_progress>
-            """;
+    private static final String FOCUS_CHAIN_EXAMPLE_EDIT = "";
 
     private static final String TOOL_USE_GUIDELINES_TEMPLATE_TEXT =
             """
@@ -261,15 +243,10 @@ public class ToolUseComponent implements SystemPromptComponent {
             """;
 
     private static final String TASK_PROGRESS =
-            "- task_progress: (optional) A checklist showing task progress after this tool use is completed. (See 'Updating Task Progress' section for more details)";
+            "Use the TodoWrite tool to update the structured todo list when task progress changes.";
     private static final String FOCUS_CHAIN_ATTEMPT =
-            "If you were using task_progress to update the task progress, you must include the completed list in the result as well.";
-    private static final String FOCUS_CHAIN_USAGE =
-            """
-            <task_progress>
-            Checklist here (optional)
-            </task_progress>
-            """;
+            "Before attempting completion, make sure all tracked TodoWrite items are completed.";
+    private static final String FOCUS_CHAIN_USAGE = "";
     private static final String MULTI_ROOT_HINT =
             " Use @workspace:path syntax (e.g., @frontend:src/index.ts) to specify a workspace.";
 
@@ -322,7 +299,7 @@ public class ToolUseComponent implements SystemPromptComponent {
     private String getToolsSection(PromptVariant variant, SystemPromptContext context) {
         List<String> toolSpecs = new ArrayList<>();
         toolSpecs.add("# Tools");
-        toolSpecs.addAll(PromptBuilder.getToolsPrompts(variant, context));
+        toolSpecs.addAll(promptBuilder.getToolsPrompts(variant, context));
         String template = String.join("\n\n", toolSpecs);
         Map<String, String> placeholders = buildPlaceholders(context, isFocusChainEnabled(context));
         return templateEngine.resolve(template, context, placeholders);
@@ -351,110 +328,6 @@ public class ToolUseComponent implements SystemPromptComponent {
     private boolean isFocusChainEnabled(SystemPromptContext context) {
         return context.getFocusChainSettings() != null
                 && Boolean.TRUE.equals(context.getFocusChainSettings().isEnabled());
-    }
-
-    /**
-     * 构建工具描述
-     *
-     * @param spec 工具规格
-     * @param context 系统提示上下文
-     * @param allToolIds 所有工具 ID 列表，用于依赖检查
-     * @return 工具描述字符串，如果工具应被跳过则返回 null
-     */
-    private String buildToolDescription(
-            ToolSpec spec, SystemPromptContext context, List<String> allToolIds) {
-        boolean hasDesc = spec.getDescription() != null && !spec.getDescription().isBlank();
-        boolean hasParams = !ToolSchema.properties(spec.getInputSchema()).isEmpty();
-        if (!hasDesc && !hasParams) {
-            return null;
-        }
-
-        // 上下文要求过滤
-        if (spec.getContextRequirements() != null) {
-            try {
-                if (!Boolean.TRUE.equals(spec.getContextRequirements().apply(context))) {
-                    return null;
-                }
-            } catch (Exception e) {
-                log.warn("Tool contextRequirements evaluation failed for {}", spec.getId(), e);
-                return null;
-            }
-        }
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("## ").append(spec.getId()).append('\n');
-
-        List<Map.Entry<String, Map<String, Object>>> filteredParams =
-                filterParameters(spec.getInputSchema(), context, allToolIds);
-
-        List<String> descriptionLines = new ArrayList<>();
-        String mainDescription = spec.getDescription() != null ? spec.getDescription() : "";
-        descriptionLines.add("Description: " + mainDescription);
-
-        for (var p : filteredParams) {
-            Object description = p.getValue().get("description");
-            if (description != null && !String.valueOf(description).isBlank()) {
-                descriptionLines.add(String.valueOf(description));
-            }
-        }
-
-        sb.append(String.join("\n", descriptionLines)).append('\n');
-
-        if (filteredParams.isEmpty()) {
-            sb.append("Parameters: None\n");
-        } else {
-            sb.append("Parameters:\n");
-            for (var p : filteredParams) {
-                String requiredText =
-                        ToolSchema.required(spec.getInputSchema()).contains(p.getKey())
-                                ? "required"
-                                : "optional";
-                sb.append("- ")
-                        .append(p.getKey())
-                        .append(": (")
-                        .append(requiredText)
-                        .append(") ")
-                        .append(ToolSchema.instruction(p.getValue(), context))
-                        .append('\n');
-            }
-        }
-
-        sb.append("Usage:\n");
-        String toolId = spec.getId();
-        sb.append('<').append(toolId).append('>').append('\n');
-        for (var p : filteredParams) {
-            sb.append('<')
-                    .append(p.getKey())
-                    .append('>')
-                    .append(ToolSchema.usage(p.getValue()))
-                    .append("</")
-                    .append(p.getKey())
-                    .append('>')
-                    .append('\n');
-        }
-        sb.append("</").append(toolId).append('>');
-
-        return sb.toString();
-    }
-
-    /**
-     * 过滤参数
-     *
-     * @param parameters 参数列表
-     * @param context 系统提示上下文
-     * @param allToolIds 所有工具 ID 列表
-     * @return 过滤后的参数列表
-     */
-    private List<Map.Entry<String, Map<String, Object>>> filterParameters(
-            Map<String, Object> inputSchema, SystemPromptContext context, List<String> allToolIds) {
-        Map<String, Map<String, Object>> parameters = ToolSchema.properties(inputSchema);
-        if (parameters.isEmpty()) {
-            return List.of();
-        }
-
-        return parameters.entrySet().stream()
-                .filter(entry -> ToolSchema.parameterEnabled(entry.getValue(), context, allToolIds))
-                .toList();
     }
 
     private Map<String, String> buildPlaceholders(

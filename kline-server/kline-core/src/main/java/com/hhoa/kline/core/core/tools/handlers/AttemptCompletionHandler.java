@@ -49,7 +49,6 @@ public class AttemptCompletionHandler implements StateFullToolHandler<AttemptCom
     public static class AttemptCompletionToolState extends ToolState {
         private String command;
         private String result;
-        private String taskProgress;
         private List<UserContentBlock> cmdResult;
     }
 
@@ -78,7 +77,6 @@ public class AttemptCompletionHandler implements StateFullToolHandler<AttemptCom
             AttemptCompletionInput input, ToolContext context, ToolUse block) {
         String result = input.result();
         String command = input.command();
-        String taskProgress = input.taskProgress();
 
         if (context.getAutoApprovalSettings() != null
                 && context.getAutoApprovalSettings().isEnabled()
@@ -108,18 +106,11 @@ public class AttemptCompletionHandler implements StateFullToolHandler<AttemptCom
                 context.getCallbacks().saveCheckpoint(true, null);
             }
 
-            if (!block.isPartial()) {
-                if (taskProgress != null) {
-                    context.getCallbacks().updateFCListFromToolResponse(taskProgress);
-                }
-            }
-
             // 需要 ask 用户批准命令 —— 保存状态并返回 PendingAsk
             AttemptCompletionToolState state = (AttemptCompletionToolState) context.getToolState();
             state.setPhase(PHASE_COMMAND_ASK);
             state.setCommand(command);
             state.setResult(result);
-            state.setTaskProgress(taskProgress);
 
             var token =
                     ToolResultUtils.askApprovalAndPushFeedbackForToken(
@@ -138,7 +129,7 @@ public class AttemptCompletionHandler implements StateFullToolHandler<AttemptCom
         }
 
         // 无命令，直接进入完成结果 ask
-        return proceedToCompletionAsk(context, block, taskProgress, cmdResult);
+        return proceedToCompletionAsk(context, block, cmdResult);
     }
 
     @Override
@@ -187,14 +178,13 @@ public class AttemptCompletionHandler implements StateFullToolHandler<AttemptCom
         }
 
         state.setCmdResult(cmdResult);
-        return proceedToCompletionAsk(context, block, state.getTaskProgress(), cmdResult);
+        return proceedToCompletionAsk(context, block, cmdResult);
     }
 
     /** 进入完成结果 ask 阶段：发送 COMPLETION_RESULT ask 并返回 PendingAsk */
     private ToolExecuteResult proceedToCompletionAsk(
             ToolContext context,
             ToolUse block,
-            String taskProgress,
             List<UserContentBlock> cmdResult) {
 
         List<ClineMessage> currentMessages = context.getMessageState().getClineMessages();
@@ -202,12 +192,6 @@ public class AttemptCompletionHandler implements StateFullToolHandler<AttemptCom
             ClineMessage lastMsg = currentMessages.getLast();
             if (ClineAsk.COMMAND_OUTPUT.equals(lastMsg.getAsk())) {
                 context.getCallbacks().say(ClineSay.COMMAND_OUTPUT, "", null, null, false, null);
-            }
-        }
-
-        if (!block.isPartial()) {
-            if (taskProgress != null) {
-                context.getCallbacks().updateFCListFromToolResponse(taskProgress);
             }
         }
 

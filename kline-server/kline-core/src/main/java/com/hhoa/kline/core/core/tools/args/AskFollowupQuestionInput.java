@@ -9,8 +9,4 @@ public record AskFollowupQuestionInput(
                 String question,
         @JsonProperty(value = "options", required = false)
                 @JsonPropertyDescription("An array of 2-5 options for the user to choose from.")
-                String options,
-        @JsonProperty(value = "task_progress", required = false)
-                @JsonPropertyDescription(
-                        "A checklist showing task progress after this tool use is completed.")
-                String taskProgress) {}
+                String options) {}

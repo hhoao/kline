@@ -5,7 +5,8 @@ import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
 import com.hhoa.kline.core.core.tools.ToolSpecProvider;
 import com.hhoa.kline.core.core.tools.args.ApplyPatchInput;
 import com.hhoa.kline.core.core.tools.handlers.ApplyPatchHandler;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
+import com.hhoa.kline.core.core.tools.handlers.ToolHandler;
+import com.hhoa.kline.core.core.tools.ClineDefaultTool;
 import java.util.function.Function;
 
 /**
@@ -13,10 +14,13 @@ import java.util.function.Function;
  *
  * @author hhoa
  */
-public final class ApplyPatchTool extends BaseToolSpec
-        implements ToolSpecProvider<ApplyPatchInput, ApplyPatchHandler> {
+public final class ApplyPatchTool implements ToolSpecProvider<ApplyPatchInput> {
 
-    private static final String DESCRIPTION =
+    private static final ApplyPatchHandler HANDLER = new ApplyPatchHandler();
+
+    private static final String DESCRIPTION = "Apply a V4A patch to add, remove, move, or edit files.";
+
+    private static final String PROMPT =
             """
             This is a custom utility that makes it more convenient to add, remove, move, or edit code \
             in a single file. `apply_patch` effectively allows you to execute a diff/patch against a file, \
@@ -89,7 +93,7 @@ public final class ApplyPatchTool extends BaseToolSpec
             EOF""";
 
     @Override
-    public String id() {
+    public String name() {
         return ClineDefaultTool.APPLY_PATCH.getValue();
     }
 
@@ -99,10 +103,8 @@ public final class ApplyPatchTool extends BaseToolSpec
     }
 
     @Override
-    public boolean enabled(ModelFamily family) {
-        return family == ModelFamily.NATIVE_GPT_5
-                || family == ModelFamily.NATIVE_GPT_5_1
-                || family == ModelFamily.GPT_5;
+    public String prompt(ModelFamily family) {
+        return PROMPT;
     }
 
     @Override
@@ -115,5 +117,15 @@ public final class ApplyPatchTool extends BaseToolSpec
             return ModelFamily.isGPT5ModelFamily(modelId)
                     || ModelFamily.isGptOssModelFamily(modelId);
         };
+    }
+
+    @Override
+    public Class<ApplyPatchInput> inputType(ModelFamily family) {
+        return ApplyPatchInput.class;
+    }
+
+    @Override
+    public ToolHandler<ApplyPatchInput> handler(ModelFamily family) {
+        return HANDLER;
     }
 }

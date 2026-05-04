@@ -42,7 +42,9 @@ import com.hhoa.kline.core.core.task.handler.TaskV2StartTaskHandler;
 import com.hhoa.kline.core.core.task.statemachine.Recoverable;
 import com.hhoa.kline.core.core.task.statemachine.StateMachine;
 import com.hhoa.kline.core.core.task.statemachine.StateMachineFactory;
+import com.hhoa.kline.core.core.tools.ToolParamCatalog;
 import com.hhoa.kline.core.core.tools.ToolExecutor;
+import com.hhoa.kline.core.core.tools.ToolRegistry;
 import com.hhoa.kline.core.core.workspace.WorkspaceRootManager;
 import com.hhoa.kline.core.subscription.MessageSender;
 import com.hhoa.kline.core.subscription.message.WindowShowMessageRequestMessage;
@@ -190,8 +192,14 @@ public class TaskV2 implements Recoverable<TaskState> {
         this.environmentContextTracker =
                 new EnvironmentContextTracker(this.taskId, this.stateManager);
         this.telemetryService = new DefaultTelemetryService();
+        ToolRegistry toolRegistry = params.getToolRegistry();
+        if (toolRegistry == null) {
+            throw new IllegalArgumentException("ToolRegistry is required");
+        }
+        ClineTagConfigs clineTagConfigs =
+                new ClineTagConfigs(new ToolParamCatalog(toolRegistry).all());
         this.messageParserFactory =
-                () -> new DefaultStreamingAssistantMessageParser(ClineTagConfigs.flatFormat());
+                () -> new DefaultStreamingAssistantMessageParser(clineTagConfigs.flatFormat());
         this.streamingMessageParser = messageParserFactory.get();
         this.responseFormatter = new ResponseFormatter();
 

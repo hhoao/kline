@@ -9,8 +9,4 @@ public record AccessMcpResourceInput(
                 String serverName,
         @JsonProperty(value = "uri", required = true)
                 @JsonPropertyDescription("The URI identifying the specific resource to access")
-                String uri,
-        @JsonProperty(value = "task_progress", required = false)
-                @JsonPropertyDescription(
-                        "A checklist showing task progress after this tool use is completed.")
-                String taskProgress) {}
+                String uri) {}

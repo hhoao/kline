@@ -11,8 +11,4 @@ public record ListFilesArgs(
         @JsonProperty(value = "recursive", required = false)
                 @JsonPropertyDescription(
                         "Whether to list files recursively. Use true for recursive listing, false or omit for top-level only.")
-                Boolean recursive,
-        @JsonProperty(value = "task_progress", required = false)
-                @JsonPropertyDescription(
-                        "A checklist showing task progress after this tool use is completed.")
-                String taskProgress) {}
+                Boolean recursive) {}

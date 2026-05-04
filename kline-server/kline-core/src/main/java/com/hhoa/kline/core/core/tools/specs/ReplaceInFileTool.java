@@ -1,31 +1,19 @@
 package com.hhoa.kline.core.core.tools.specs;
 
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
-import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
 import com.hhoa.kline.core.core.tools.ToolSpecProvider;
 import com.hhoa.kline.core.core.tools.args.ReplaceInFileInput;
+import com.hhoa.kline.core.core.tools.handlers.ReplaceInFileToolHandler;
 import com.hhoa.kline.core.core.tools.handlers.ToolHandler;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.function.Function;
+import com.hhoa.kline.core.core.tools.ClineDefaultTool;
 
 /**
  * 替换文件内容工具规格
  *
  * @author hhoa
  */
-public final class ReplaceInFileTool extends BaseToolSpec
-        implements ToolSpecProvider<ReplaceInFileInput, ToolHandler> {
-
-    private static final String GENERIC_DESCRIPTION =
-            "Request to replace sections of content in an existing file using SEARCH/REPLACE blocks that define exact changes to specific parts of the file. This tool should be used when you need to make targeted changes to specific parts of a file.";
-
-    private static final String NATIVE_DESCRIPTION =
-            "[IMPORTANT: Always output the absolutePath first] Request to replace sections of content in an existing file using SEARCH/REPLACE blocks that define exact changes to specific parts of the file. This tool should be used when you need to make targeted changes to specific parts of a file.";
+public final class ReplaceInFileTool implements ToolSpecProvider<ReplaceInFileInput> {
+    private static final ReplaceInFileToolHandler HANDLER = new ReplaceInFileToolHandler();
 
     private static final String BASE_DIFF_INSTRUCTIONS =
             """
@@ -74,77 +62,49 @@ public final class ReplaceInFileTool extends BaseToolSpec
                      ]
                    +++++++ REPLACE""";
 
-    /** 动态 diff instruction：当编辑器中有打开的 .ipynb 文件时，追加 notebook 指令。 */
-    private static final Function<SystemPromptContext, String> DIFF_INSTRUCTION_FN =
-            context -> {
-                if (shouldIncludeNotebookInstructions(context)) {
-                    return BASE_DIFF_INSTRUCTIONS + NOTEBOOK_INSTRUCTIONS;
-                }
-                return BASE_DIFF_INSTRUCTIONS;
-            };
+    private static final String DESCRIPTION = "Replace sections of an existing file.";
 
-    private static boolean shouldIncludeNotebookInstructions(SystemPromptContext context) {
-        if (context == null || context.getEditorTabs() == null) {
-            return false;
-        }
-        List<String> paths = getOpenOrVisibleTabPaths(context);
-        return paths.stream().anyMatch(p -> p.endsWith(".ipynb"));
-    }
+    private static final String GENERIC_PROMPT =
+            """
+            Request to replace sections of content in an existing file using SEARCH/REPLACE blocks that define exact changes to specific parts of the file. This tool should be used when you need to make targeted changes to specific parts of a file.
 
-    private static List<String> getOpenOrVisibleTabPaths(SystemPromptContext context) {
-        SystemPromptContext.EditorTabs tabs = context.getEditorTabs();
-        if (tabs == null) {
-            return Collections.emptyList();
-        }
-        List<String> result = new ArrayList<>();
-        if (tabs.getOpen() != null) {
-            result.addAll(tabs.getOpen());
-        }
-        if (tabs.getVisible() != null) {
-            result.addAll(tabs.getVisible());
-        }
-        return result;
-    }
+            Diff parameter format:
+            %s%s"""
+                    .formatted(BASE_DIFF_INSTRUCTIONS, NOTEBOOK_INSTRUCTIONS);
+
+    private static final String NATIVE_PROMPT =
+            """
+            [IMPORTANT: Always output the absolutePath first] Request to replace sections of content in an existing file using SEARCH/REPLACE blocks that define exact changes to specific parts of the file. This tool should be used when you need to make targeted changes to specific parts of a file.
+
+            Diff parameter format:
+            %s%s"""
+                    .formatted(BASE_DIFF_INSTRUCTIONS, NOTEBOOK_INSTRUCTIONS);
 
     @Override
-    public String id() {
+    public String name() {
         return ClineDefaultTool.FILE_EDIT.getValue();
     }
 
     @Override
     public String description(ModelFamily family) {
+        return DESCRIPTION;
+    }
+
+    @Override
+    public String prompt(ModelFamily family) {
         return switch (family) {
-            case NATIVE_GPT_5, NATIVE_GPT_5_1, NATIVE_NEXT_GEN -> NATIVE_DESCRIPTION;
-            default -> GENERIC_DESCRIPTION;
+            case NATIVE_GPT_5, NATIVE_GPT_5_1, NATIVE_NEXT_GEN -> NATIVE_PROMPT;
+            default -> GENERIC_PROMPT;
         };
     }
 
     @Override
-    public void customizeInputSchema(ModelFamily family, Map<String, Object> inputSchema) {
-        require(inputSchema, "diff");
-        instructionFn(inputSchema, "diff", DIFF_INSTRUCTION_FN);
-        if (isNative(family)) {
-            require(inputSchema, "absolutePath");
-            describe(inputSchema, "absolutePath", "The absolute path to the file to write to.");
-            return;
-        }
-        require(inputSchema, "path");
-        describe(
-                inputSchema,
-                "path",
-                "The path of the file to modify (relative to the current working directory {{CWD}})");
-        usage(inputSchema, "path", "File path here");
-        usage(inputSchema, "diff", "Search and replace blocks here");
+    public Class<ReplaceInFileInput> inputType(ModelFamily family) {
+        return ReplaceInFileInput.class;
     }
 
     @Override
-    public Set<String> excludedParameters(ModelFamily family) {
-        return isNative(family) ? Set.of("path") : Set.of("absolutePath");
-    }
-
-    private static boolean isNative(ModelFamily family) {
-        return family == ModelFamily.NATIVE_GPT_5
-                || family == ModelFamily.NATIVE_GPT_5_1
-                || family == ModelFamily.NATIVE_NEXT_GEN;
+    public ToolHandler<ReplaceInFileInput> handler(ModelFamily family) {
+        return HANDLER;
     }
 }

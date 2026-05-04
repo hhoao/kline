@@ -4,17 +4,21 @@ import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.tools.ToolSpecProvider;
 import com.hhoa.kline.core.core.tools.args.ActModeRespondInput;
 import com.hhoa.kline.core.core.tools.handlers.ActModeRespondToolHandler;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
+import com.hhoa.kline.core.core.tools.handlers.ToolHandler;
+import com.hhoa.kline.core.core.tools.ClineDefaultTool;
 
 /**
  * Act Mode Respond 工具规格 - 在 ACT MODE 执行期间提供进度更新
  *
  * @author hhoa
  */
-public final class ActModeRespondTool extends BaseToolSpec
-        implements ToolSpecProvider<ActModeRespondInput, ActModeRespondToolHandler> {
+public final class ActModeRespondTool implements ToolSpecProvider<ActModeRespondInput> {
 
-    private static final String DESCRIPTION =
+    private static final ActModeRespondToolHandler HANDLER = new ActModeRespondToolHandler();
+
+    private static final String DESCRIPTION = "Provide a progress update during ACT MODE.";
+
+    private static final String PROMPT =
             "Provide a progress update or preamble to the user during ACT MODE execution. "
                     + "This tool allows you to communicate your thought process and planned actions without "
                     + "interrupting the execution flow. After displaying your message, execution automatically "
@@ -38,7 +42,7 @@ public final class ActModeRespondTool extends BaseToolSpec
                     + "consecutively, the tool call will fail with an explicit error.";
 
     @Override
-    public String id() {
+    public String name() {
         return ClineDefaultTool.ACT_MODE.getValue();
     }
 
@@ -48,10 +52,17 @@ public final class ActModeRespondTool extends BaseToolSpec
     }
 
     @Override
-    public boolean enabled(ModelFamily family) {
-        return family == ModelFamily.NATIVE_GPT_5
-                || family == ModelFamily.NATIVE_GPT_5_1
-                || family == ModelFamily.NATIVE_NEXT_GEN
-                || family == ModelFamily.GEMINI_3;
+    public String prompt(ModelFamily family) {
+        return PROMPT;
+    }
+
+    @Override
+    public Class<ActModeRespondInput> inputType(ModelFamily family) {
+        return ActModeRespondInput.class;
+    }
+
+    @Override
+    public ToolHandler<ActModeRespondInput> handler(ModelFamily family) {
+        return HANDLER;
     }
 }

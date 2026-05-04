@@ -31,9 +31,9 @@ public class ActModeRespondToolHandler implements ToolHandler<ActModeRespondInpu
         }
     }
 
-    public ToolExecuteResult execute(ActModeRespondInput input, ToolContext context, ToolUse block) {
+    public ToolExecuteResult execute(
+            ActModeRespondInput input, ToolContext context, ToolUse block) {
         String response = input.response();
-        String taskProgress = input.taskProgress();
 
         // Only available in ACT mode
         if (!Mode.ACT.equals(context.getMode())) {
@@ -57,10 +57,6 @@ public class ActModeRespondToolHandler implements ToolHandler<ActModeRespondInpu
         context.getTaskState().getApiTurnState().setConsecutiveMistakeCount(0);
 
         context.getCallbacks().say(ClineSay.TEXT, response, null, null, false, null);
-
-        if (taskProgress != null && !taskProgress.isEmpty()) {
-            context.getCallbacks().updateFCListFromToolResponse(taskProgress);
-        }
 
         return HandlerUtils.createToolExecuteResult(
                 formatResponse.toolResult(

@@ -7,6 +7,8 @@ import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptSection;
 import com.hhoa.kline.core.core.prompts.systemprompt.templates.TemplateEngine;
 import lombok.RequiredArgsConstructor;
 
+import java.text.MessageFormat;
+
 /**
  * 技能组件
  *
@@ -30,17 +32,18 @@ public class SkillsComponent implements SystemPromptComponent {
             skillsList.append(skill.getDescription()).append("\n");
         }
 
-        return "SKILLS\n\n"
-                + "The following skills provide specialized instructions for specific tasks. "
-                + "When a user's request matches a skill description, use the use_skill tool to "
-                + "load and activate the skill.\n\n"
-                + "Available skills:\n"
-                + skillsList
-                + "\n"
-                + "To use a skill:\n"
-                + "1. Match the user's request to a skill based on its description\n"
-                + "2. Call use_skill with the skill_name parameter set to the exact skill name\n"
-                + "3. Follow the instructions returned by the tool";
+        return MessageFormat.format("""
+            SKILLS
+            
+            The following skills provide specialized instructions for specific tasks. When a user''s request matches a skill description, use the use_skill tool to load and activate the skill.
+            
+            Available skills:
+            {0}
+            To use a skill:
+            1. Match the user''s request to a skill based on its description
+            2. Call use_skill with the skill_name parameter set to the exact skill name
+            3. Follow the instructions returned by the tool""",
+            skillsList);
     }
 
     @Override

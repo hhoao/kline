@@ -2,6 +2,7 @@ package com.hhoa.kline.core.core.tools;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -10,14 +11,14 @@ import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.tools.args.ExecuteCommandInput;
 import com.hhoa.kline.core.core.tools.args.ListFilesArgs;
 import com.hhoa.kline.core.core.tools.args.ReplaceInFileInput;
+import com.hhoa.kline.core.core.tools.args.TodoWriteInput;
 import com.hhoa.kline.core.core.tools.args.WriteToFileInput;
-import com.hhoa.kline.core.core.tools.handlers.ExecuteCommandToolHandler;
-import com.hhoa.kline.core.core.tools.handlers.ListFilesToolHandler;
 import com.hhoa.kline.core.core.tools.handlers.ToolHandler;
+import com.hhoa.kline.core.core.tools.specs.WriteToFileTool;
 import com.hhoa.kline.core.core.tools.specs.ExecuteCommandToolSpec;
 import com.hhoa.kline.core.core.tools.specs.ListFilesTool;
-import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
+import java.lang.Record;
 import java.lang.reflect.Modifier;
 import java.util.List;
 import java.util.Map;
@@ -32,12 +33,13 @@ class ToolSpecResolverTest {
                         "sample_tool",
                         "sample_tool",
                         "Sample tool description.",
-                        null,
+                        "Sample tool prompt.",
                         SampleArgs.class,
                         ModelFamily.GENERIC);
 
         assertEquals("sample_tool", spec.getName());
         assertEquals("Sample tool description.", spec.getDescription());
+        assertEquals("Sample tool prompt.", spec.getPrompt());
         assertNotNull(spec.getInputSchema());
 
         Map<String, Object> path = parameter(spec, "path");
@@ -52,90 +54,138 @@ class ToolSpecResolverTest {
 
     @Test
     void executeCommandHandlerDeclaresTypedArgumentsAndGeneratedSpec() {
-        ExecuteCommandToolHandler handler = new ExecuteCommandToolHandler();
-
         ExecuteCommandToolSpec provider = new ExecuteCommandToolSpec();
-        ToolSpec spec = ToolSpecResolver.resolve(provider, ModelFamily.GENERIC, handler);
+        ToolSpec spec = ToolSpecResolver.resolve(provider, ModelFamily.GENERIC);
         assertTrue(Modifier.isFinal(ExecuteCommandToolSpec.class.getModifiers()));
-        assertEquals("execute_command", provider.id());
+        assertEquals("execute_command", provider.name());
         assertEquals("execute_command", provider.name());
         assertEquals(ExecuteCommandInput.class, spec.getInputType());
+        assertEquals(Record.class, spec.getInputType().getSuperclass());
         assertEquals("execute_command", spec.getName());
         assertEquals("boolean", parameter(spec, "requires_approval").get("type"));
         assertEquals("integer", parameter(spec, "timeout").get("type"));
+        assertTrue(
+                parameter(spec, "timeout").keySet().stream()
+                        .noneMatch(key -> key.startsWith("x-kline-")));
     }
 
     @Test
     void executeCommandSpecUsesModelFamilySpecificDescriptions() {
         ExecuteCommandToolSpec provider = new ExecuteCommandToolSpec();
 
+        assertEquals("Execute a CLI command on the user's system.", provider.description(ModelFamily.GENERIC));
+        assertTrue(provider.prompt(ModelFamily.GEMINI_3).contains("When chaining commands"));
+        assertTrue(provider.prompt(ModelFamily.GENERIC).contains("{{CWD}}{{MULTI_ROOT_HINT}}"));
         assertEquals(
                 "Request to execute a CLI command on the system. Use this when you need to perform system operations or run specific commands to accomplish any step in the user's task.",
-                provider.description(ModelFamily.NATIVE_GPT_5));
+                provider.prompt(ModelFamily.NATIVE_GPT_5));
         assertEquals(
                 "Request to execute a CLI command on the system. Use this when you need to perform system operations or run specific commands to accomplish any step in the user's task.",
-                provider.description(ModelFamily.NATIVE_GPT_5_1));
+                provider.prompt(ModelFamily.NATIVE_GPT_5_1));
         assertEquals(
                 "Request to execute a CLI command on the system. Use this when you need to perform system operations or run specific commands to accomplish any step in the user's task.",
-                provider.description(ModelFamily.NATIVE_NEXT_GEN));
-        assertTrue(provider.description(ModelFamily.GEMINI_3).contains("When chaining commands"));
-        assertTrue(
-                provider.description(ModelFamily.GENERIC).contains("{{CWD}}{{MULTI_ROOT_HINT}}"));
+                provider.prompt(ModelFamily.NATIVE_NEXT_GEN));
     }
 
     @Test
     void listFilesHandlerDeclaresTypedArgumentsAndGeneratedSpec() {
-        ListFilesToolHandler handler = new ListFilesToolHandler();
-
-        ToolSpec spec = ToolSpecResolver.resolve(new ListFilesTool(), ModelFamily.GENERIC, handler);
+        ToolSpec spec = ToolSpecResolver.resolve(new ListFilesTool(), ModelFamily.GENERIC);
         assertEquals(ListFilesArgs.class, spec.getInputType());
         assertEquals("list_files", spec.getName());
         assertEquals("boolean", parameter(spec, "recursive").get("type"));
-        assertEquals("string", parameter(spec, "task_progress").get("type"));
+        assertTrue(!properties(spec).containsKey("task_progress"));
     }
 
     @Test
     void defaultRegistryBindsFileSpecsToTypedInputs() {
         DefaultToolRegistry registry = new DefaultToolRegistry();
 
-        ToolSpec writeSpec = registry.getSpec("write_to_file", ModelFamily.GENERIC);
-        ToolSpec replaceSpec = registry.getSpec("replace_in_file", ModelFamily.GENERIC);
+        ToolSpec writeSpec = registry.getToolSpec("write_to_file", ModelFamily.GENERIC);
+        ToolSpec replaceSpec = registry.getToolSpec("replace_in_file", ModelFamily.GENERIC);
 
         assertNotNull(writeSpec);
         assertEquals(WriteToFileInput.class, writeSpec.getInputType());
+        assertEquals(Record.class, writeSpec.getInputType().getSuperclass());
         assertEquals("string", parameter(writeSpec, "content").get("type"));
+        assertTrue(!properties(writeSpec).containsKey("task_progress"));
+        assertTrue(properties(writeSpec).containsKey("path"));
+        assertTrue(properties(writeSpec).containsKey("absolutePath"));
 
         assertNotNull(replaceSpec);
         assertEquals(ReplaceInFileInput.class, replaceSpec.getInputType());
         assertEquals("string", parameter(replaceSpec, "diff").get("type"));
+        assertTrue(!properties(replaceSpec).containsKey("task_progress"));
+        assertTrue(properties(replaceSpec).containsKey("absolutePath"));
+    }
+
+    @Test
+    void todoWriteUsesStructuredClaudeCodeTodoSchema() {
+        DefaultToolRegistry registry = new DefaultToolRegistry();
+
+        ToolSpec todoSpec = registry.getToolSpec("TodoWrite", ModelFamily.GENERIC);
+
+        assertNotNull(todoSpec);
+        assertEquals(TodoWriteInput.class, todoSpec.getInputType());
+        assertEquals("TodoWrite", todoSpec.getName());
+        assertTrue(properties(todoSpec).containsKey("todos"));
+        assertTrue(todoSpec.getPrompt().contains("structured task list"));
+    }
+
+    @Test
+    void nativeWriteSpecUsesSameInputRecordWithAbsolutePathInSchema() {
+        DefaultToolRegistry registry = new DefaultToolRegistry();
+
+        ToolSpec writeSpec = registry.getToolSpec("write_to_file", ModelFamily.NATIVE_GPT_5);
+
+        assertNotNull(writeSpec);
+        assertEquals(WriteToFileInput.class, writeSpec.getInputType());
+        assertEquals("string", parameter(writeSpec, "absolutePath").get("type"));
+        assertTrue(properties(writeSpec).containsKey("path"));
+        assertEquals(
+                WriteToFileInput.class,
+                ToolSpecResolver.resolveArgumentType(
+                        registry.getToolHandler("write_to_file").getClass()));
+    }
+
+    @Test
+    void newRuleAliasUsesWriteFileHandlerDirectly() {
+        DefaultToolRegistry registry = new DefaultToolRegistry();
+
+        assertSame(WriteToFileTool.sharedFileHandler(), registry.getToolHandler("new_rule"));
+        assertEquals(
+                WriteToFileInput.class,
+                ToolSpecResolver.resolveArgumentType(registry.getToolHandler("new_rule").getClass()));
     }
 
     @Test
     void defaultRegistryProvidesPromptToolSpecs() {
         DefaultToolRegistry registry = new DefaultToolRegistry();
 
-        List<ToolSpec> specs = registry.getToolSpecs(ModelFamily.GENERIC, null);
+        List<ToolSpec> specs = registry.getToolSpecs(ModelFamily.GENERIC, null, true);
 
-        assertTrue(specs.stream().anyMatch(spec -> "execute_command".equals(spec.getId())));
-        assertTrue(specs.stream().anyMatch(spec -> "read_file".equals(spec.getId())));
-        assertTrue(specs.stream().anyMatch(spec -> "replace_in_file".equals(spec.getId())));
+        assertTrue(specs.stream().anyMatch(spec -> "execute_command".equals(spec.getName())));
+        assertTrue(specs.stream().anyMatch(spec -> "read_file".equals(spec.getName())));
+        assertTrue(specs.stream().anyMatch(spec -> "replace_in_file".equals(spec.getName())));
     }
 
     @Test
-    void methodParametersBeforeContextBecomeInputSchema() {
+    void handlerGenericInputTypeBecomesInputSchema() {
         ToolSpec spec =
                 ToolSpecResolver.resolve(
-                        "multi_parameter",
-                        "multi_parameter",
-                        "multi",
-                        null,
+                        "generic_handler",
+                        "generic_handler",
+                        "generic",
+                        "generic prompt",
                         ModelFamily.GENERIC,
-                        new MultiParameterHandler());
+                        new GenericInputHandler());
 
-        assertEquals("multi_parameter", spec.getName());
+        assertEquals("generic_handler", spec.getName());
+        assertEquals("generic prompt", spec.getPrompt());
+        assertEquals(GenericArgs.class, spec.getInputType());
         assertEquals("string", parameter(spec, "command").get("type"));
         assertEquals("boolean", parameter(spec, "requires_approval").get("type"));
-        assertEquals(2, properties(spec).size());
+        assertEquals("integer", parameter(spec, "timeout").get("type"));
+        assertEquals(3, properties(spec).size());
     }
 
     @SuppressWarnings("unchecked")
@@ -161,17 +211,37 @@ class ToolSpecResolverTest {
                     Boolean recursive,
             List<String> tags) {}
 
-    static class MultiParameterHandler implements ToolHandler {
+    record GenericArgs(
+            String command,
+            @JsonProperty("requires_approval") Boolean requiresApproval,
+            Integer timeout) {}
+
+    static class GenericInputHandler implements ToolHandler<GenericArgs> {
         @Override
         public String getDescription(com.hhoa.kline.core.core.assistant.ToolUse block) {
-            return "multi";
+            return "generic";
+        }
+
+        @Override
+        public void handlePartialBlock(
+                GenericArgs input,
+                com.hhoa.kline.core.core.tools.types.ToolContext context,
+                com.hhoa.kline.core.core.assistant.ToolUse block) {}
+
+        @Override
+        public ToolExecuteResult execute(
+                GenericArgs input,
+                com.hhoa.kline.core.core.tools.types.ToolContext context,
+                com.hhoa.kline.core.core.assistant.ToolUse block) {
+            return new ToolExecuteResult.Immediate(List.of());
         }
 
         public ToolExecuteResult execute(
                 @JsonProperty(value = "command", required = true) String command,
-                @JsonProperty("requires_approval") Boolean requiresApproval,
-                ToolContext context) {
-            return new ToolExecuteResult.Immediate(List.of());
+                com.hhoa.kline.core.core.tools.types.ToolContext context,
+                com.hhoa.kline.core.core.assistant.ToolUse block,
+                String ignored) {
+            throw new AssertionError("schema must not be resolved from public overloads");
         }
     }
 }

@@ -1,7 +1,6 @@
 package com.hhoa.kline.core.core.assistant.parser;
 
-import com.hhoa.kline.core.enums.ClineDefaultTool;
-import com.hhoa.kline.core.enums.ToolParamName;
+import com.hhoa.kline.core.core.tools.ClineDefaultTool;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -12,8 +11,14 @@ import java.util.stream.Collectors;
  * @author hhoa
  */
 public final class ClineTagConfigs {
+    private final Set<String> allParamNames;
 
-    private ClineTagConfigs() {}
+    public ClineTagConfigs(Set<String> allParamNames) {
+        if (allParamNames == null || allParamNames.isEmpty()) {
+            throw new IllegalArgumentException("allParamNames must not be null or empty");
+        }
+        this.allParamNames = allParamNames;
+    }
 
     /**
      * Cline 扁平格式：工具名作为根标签，参数名作为工具的子标签
@@ -24,15 +29,10 @@ public final class ClineTagConfigs {
      * </read_file>
      * }</pre>
      */
-    public static TagHierarchyConfig flatFormat() {
+    public TagHierarchyConfig flatFormat() {
         Set<String> allToolNames =
                 Arrays.stream(ClineDefaultTool.values())
                         .map(ClineDefaultTool::getValue)
-                        .collect(Collectors.toSet());
-
-        Set<String> allParamNames =
-                Arrays.stream(ToolParamName.values())
-                        .map(ToolParamName::getValue)
                         .collect(Collectors.toSet());
 
         TagHierarchyConfig.Builder builder =
@@ -56,7 +56,7 @@ public final class ClineTagConfigs {
      * </function_calls>
      * }</pre>
      */
-    public static TagHierarchyConfig nestedFormat() {
+    public TagHierarchyConfig nestedFormat() {
         return TagHierarchyConfig.builder()
                 .rootTag("function_calls")
                 .childTags("function_calls", Set.of("invoke"))

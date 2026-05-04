@@ -51,8 +51,9 @@ public class AutoTodoComponent implements SystemPromptComponent {
 
             - Every 10th API request, you will be prompted to review and update the current todo list if one exists
             - When switching from PLAN MODE to ACT MODE, you should create a comprehensive todo list for the task
-            - Todo list updates should be done silently using the task_progress parameter - do not announce these updates to the user
-            - Use standard Markdown checklist format: "- [ ]" for incomplete items and "- [x]" for completed items
+            - Todo list updates should be done silently using the TodoWrite tool - do not announce these updates to the user
+            - TodoWrite items are structured with content, status, and activeForm
+            - Use status pending, in_progress, or completed
             - The system will automatically include todo list context in your prompts when appropriate
             - Focus on creating actionable, meaningful steps rather than granular technical details
             """;

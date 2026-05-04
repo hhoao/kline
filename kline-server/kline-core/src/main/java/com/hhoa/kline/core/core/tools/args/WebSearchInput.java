@@ -12,8 +12,4 @@ public record WebSearchInput(
                 String allowedDomains,
         @JsonProperty(value = "blocked_domains", required = false)
                 @JsonPropertyDescription("Domains to exclude from results.")
-                String blockedDomains,
-        @JsonProperty(value = "task_progress", required = false)
-                @JsonPropertyDescription(
-                        "A checklist showing task progress after this tool use is completed.")
-                String taskProgress) {}
+                String blockedDomains) {}

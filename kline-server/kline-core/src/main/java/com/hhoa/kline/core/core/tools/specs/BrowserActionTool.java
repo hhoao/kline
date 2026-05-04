@@ -5,7 +5,8 @@ import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
 import com.hhoa.kline.core.core.tools.ToolSpecProvider;
 import com.hhoa.kline.core.core.tools.args.BrowserActionInput;
 import com.hhoa.kline.core.core.tools.handlers.BrowserToolHandler;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
+import com.hhoa.kline.core.core.tools.handlers.ToolHandler;
+import com.hhoa.kline.core.core.tools.ClineDefaultTool;
 import java.util.function.Function;
 
 /**
@@ -13,10 +14,13 @@ import java.util.function.Function;
  *
  * @author hhoa
  */
-public final class BrowserActionTool extends BaseToolSpec
-        implements ToolSpecProvider<BrowserActionInput, BrowserToolHandler> {
+public final class BrowserActionTool implements ToolSpecProvider<BrowserActionInput> {
 
-    private static final String DESCRIPTION =
+    private static final BrowserToolHandler HANDLER = new BrowserToolHandler();
+
+    private static final String DESCRIPTION = "Interact with a Puppeteer-controlled browser.";
+
+    private static final String PROMPT =
             "Request to interact with a Puppeteer-controlled browser. Every action, except `close`, will be responded to with a screenshot of the browser's current state, along with any new console logs. You may only perform one browser action per message, and wait for the user's response including a screenshot and logs to determine the next action.\n"
                     + "- The sequence of actions **must always start with** launching the browser at a URL, and **must always end with** closing the browser. If you need to visit a new URL that is not possible to navigate to from the current webpage, you must first close the browser, then launch again at the new URL.\n"
                     + "- While the browser is active, only the `browser_action` tool can be used. No other tools should be called during this time. You may proceed to use other tools only after closing the browser. For example if you run into an error and need to fix a file, you must close the browser, then use other tools to make the necessary changes, then re-launch the browser to verify the result.\n"
@@ -27,7 +31,7 @@ public final class BrowserActionTool extends BaseToolSpec
             (context) -> Boolean.TRUE.equals(context.getSupportsBrowserUse());
 
     @Override
-    public String id() {
+    public String name() {
         return ClineDefaultTool.BROWSER.getValue();
     }
 
@@ -37,7 +41,22 @@ public final class BrowserActionTool extends BaseToolSpec
     }
 
     @Override
+    public String prompt(ModelFamily family) {
+        return PROMPT;
+    }
+
+    @Override
     public Function<SystemPromptContext, Boolean> contextRequirements(ModelFamily family) {
         return CONTEXT_REQUIREMENTS;
+    }
+
+    @Override
+    public Class<BrowserActionInput> inputType(ModelFamily family) {
+        return BrowserActionInput.class;
+    }
+
+    @Override
+    public ToolHandler<BrowserActionInput> handler(ModelFamily family) {
+        return HANDLER;
     }
 }

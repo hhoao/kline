@@ -12,8 +12,4 @@ public record SearchFilesInput(
                 String regex,
         @JsonProperty(value = "file_pattern", required = false)
                 @JsonPropertyDescription("Glob pattern to filter files.")
-                String filePattern,
-        @JsonProperty(value = "task_progress", required = false)
-                @JsonPropertyDescription(
-                        "A checklist showing task progress after this tool use is completed.")
-                String taskProgress) {}
+                String filePattern) {}

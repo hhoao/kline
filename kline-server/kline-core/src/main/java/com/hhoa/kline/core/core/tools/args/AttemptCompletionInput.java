@@ -10,8 +10,4 @@ public record AttemptCompletionInput(
         @JsonProperty(value = "command", required = false)
                 @JsonPropertyDescription(
                         "A CLI command to execute to show a live demo of the result.")
-                String command,
-        @JsonProperty(value = "task_progress", required = false)
-                @JsonPropertyDescription(
-                        "A checklist showing task progress after this tool use is completed.")
-                String taskProgress) {}
+                String command) {}

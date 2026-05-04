@@ -1,6 +1,6 @@
 package com.hhoa.kline.core.core.controller.testsupport;
 
-import com.hhoa.kline.core.enums.ClineDefaultTool;
+import com.hhoa.kline.core.core.tools.ClineDefaultTool;
 
 /** 集成测试中构造与运行时解析器一致的工具 XML 片段（与 {@link ScriptedConversationApiHandler} 配合）。 */
 public final class ClineToolXmlFragments {

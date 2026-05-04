@@ -77,7 +77,6 @@ public final class GlmComponentOverrides {
                 *Example:*
                 <read_file>
                 <path>File path here</path>
-                <task_progress>Checklist here (optional)</task_progress>
                 </read_file>
 
                 **write_to_file** — Create/overwrite file. You should only use this when editing a new file.
@@ -86,7 +85,6 @@ public final class GlmComponentOverrides {
                 <write_to_file>
                 <path>File path here</path>
                 <content>Your file content here</content>
-                <task_progress>Checklist here (optional)</task_progress>
                 </write_to_file>
 
                 **replace_in_file** — Targeted edits to perform on existing files. You should use replace_in_file when editing a file that already exists.
@@ -103,7 +101,6 @@ public final class GlmComponentOverrides {
                 <replace_in_file>
                 <path>File path here</path>
                 <diff>Search and replace blocks here</diff>
-                <task_progress>Checklist here (optional)</task_progress>
                 </replace_in_file>
 
                 **search_files** — Regex search to perform.
@@ -113,7 +110,6 @@ public final class GlmComponentOverrides {
                 <path>Directory path here</path>
                 <regex>Your regex pattern here</regex>
                 <file_pattern>file pattern here (optional)</file_pattern>
-                <task_progress>Checklist here (optional)</task_progress>
                 </search_files>
 
                 **list_files** — List directory contents.
@@ -122,9 +118,15 @@ public final class GlmComponentOverrides {
                 <list_files>
                 <path>Directory path here</path>
                 <recursive>true or false (optional)</recursive>
-                <task_progress>Checklist here (optional)</task_progress>
                 </list_files>
                 Key: Rely on returned tool results instead of using list_files to "confirm" writes.
+
+                **TodoWrite** — Update the structured todo list for the current session.
+                Params: todos (array of items with content, status, activeForm). Status: pending, in_progress, completed.
+                *Example:*
+                <TodoWrite>
+                <todos>[{"content":"Inspect files","status":"completed","activeForm":"Inspecting files"},{"content":"Implement change","status":"in_progress","activeForm":"Implementing change"}]</todos>
+                </TodoWrite>
 
                 %s
 
@@ -134,7 +136,6 @@ public final class GlmComponentOverrides {
                 <attempt_completion>
                 <result>Your final result description here</result>
                 <command>Your command here (optional)</command>
-                <task_progress>Checklist here (required if you used task_progress in previous tool uses)</task_progress>
                 </attempt_completion>
                 **Gate:** Ask yourself inside <reasoning> whether all prior tool uses were user-confirmed. If not, do **not** call.
 
@@ -152,7 +153,6 @@ public final class GlmComponentOverrides {
                 <plan_mode_respond>
                 <response>Your response here</response>
                 <needs_more_exploration>true or false (optional, but you MUST set to true if in <response> you need to read files or use other exploration tools)</needs_more_exploration>
-                <task_progress>Checklist here (If you have presented the user with concrete steps or requirements, you can optionally include a todo list outlining these steps.)</task_progress>
                 </plan_mode_respond>"""
                 .formatted(mcpSection);
     }
@@ -173,27 +173,16 @@ public final class GlmComponentOverrides {
             """
             UPDATING TASK PROGRESS
 
-            Each tool supports an optional task_progress parameter for maintaining a Markdown checklist of your progress. Use it to show completed and remaining steps throughout a task.
+            Use the TodoWrite tool to maintain a structured todo list for your progress. TodoWrite is a standalone tool call, not a parameter on other tools.
 
-            - Normally, skip task_progress during PLAN MODE until the plan is approved and you enter ACT MODE.
-            - Use standard Markdown checkboxes: - [ ] (incomplete) and - [x] (complete).
+            - Normally, skip TodoWrite during PLAN MODE until the plan is approved and you enter ACT MODE.
+            - Use status pending, in_progress, or completed.
+            - Keep exactly one item in_progress while work is underway whenever possible.
             - Include the full checklist of meaningful milestones—not low-level technical steps.
             - Update the checklist whenever progress is made; rewrite it if scope or priorities change.
             - When adding the checklist for the first time, mark the current step as completed if it was just accomplished.
             - Short checklists are fine for simple tasks; keep longer ones concise and readable.
-            - task_progress must be included as a parameter, not as a standalone tool call.
-
-            Example:
-            <execute_command>
-            <command>npm install react</command>
-            <requires_approval>false</requires_approval>
-            <task_progress>    <- NOTE THIS IS ALWAYS A PARAMETER INSIDE THE TOOL CALL
-            - [x] Set up project structure
-            - [x] Install dependencies
-            - [ ] Create components
-            - [ ] Test application
-            </task_progress>
-            </execute_command>""";
+            """;
 
     private static final String GLM_MCP_TEMPLATE =
             """

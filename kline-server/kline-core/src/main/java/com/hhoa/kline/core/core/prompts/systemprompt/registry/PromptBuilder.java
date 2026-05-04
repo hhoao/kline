@@ -6,12 +6,9 @@ import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptContext;
 import com.hhoa.kline.core.core.prompts.systemprompt.SystemPromptSection;
 import com.hhoa.kline.core.core.prompts.systemprompt.templates.Placeholders;
 import com.hhoa.kline.core.core.prompts.systemprompt.templates.TemplateEngine;
-import com.hhoa.kline.core.core.tools.DefaultToolRegistry;
-import com.hhoa.kline.core.core.tools.ToolSchema;
 import com.hhoa.kline.core.core.tools.ToolSpec;
+import com.hhoa.kline.core.core.tools.ToolRegistry;
 import com.hhoa.kline.core.core.tools.registry.ToolPromptBuilder;
-import com.hhoa.kline.core.core.tools.subagent.AgentConfigLoader;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -36,7 +33,6 @@ import lombok.extern.slf4j.Slf4j;
 public class PromptBuilder {
 
     private static final List<String> STANDARD_PLACEHOLDER_KEYS;
-    private static final DefaultToolRegistry TOOL_REGISTRY = new DefaultToolRegistry();
 
     static {
         STANDARD_PLACEHOLDER_KEYS = new ArrayList<>(Placeholders.STANDARD_PLACEHOLDERS.values());
@@ -44,6 +40,7 @@ public class PromptBuilder {
 
     private final ComponentRegistry componentRegistry;
     private final TemplateEngine templateEngine;
+    private final ToolRegistry toolRegistry;
 
     /** 构建系统提示 */
     public String build(PromptVariant variant, SystemPromptContext context) {
@@ -202,7 +199,7 @@ public class PromptBuilder {
     }
 
     /** 获取工具提示 */
-    public static List<String> getToolsPrompts(PromptVariant variant, SystemPromptContext context) {
+    public List<String> getToolsPrompts(PromptVariant variant, SystemPromptContext context) {
         ModelFamily family = variant.getFamily();
         if (family == null) {
             family = ModelFamily.GENERIC;
@@ -211,26 +208,26 @@ public class PromptBuilder {
         List<ToolSpec> resolvedTools;
 
         if (variant.getTools() != null && !variant.getTools().isEmpty()) {
-            List<String> requestedIds = new ArrayList<>(variant.getTools());
+            List<String> toolNames = new ArrayList<>(variant.getTools());
             resolvedTools =
-                    TOOL_REGISTRY.getToolsForVariantWithFallback(family, requestedIds, context);
+                    toolRegistry.getToolSpecs(family, context, toolNames, true);
 
             Map<String, ToolSpec> toolMap =
                     resolvedTools.stream()
                             .collect(
                                     Collectors.toMap(
-                                            ToolSpec::getId,
+                                            ToolSpec::getName,
                                             tool -> tool,
                                             (existing, replacement) -> existing));
             resolvedTools =
-                    requestedIds.stream()
+                    toolNames.stream()
                             .map(toolMap::get)
                             .filter(Objects::nonNull)
                             .collect(Collectors.toList());
         } else {
-            resolvedTools = TOOL_REGISTRY.getToolSpecs(family, context);
+            resolvedTools = toolRegistry.getToolSpecs(family, context, true);
             if (resolvedTools == null || resolvedTools.isEmpty()) {
-                resolvedTools = TOOL_REGISTRY.getToolSpecs(ModelFamily.GENERIC, context);
+                resolvedTools = toolRegistry.getToolSpecs(ModelFamily.GENERIC, context, true);
             }
             if (resolvedTools == null || resolvedTools.isEmpty()) {
                 return Collections.emptyList();
@@ -239,23 +236,21 @@ public class PromptBuilder {
                     resolvedTools.stream()
                             .sorted(
                                     (a, b) -> {
-                                        String idA = a.getId() != null ? a.getId() : "";
-                                        String idB = b.getId() != null ? b.getId() : "";
+                                        String idA = a.getName() != null ? a.getName() : "";
+                                        String idB = b.getName() != null ? b.getName() : "";
                                         return idA.compareTo(idB);
                                     })
                             .collect(Collectors.toList());
         }
 
-        resolvedTools = mergeDynamicSubagentToolSpecs(resolvedTools, variant, context);
-
         List<ToolSpec> enabledTools =
                 resolvedTools.stream()
                         .filter(
                                 tool -> {
-                                    if (tool.getContextRequirements() != null) {
+                                    if (tool.getEnabled() != null) {
                                         try {
                                             return Boolean.TRUE.equals(
-                                                    tool.getContextRequirements().apply(context));
+                                                    tool.getEnabled().apply(context));
                                         } catch (Exception e) {
                                             return false;
                                         }
@@ -266,7 +261,7 @@ public class PromptBuilder {
 
         List<String> ids =
                 enabledTools.stream()
-                        .map(ToolSpec::getId)
+                        .map(ToolSpec::getName)
                         .filter(id -> id != null && !id.isBlank())
                         .collect(Collectors.toList());
 
@@ -274,71 +269,6 @@ public class PromptBuilder {
                 .map(spec -> ToolPromptBuilder.render(spec, ids, context))
                 .filter(toolPrompt -> toolPrompt != null && !toolPrompt.isBlank())
                 .collect(Collectors.toList());
-    }
-
-    /**
-     * 与 Cline {@code ClineToolSet.getDynamicSubagentToolSpecs} / {@code getEnabledToolSpecs}
-     * 一致：在启用子代理且存在 YAML 配置时，用动态 {@code use_subagent_*} 工具替换单一的 {@code use_subagents}。
-     */
-    private static List<ToolSpec> mergeDynamicSubagentToolSpecs(
-            List<ToolSpec> resolvedTools, PromptVariant variant, SystemPromptContext context) {
-        if (!Boolean.TRUE.equals(context.getSubagentsEnabled())
-                || Boolean.TRUE.equals(context.getIsSubagentRun())) {
-            return resolvedTools;
-        }
-        List<String> requestedIds =
-                variant.getTools() != null && !variant.getTools().isEmpty()
-                        ? variant.getTools()
-                        : List.of();
-        boolean shouldInclude =
-                requestedIds.isEmpty()
-                        || requestedIds.contains(ClineDefaultTool.USE_SUBAGENTS.getValue());
-        if (!shouldInclude) {
-            return resolvedTools;
-        }
-        List<AgentConfigLoader.AgentConfigWithToolName> agentConfigs =
-                AgentConfigLoader.getInstance().getAllCachedConfigsWithToolNames();
-        if (agentConfigs.isEmpty()) {
-            return resolvedTools;
-        }
-        List<ToolSpec> filtered = new ArrayList<>();
-        for (ToolSpec t : resolvedTools) {
-            if (!ClineDefaultTool.USE_SUBAGENTS.getValue().equals(t.getId())) {
-                filtered.add(t);
-            }
-        }
-        ModelFamily family =
-                variant.getFamily() != null ? variant.getFamily() : ModelFamily.GENERIC;
-        for (AgentConfigLoader.AgentConfigWithToolName entry : agentConfigs) {
-            filtered.add(buildDynamicSubagentSpec(entry, family));
-        }
-        return filtered;
-    }
-
-    private static ToolSpec buildDynamicSubagentSpec(
-            AgentConfigLoader.AgentConfigWithToolName entry, ModelFamily family) {
-        Map<String, Object> inputSchema = ToolSchema.objectSchema();
-        ToolSchema.putProperty(
-                inputSchema,
-                "prompt",
-                ToolSchema.stringProperty(
-                        "Helpful instruction for the task that the subagent will perform."));
-        ToolSchema.require(inputSchema, "prompt");
-
-        return ToolSpec.builder()
-                .variant(family)
-                .id(ClineDefaultTool.USE_SUBAGENTS.getValue())
-                .name(entry.toolName())
-                .description(
-                        String.format(
-                                "Use the \"%s\" subagent: %s",
-                                entry.config().name(), entry.config().description()))
-                .contextRequirements(
-                        ctx ->
-                                Boolean.TRUE.equals(ctx.getSubagentsEnabled())
-                                        && !Boolean.TRUE.equals(ctx.getIsSubagentRun()))
-                .inputSchema(inputSchema)
-                .build();
     }
 
     /** 后处理提示内容 */

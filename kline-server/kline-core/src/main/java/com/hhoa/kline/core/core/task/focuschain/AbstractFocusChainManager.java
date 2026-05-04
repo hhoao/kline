@@ -95,7 +95,7 @@ public abstract class AbstractFocusChainManager implements FocusChainManager {
                     totalItems > 0 ? Math.round((float) (completedItems * 100) / totalItems) : 0;
 
             String introUpdateRequired =
-                    "# task_progress UPDATE REQUIRED - You MUST include the task_progress parameter in your NEXT tool call.";
+                    "# TodoWrite UPDATE REQUIRED - You MUST use the TodoWrite tool in your NEXT assistant message.";
             String listCurrentProgress =
                     "**Current Progress: "
                             + completedItems
@@ -174,79 +174,83 @@ public abstract class AbstractFocusChainManager implements FocusChainManager {
     }
 
     @Override
-    public void updateFCListFromToolResponse(String taskProgress) {
+    public void updateFCListFromToolResponse(String todoList) {
         try {
-            if (taskProgress != null && !taskProgress.trim().isEmpty()) {
+            if (todoList != null) {
                 taskState.setApiRequestsSinceLastTodoUpdate(0);
+                String trimmed = todoList.trim();
+                if (trimmed.isEmpty()) {
+                    taskState.setCurrentFocusChainChecklist(null);
+                    saveFocusChain("");
+                    if (say != null) {
+                        say.say(ClineSay.TASK_PROGRESS, "", null, null, false);
+                    }
+                    return;
+                }
+
+                updateFocusChainList(trimmed);
+                return;
             }
 
-            if (taskProgress != null && !taskProgress.trim().isEmpty()) {
-                String trimmed = taskProgress.trim();
-                String previousList = taskState.getCurrentFocusChainChecklist();
+            String markdownTodoList = getFocusChain();
+            if (markdownTodoList != null) {
+                taskState.setCurrentFocusChainChecklist(markdownTodoList);
 
-                taskState.setCurrentFocusChainChecklist(trimmed);
-                log.debug(
-                        "[Task {}] focus chain list: LLM provided focus chain list update via task_progress parameter. Length {} > {}",
-                        taskId,
-                        previousList != null ? previousList.length() : 0,
-                        trimmed.length());
-
-                FocusChainUtils.TodoListCounts counts =
-                        FocusChainUtils.parseFocusChainListCounts(trimmed);
-                int totalItems = counts.totalItems();
-                int completedItems = counts.completedItems();
-
-                if (!hasTrackedFirstProgress && totalItems > 0) {
-                    if (telemetryService != null) {
-                        telemetryService.captureFocusChainProgressFirst(this.taskId, totalItems);
-                    }
-                    hasTrackedFirstProgress = true;
-                } else if (hasTrackedFirstProgress && totalItems > 0) {
-                    if (telemetryService != null) {
-                        telemetryService.captureFocusChainProgressUpdate(
-                                this.taskId, totalItems, completedItems);
-                    }
-                }
-
-                try {
-                    saveFocusChain(trimmed);
-
-                    if (say != null) {
-                        say.say(ClineSay.TASK_PROGRESS, trimmed, null, null, false);
-                        return;
-                    }
-                } catch (Exception error) {
-                    log.error(
-                            "[Task {}] focus chain list: Failed to write to markdown file",
-                            taskId,
-                            error);
-                    if (say != null) {
-                        say.say(ClineSay.TASK_PROGRESS, trimmed, null, null, false);
-                        log.debug(
-                                "[Task {}] focus chain list: Sent fallback task_progress message to UI",
-                                taskId);
-                    }
+                if (say != null) {
+                    say.say(ClineSay.TASK_PROGRESS, markdownTodoList, null, null, false);
                 }
             } else {
-                String markdownTodoList = getFocusChain();
-                if (markdownTodoList != null) {
-                    taskState.setCurrentFocusChainChecklist(markdownTodoList);
-
-                    if (say != null) {
-                        say.say(ClineSay.TASK_PROGRESS, markdownTodoList, null, null, false);
-                        return;
-                    }
-                } else {
-                    log.debug(
-                            "[Task {}] focus chain list: No valid task progress to update with",
-                            taskId);
-                }
+                log.debug(
+                        "[Task {}] focus chain list: No valid task progress to update with",
+                        taskId);
             }
         } catch (Exception error) {
             log.error(
                     "[Task {}] focus chain list: Error in updateFCListFromToolResponse",
                     taskId,
                     error);
+        }
+    }
+
+    private void updateFocusChainList(String trimmed) {
+        String previousList = taskState.getCurrentFocusChainChecklist();
+
+        taskState.setCurrentFocusChainChecklist(trimmed);
+        log.debug(
+                "[Task {}] focus chain list: LLM provided focus chain list update via TodoWrite. Length {} > {}",
+                taskId,
+                previousList != null ? previousList.length() : 0,
+                trimmed.length());
+
+        FocusChainUtils.TodoListCounts counts = FocusChainUtils.parseFocusChainListCounts(trimmed);
+        int totalItems = counts.totalItems();
+        int completedItems = counts.completedItems();
+
+        if (!hasTrackedFirstProgress && totalItems > 0) {
+            if (telemetryService != null) {
+                telemetryService.captureFocusChainProgressFirst(this.taskId, totalItems);
+            }
+            hasTrackedFirstProgress = true;
+        } else if (hasTrackedFirstProgress && totalItems > 0 && telemetryService != null) {
+            telemetryService.captureFocusChainProgressUpdate(
+                    this.taskId, totalItems, completedItems);
+        }
+
+        try {
+            saveFocusChain(trimmed);
+
+            if (say != null) {
+                say.say(ClineSay.TASK_PROGRESS, trimmed, null, null, false);
+            }
+        } catch (Exception error) {
+            log.error(
+                    "[Task {}] focus chain list: Failed to write to markdown file", taskId, error);
+            if (say != null) {
+                say.say(ClineSay.TASK_PROGRESS, trimmed, null, null, false);
+                log.debug(
+                        "[Task {}] focus chain list: Sent fallback task progress message to UI",
+                        taskId);
+            }
         }
     }
 

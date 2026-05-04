@@ -5,7 +5,7 @@ import com.hhoa.kline.core.core.storage.StateManager;
 import com.hhoa.kline.core.core.workspace.WorkspaceConfig;
 import com.hhoa.kline.core.core.workspace.WorkspaceResolver;
 import com.hhoa.kline.core.core.workspace.WorkspaceRootManager;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
+
 import java.util.Arrays;
 
 public class AutoApprove {
@@ -44,7 +44,7 @@ public class AutoApprove {
         }
 
         return switch (tool) {
-            case FILE_READ, LIST_FILES, LIST_CODE_DEF, SEARCH, USE_SUBAGENTS ->
+            case FILE_READ, LIST_FILES, LIST_CODE_DEF, SEARCH, AGENT ->
                     AutoApproveToolResult.of(
                             actions.isReadFiles(),
                             Boolean.TRUE.equals(actions.getReadFilesExternally()));
@@ -73,7 +73,7 @@ public class AutoApprove {
                     FILE_EDIT,
                     APPLY_PATCH,
                     BASH,
-                    USE_SUBAGENTS ->
+                    AGENT ->
                     AutoApproveToolResult.of(true, true);
             case BROWSER, WEB_FETCH, WEB_SEARCH, MCP_ACCESS, MCP_USE ->
                     AutoApproveToolResult.of(true);

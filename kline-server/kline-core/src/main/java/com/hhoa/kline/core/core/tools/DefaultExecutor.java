@@ -12,7 +12,6 @@ import com.hhoa.kline.core.core.ignore.ClineIgnoreController;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.shared.ClineSay;
-import com.hhoa.kline.core.core.shared.FocusChainSettings;
 import com.hhoa.kline.core.core.shared.storage.types.Mode;
 import com.hhoa.kline.core.core.task.AskResult;
 import com.hhoa.kline.core.core.task.HookExecution;
@@ -48,11 +47,16 @@ public class DefaultExecutor implements ToolExecutor {
     @Setter private Runnable clearActiveHookExecution;
 
     public DefaultExecutor(
-            ClineIgnoreController clineIgnoreController, ResponseFormatter responseFormatter) {
+            ToolRegistry registry,
+            ClineIgnoreController clineIgnoreController,
+            ResponseFormatter responseFormatter) {
+        if (registry == null) {
+            throw new IllegalArgumentException("registry == null");
+        }
         this.clineIgnoreController = clineIgnoreController;
         this.responseFormatter =
                 responseFormatter != null ? responseFormatter : new ResponseFormatter();
-        this.registry = new DefaultToolRegistry();
+        this.registry = registry;
     }
 
     @Override
@@ -93,10 +97,10 @@ public class DefaultExecutor implements ToolExecutor {
     public ToolExecuteResult resume(
             PendingAskToken askToken, AskResult askResult, ToolContext context) {
         if (askToken instanceof ToolUsePendingAskToken toolUsePendingAskToken) {
-            ToolHandler handler =
-                    registry.getHandler(toolUsePendingAskToken.getToolUse().getName());
+            ToolHandler<?> handler =
+                    registry.getToolHandler(toolUsePendingAskToken.getToolUse().getName());
 
-            if (handler instanceof StateFullToolHandler stateFullHandler) {
+            if (handler instanceof StateFullToolHandler<?> stateFullHandler) {
                 ToolState toolState = context.getToolState();
                 ToolExecuteResult result =
                         stateFullHandler.resume(
@@ -105,7 +109,6 @@ public class DefaultExecutor implements ToolExecutor {
                     if (context.getCallbacks() != null) {
                         context.getCallbacks().saveCheckpoint(false, null);
                     }
-                    updateFocusChainIfNeeded(toolUsePendingAskToken.getToolUse(), context);
                 }
                 return result;
             } else {
@@ -120,9 +123,9 @@ public class DefaultExecutor implements ToolExecutor {
 
     @Override
     public ToolState getOrCreateToolState(String name) {
-        ToolHandler handler = registry.getHandler(name);
+        ToolHandler<?> handler = registry.getToolHandler(name);
         ToolState toolState;
-        if (handler instanceof StateFullToolHandler stateFullHandler) {
+        if (handler instanceof StateFullToolHandler<?> stateFullHandler) {
             toolState = stateFullHandler.createToolState();
         } else {
             toolState = new ToolState();
@@ -184,7 +187,7 @@ public class DefaultExecutor implements ToolExecutor {
     }
 
     private ToolExecuteResult handleCompleteBlockAsync(ToolUse block, ToolContext config) {
-        ToolHandler handler = registry.getHandler(block.getName());
+        ToolHandler<?> handler = registry.getToolHandler(block.getName());
         if (handler == null) {
             String errorMsg = "Handler not found for tool: " + block.getName();
             List<UserContentBlock> errorResult =
@@ -194,7 +197,7 @@ public class DefaultExecutor implements ToolExecutor {
 
         ToolCallValidator.ValidationResult validation =
                 ToolCallValidator.validate(
-                        registry.getSpec(block.getName(), ModelFamily.GENERIC), block, config);
+                        registry.getToolSpec(block.getName(), ModelFamily.GENERIC), block, config);
         if (!validation.isValid()) {
             if (config.getTaskState() != null) {
                 config.getTaskState()
@@ -232,7 +235,7 @@ public class DefaultExecutor implements ToolExecutor {
     }
 
     private ToolExecuteResult handleCompleteBlockAsyncInternal(
-            ToolUse block, ToolContext config, ToolHandler handler) {
+            ToolUse block, ToolContext config, ToolHandler<?> handler) {
         // Check abort flag at the very start to prevent execution after cancellation
         if (config.getTaskState() != null && config.getTaskState().isAbort()) {
             return new ToolExecuteResult.Immediate(List.of());
@@ -250,8 +253,6 @@ public class DefaultExecutor implements ToolExecutor {
             if (config.getTaskState() != null) {
                 config.getTaskState().getToolExecutionState().setLastToolName(block.getName());
             }
-
-            updateFocusChainIfNeeded(block, config);
 
             // Check abort before running PostToolUse hook
             if (config.getTaskState() != null && config.getTaskState().isAbort()) {
@@ -438,35 +439,6 @@ public class DefaultExecutor implements ToolExecutor {
         return sb.toString();
     }
 
-    private void updateFocusChainIfNeeded(ToolUse block, ToolContext config) {
-        if (config.getTaskState() != null
-                && config.getServices() != null
-                && config.getServices().getStateManager() != null
-                && !block.isPartial()) {
-            try {
-                FocusChainSettings focusChainSettings =
-                        config.getServices()
-                                .getStateManager()
-                                .getSettings()
-                                .getFocusChainSettings();
-                if (focusChainSettings != null
-                        && focusChainSettings.isEnabled()
-                        && config.getCallbacks() != null) {
-                    String taskProgress =
-                            block.getParams() != null
-                                            && block.getParams().get("task_progress") != null
-                                    ? String.valueOf(block.getParams().get("task_progress"))
-                                    : null;
-                    if (taskProgress != null) {
-                        config.getCallbacks().updateFCListFromToolResponse(taskProgress);
-                    }
-                }
-            } catch (Exception e) {
-                log.debug("Failed to update Focus Chain", e);
-            }
-        }
-    }
-
     private boolean isPlanModeToolRestricted(String toolName, ToolContext config) {
         Boolean strictPlanModeEnabled = getStrictPlanModeEnabled(config);
         if (strictPlanModeEnabled == null || !strictPlanModeEnabled) {
@@ -515,7 +487,7 @@ public class DefaultExecutor implements ToolExecutor {
     }
 
     private void handlePartialBlock(ToolUse block, ToolContext config) {
-        ToolHandler handler = registry.getHandler(block.getName());
+        ToolHandler<?> handler = registry.getToolHandler(block.getName());
         if (handler == null) {
             return;
         }

@@ -1,8 +1,6 @@
 package com.hhoa.kline.core.core.tools.handlers;
 
-import com.hhoa.kline.core.core.assistant.DiffProcessor;
 import com.hhoa.kline.core.core.assistant.ToolUse;
-import com.hhoa.kline.core.core.ignore.ClineIgnoreController;
 import com.hhoa.kline.core.core.integrations.editor.DiffViewProvider;
 import com.hhoa.kline.core.core.prompts.ResponseFormatter;
 import com.hhoa.kline.core.core.services.telemetry.TelemetryService;
@@ -10,8 +8,6 @@ import com.hhoa.kline.core.core.shared.ClineAsk;
 import com.hhoa.kline.core.core.shared.ClineMessageFormat;
 import com.hhoa.kline.core.core.shared.ClineSay;
 import com.hhoa.kline.core.core.task.AskResult;
-import com.hhoa.kline.core.core.tools.ToolArgumentMapper;
-import com.hhoa.kline.core.core.tools.args.ReplaceInFileInput;
 import com.hhoa.kline.core.core.tools.args.WriteToFileInput;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
@@ -19,19 +15,14 @@ import com.hhoa.kline.core.core.tools.types.ToolState;
 import com.hhoa.kline.core.core.tools.types.UIHelpers;
 import com.hhoa.kline.core.core.tools.utils.ToolResultUtils;
 import com.hhoa.kline.core.core.utils.StringUtils;
-import com.hhoa.kline.core.core.workspace.WorkspaceConfig;
-import com.hhoa.kline.core.core.workspace.WorkspaceResolver;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.text.MessageFormat;
 import java.util.Arrays;
 import lombok.Getter;
 import lombok.Setter;
 
 /**
- * 写入/替换文件工具处理器 支持 write_to_file / replace_in_file / new_rule 三类操作
+ * 写入文件工具处理器，仅负责 write_to_file。
  *
  * @author hhoa
  */
@@ -51,56 +42,6 @@ public class WriteToFileToolHandler implements StateFullToolHandler<WriteToFileI
         return path != null && !path.isEmpty() ? path : absolutePath;
     }
 
-    private static FileToolInput inputForTool(WriteToFileInput input, ToolUse block) {
-        if ("replace_in_file".equals(block.getName())) {
-            ReplaceInFileInput replaceInput =
-                    ToolArgumentMapper.map(block, ReplaceInFileInput.class);
-            return new FileToolInput(
-                    replaceInput.path(), replaceInput.absolutePath(), null, replaceInput.diff());
-        }
-        return new FileToolInput(input.path(), input.absolutePath(), input.content(), null);
-    }
-
-    private static String buildToolMessage(String tool, String path, String content) {
-        return buildJsonMessage(tool, path, content, "true");
-    }
-
-    private static String buildUserFeedbackMessage(String tool, String path, String diff) {
-        return """
-            {"tool":"%s","path":"%s","diff":"%s"}"""
-                .formatted(tool, StringUtils.escapeJson(path), StringUtils.escapeJson(diff));
-    }
-
-    private static String buildJsonMessage(
-            String tool, String path, String content, String operationIsLocatedInWorkspace) {
-        return MessageFormat.format(
-                """
-            '{'"tool":"{0}","path":"{1}","content":"{2}","operationIsLocatedInWorkspace":{3}'}'""",
-                tool,
-                StringUtils.escapeJson(path),
-                StringUtils.escapeJson(content),
-                operationIsLocatedInWorkspace != null ? operationIsLocatedInWorkspace : "true");
-    }
-
-    private static String getModelId(ToolContext config) {
-        return config.getApi() != null && config.getApi().getModel() != null
-                ? config.getApi().getModel().getId()
-                : "unknown";
-    }
-
-    private static boolean determineFileExists(DiffViewProvider dvp, Path absolutePath) {
-        if (dvp != null && dvp.getEditType() != null) {
-            return dvp.getEditType() == DiffViewProvider.EditType.MODIFY;
-        }
-
-        boolean exists = Files.exists(absolutePath);
-        if (dvp != null) {
-            dvp.setEditType(
-                    exists ? DiffViewProvider.EditType.MODIFY : DiffViewProvider.EditType.CREATE);
-        }
-        return exists;
-    }
-
     @Override
     public ToolState createToolState() {
         return new WriteFileToolState();
@@ -113,26 +54,23 @@ public class WriteToFileToolHandler implements StateFullToolHandler<WriteToFileI
 
     public void handlePartialBlock(WriteToFileInput input, ToolContext context, ToolUse block) {
         UIHelpers ui = UIHelpers.create(context);
-        FileToolInput toolInput = inputForTool(input, block);
-        String rawRelPath = getPathParam(toolInput.path(), toolInput.absolutePath());
-        String rawContent = toolInput.content();
-        String rawDiff = toolInput.diff();
+        String rawRelPath = getPathParam(input.path(), input.absolutePath());
+        String rawContent = input.content();
 
-        if (rawRelPath == null || (rawContent == null && rawDiff == null)) {
+        if (rawRelPath == null || rawContent == null) {
             return;
         }
 
         ToolContext config = ui.getContext();
         try {
             FileOperationResult result =
-                    validateAndPrepareFileOperation(config, block, rawRelPath, rawDiff, rawContent);
+                    validateAndPrepareFileOperation(config, rawRelPath, rawContent);
             if (result == null) {
                 return;
             }
 
             String tool = result.fileExists ? "editedExistingFile" : "newFileCreated";
-            String contentValue = result.diff != null ? result.diff : result.content;
-            String msg = buildToolMessage(tool, result.relPath, contentValue);
+            String msg = FileToolSupport.buildToolMessage(tool, result.relPath, result.content);
 
             Boolean approve = ui.shouldAutoApproveToolWithPath(block.getName(), result.relPath);
 
@@ -158,36 +96,9 @@ public class WriteToFileToolHandler implements StateFullToolHandler<WriteToFileI
         }
     }
 
-    public void handleReplaceInFilePartialBlock(
-            ReplaceInFileInput input, ToolContext context, ToolUse block) {
-        WriteToFileInput writeInput =
-                new WriteToFileInput(
-                        input.path(), input.absolutePath(), null, input.taskProgress());
-        handlePartialBlock(writeInput, context, block);
-    }
-
     public ToolExecuteResult execute(WriteToFileInput input, ToolContext context, ToolUse block) {
-        FileToolInput toolInput = inputForTool(input, block);
-        String rawRelPath = getPathParam(toolInput.path(), toolInput.absolutePath());
-        String rawContent = toolInput.content();
-        String rawDiff = toolInput.diff();
-
-        if ("replace_in_file".equals(block.getName())
-                && (rawDiff == null || rawDiff.trim().isEmpty())) {
-            context.getTaskState()
-                    .getApiTurnState()
-                    .setConsecutiveMistakeCount(
-                            context.getTaskState().getApiTurnState().getConsecutiveMistakeCount()
-                                    + 1);
-            if (context.getServices().getDiffViewProvider() != null) {
-                try {
-                    context.getServices().getDiffViewProvider().reset();
-                } catch (Exception ignored) {
-                }
-            }
-            return HandlerUtils.createToolExecuteResult(
-                    formatResponse.toolError(formatResponse.missingToolParameterError("diff")));
-        }
+        String rawRelPath = getPathParam(input.path(), input.absolutePath());
+        String rawContent = input.content();
 
         if ("write_to_file".equals(block.getName())
                 && (rawContent == null || rawContent.trim().isEmpty())) {
@@ -223,27 +134,9 @@ public class WriteToFileToolHandler implements StateFullToolHandler<WriteToFileI
                                     rawRelPath, mistakeCount, null)));
         }
 
-        if ("new_rule".equals(block.getName())
-                && (rawContent == null || rawContent.trim().isEmpty())) {
-            context.getTaskState()
-                    .getApiTurnState()
-                    .setConsecutiveMistakeCount(
-                            context.getTaskState().getApiTurnState().getConsecutiveMistakeCount()
-                                    + 1);
-            if (context.getServices().getDiffViewProvider() != null) {
-                try {
-                    context.getServices().getDiffViewProvider().reset();
-                } catch (Exception ignored) {
-                }
-            }
-            return HandlerUtils.createToolExecuteResult(
-                    formatResponse.toolError(formatResponse.missingToolParameterError("content")));
-        }
-
         try {
             FileOperationResult result =
-                    validateAndPrepareFileOperation(
-                            context, block, rawRelPath, rawDiff, rawContent);
+                    validateAndPrepareFileOperation(context, rawRelPath, rawContent);
             if (result == null) {
                 return HandlerUtils.createToolExecuteResult("");
             }
@@ -265,14 +158,6 @@ public class WriteToFileToolHandler implements StateFullToolHandler<WriteToFileI
         }
     }
 
-    public ToolExecuteResult executeReplaceInFile(
-            ReplaceInFileInput input, ToolContext context, ToolUse block) {
-        WriteToFileInput writeInput =
-                new WriteToFileInput(
-                        input.path(), input.absolutePath(), null, input.taskProgress());
-        return execute(writeInput, context, block);
-    }
-
     @Override
     public ToolExecuteResult resume(
             ToolContext context, ToolUse block, ToolState toolState, AskResult askResult) {
@@ -280,7 +165,7 @@ public class WriteToFileToolHandler implements StateFullToolHandler<WriteToFileI
         FileOperationResult result = state.getResult();
 
         boolean approved = ToolResultUtils.processAskResult(askResult, context);
-        String modelId = getModelId(context);
+        String modelId = FileToolSupport.getModelId(context);
         TelemetryService telemetry = context.getServices().getTelemetryService();
 
         if (!approved) {
@@ -326,115 +211,41 @@ public class WriteToFileToolHandler implements StateFullToolHandler<WriteToFileI
     }
 
     private FileOperationResult validateAndPrepareFileOperation(
-            ToolContext config,
-            ToolUse block,
-            String rawRelPath,
-            String rawDiff,
-            String rawContent) {
+            ToolContext config, String rawRelPath, String rawContent) {
         try {
             if (config.getWorkspaceManager() == null) {
                 throw new IllegalStateException("workspaceManager 未配置，无法写入文件");
             }
-            WorkspaceConfig workspaceConfig = new WorkspaceConfig(config.getWorkspaceManager());
-            WorkspaceResolver.WorkspacePathResult pathResult =
-                    WorkspaceResolver.resolveWorkspacePath(
-                            workspaceConfig,
+            FileToolSupport.ResolvedFileTarget target =
+                    FileToolSupport.resolveFileTarget(
+                            config,
                             rawRelPath,
                             "WriteToFileToolHandler.validateAndPrepareFileOperation");
 
-            Path absolutePath = Paths.get(pathResult.absolutePath());
-            String resolvedPath = pathResult.resolvedPath();
-
-            Path fallbackAbsolutePath = Paths.get(config.getCwd(), rawRelPath).normalize();
-            boolean usedHint = true;
-            TelemetryService.WorkspaceContext workspaceContext =
-                    new TelemetryService.WorkspaceContext(
-                            usedHint, !absolutePath.equals(fallbackAbsolutePath), "hint");
-
-            ClineIgnoreController controller = config.getServices().getClineIgnoreController();
-            if (controller != null && !controller.validateAccess(resolvedPath)) {
+            if (!FileToolSupport.validateClineIgnore(config, target.resolvedPath())) {
                 config.getCallbacks()
-                        .say(ClineSay.CLINEIGNORE_ERROR, resolvedPath, null, null, false, null);
+                        .say(
+                                ClineSay.CLINEIGNORE_ERROR,
+                                target.resolvedPath(),
+                                null,
+                                null,
+                                false,
+                                null);
 
                 String errorResponse =
-                        formatResponse.toolError(formatResponse.clineIgnoreError(resolvedPath));
+                        formatResponse.toolError(
+                                formatResponse.clineIgnoreError(target.resolvedPath()));
 
                 return new FileOperationResult(errorResponse);
             }
 
             DiffViewProvider dvp = config.getServices().getDiffViewProvider();
-            boolean fileExists = determineFileExists(dvp, absolutePath);
+            boolean fileExists = FileToolSupport.determineFileExists(dvp, target.absolutePath());
 
-            String newContent = "";
-
-            String diff = rawDiff;
-
-            if (diff != null) {
-                if (!config.getApi().getModel().getId().contains("claude")) {
-                    diff = StringUtils.fixModelHtmlEscaping(diff);
-                    diff = StringUtils.removeInvalidChars(diff);
-                }
-
-                if (!config.getServices().getDiffViewProvider().isEditing()) {
-                    ToolContext.OpenOptions opts = new ToolContext.OpenOptions();
-                    opts.displayPath = rawRelPath;
-                    try {
-                        config.getServices()
-                                .getDiffViewProvider()
-                                .open(absolutePath.toString(), opts.displayPath);
-                    } catch (IOException e) {
-                        throw new RuntimeException("Failed to open diff editor", e);
-                    }
-                }
-
-                try {
-                    String originalContent =
-                            dvp != null && dvp.getOriginalContent() != null
-                                    ? dvp.getOriginalContent()
-                                    : (fileExists ? Files.readString(absolutePath) : "");
-                    newContent =
-                            new DiffProcessor()
-                                    .constructNewFileContent(
-                                            diff, originalContent, !block.isPartial());
-                } catch (Exception error) {
-                    config.getCallbacks()
-                            .say(ClineSay.DIFF_ERROR, resolvedPath, null, null, false, null);
-
-                    String errorType =
-                            error.getMessage() != null
-                                            && error.getMessage()
-                                                    .contains("does not match anything")
-                                    ? "search_not_found"
-                                    : "other_diff_error";
-
-                    TelemetryService telemetry = config.getServices().getTelemetryService();
-                    if (telemetry != null) {
-                        telemetry.captureDiffEditFailure(
-                                config.getUlid(), getModelId(config), errorType);
-                    }
-
-                    String errorResponse =
-                            formatResponse.toolError(
-                                    (error.getMessage() != null ? error.getMessage() : "")
-                                            + "\n\n"
-                                            + formatResponse.diffError(
-                                                    resolvedPath,
-                                                    dvp != null && dvp.getOriginalContent() != null
-                                                            ? dvp.getOriginalContent()
-                                                            : ""));
-
-                    if (dvp != null) {
-                        try {
-                            dvp.revertChanges();
-                            dvp.reset();
-                        } catch (Exception ex) {
-                        }
-                    }
-
-                    return new FileOperationResult(errorResponse);
-                }
-            } else if (rawContent != null) {
-                newContent = rawContent;
+            if (rawContent == null) {
+                return null;
+            }
+            String newContent = rawContent;
 
                 if (newContent.startsWith("```")) {
                     String[] lines = newContent.split("\n");
@@ -457,20 +268,15 @@ public class WriteToFileToolHandler implements StateFullToolHandler<WriteToFileI
                     newContent = StringUtils.fixModelHtmlEscaping(newContent);
                     newContent = StringUtils.removeInvalidChars(newContent);
                 }
-            } else {
-                return null;
-            }
-
             newContent = StringUtils.trimEnd(newContent);
 
             return new FileOperationResult(
                     rawRelPath,
-                    absolutePath,
+                    target.absolutePath(),
                     fileExists,
-                    diff,
                     rawContent,
                     newContent,
-                    workspaceContext);
+                    target.workspaceContext());
         } catch (Exception e) {
             throw new RuntimeException("Failed to prepare file operation: " + e.getMessage(), e);
         }
@@ -480,8 +286,8 @@ public class WriteToFileToolHandler implements StateFullToolHandler<WriteToFileI
             ToolContext config, ToolUse block, FileOperationResult result) {
 
         String tool = result.fileExists ? "editedExistingFile" : "newFileCreated";
-        String contentValue = result.diff != null ? result.diff : result.content;
-        String completeMessage = buildToolMessage(tool, result.relPath, contentValue);
+        String completeMessage =
+                FileToolSupport.buildToolMessage(tool, result.relPath, result.content);
 
         Boolean approve =
                 config.getCallbacks()
@@ -504,7 +310,7 @@ public class WriteToFileToolHandler implements StateFullToolHandler<WriteToFileI
             telemetry.captureToolUsage(
                     config.getUlid(),
                     block.getName(),
-                    getModelId(config),
+                    FileToolSupport.getModelId(config),
                     true,
                     true,
                     result.workspaceContext);
@@ -551,8 +357,8 @@ public class WriteToFileToolHandler implements StateFullToolHandler<WriteToFileI
 
         if (!dvp.isEditing()) {
             String tool = result.fileExists ? "editedExistingFile" : "newFileCreated";
-            String contentValue = result.diff != null ? result.diff : result.content;
-            String partialMessage = buildToolMessage(tool, result.relPath, contentValue);
+            String partialMessage =
+                    FileToolSupport.buildToolMessage(tool, result.relPath, result.content);
 
             config.getCallbacks().ask(ClineAsk.TOOL, partialMessage, true, ClineMessageFormat.JSON);
             try {
@@ -607,7 +413,8 @@ public class WriteToFileToolHandler implements StateFullToolHandler<WriteToFileI
                 .trackFileContext(result.relPath, "user_edited")
                 .join();
         String tool = result.fileExists ? "editedExistingFile" : "newFileCreated";
-        String userFeedbackMsg = buildUserFeedbackMessage(tool, result.relPath, save.userEdits);
+        String userFeedbackMsg =
+                FileToolSupport.buildUserFeedbackMessage(tool, result.relPath, save.userEdits);
         config.getCallbacks()
                 .say(ClineSay.USER_FEEDBACK_DIFF, userFeedbackMsg, null, null, false, null);
         return HandlerUtils.createToolExecuteResult(
@@ -623,7 +430,6 @@ public class WriteToFileToolHandler implements StateFullToolHandler<WriteToFileI
         String relPath;
         Path absolutePath;
         boolean fileExists;
-        String diff;
         String content;
         String newContent;
         TelemetryService.WorkspaceContext workspaceContext;
@@ -633,14 +439,12 @@ public class WriteToFileToolHandler implements StateFullToolHandler<WriteToFileI
                 String relPath,
                 Path absolutePath,
                 boolean fileExists,
-                String diff,
                 String content,
                 String newContent,
                 TelemetryService.WorkspaceContext workspaceContext) {
             this.relPath = relPath;
             this.absolutePath = absolutePath;
             this.fileExists = fileExists;
-            this.diff = diff;
             this.content = content;
             this.newContent = newContent;
             this.workspaceContext = workspaceContext;
@@ -650,6 +454,4 @@ public class WriteToFileToolHandler implements StateFullToolHandler<WriteToFileI
             this.error = error;
         }
     }
-
-    private record FileToolInput(String path, String absolutePath, String content, String diff) {}
 }

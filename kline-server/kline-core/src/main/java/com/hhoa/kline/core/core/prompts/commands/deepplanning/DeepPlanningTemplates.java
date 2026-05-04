@@ -12,8 +12,8 @@ final class DeepPlanningTemplates {
 
     static final String FOCUS_CHAIN_INTRO =
             """
-            **Task Progress Parameter:**
-            When creating the new task, you must include a task_progress parameter that breaks down the implementation into trackable steps. This parameter should be included inside the tool call, but not located inside of other content/argument blocks. This should follow the standard Markdown checklist format with "- [ ]" for incomplete items.""";
+            **TodoWrite Task Progress:**
+            When creating the new task, include a TodoWrite-oriented task list in the task context that breaks down the implementation into trackable steps. Use structured todo items with content, status, and activeForm when the implementation task starts.""";
 
     static final String BASH_INVESTIGATION_COMMANDS =
             """
@@ -230,7 +230,7 @@ final class DeepPlanningTemplates {
                 + "\n\n"
                 + "## STEP 4: Create Implementation Task\n\n"
                 + "Use the new_task command to create a task for implementing the plan. "
-                + "The task must include a <task_progress> list that breaks down the implementation into trackable steps.\n\n"
+                + "The task must include a TodoWrite task list that breaks down the implementation into trackable steps.\n\n"
                 + "### Task Creation Requirements\n\n"
                 + "Your new task should be self-contained and reference the plan document rather than "
                 + "requiring additional codebase investigation. Include these specific instructions in the task description:\n\n"
@@ -240,15 +240,14 @@ final class DeepPlanningTemplates {
                 + "and explicitly provide them when creating the new task:\n"
                 + BASH_PLAN_NAVIGATION_COMMANDS
                 + "\n\n"
-                + "**Task Progress Format:**\n"
+                + "**TodoWrite Task Progress Format:**\n"
                 + "<IMPORTANT>\n"
-                + "You absolutely must include the task_progress contents in context when creating the new task. "
-                + "When providing it, do not wrap it in XML tags- instead provide it like this:\n\n\n"
-                + "task_progress Items:\n"
-                + "- [ ] Step 1: Brief description of first implementation step\n"
-                + "- [ ] Step 2: Brief description of second implementation step\n"
-                + "- [ ] Step 3: Brief description of third implementation step\n"
-                + "- [ ] Step N: Brief description of final implementation step\n\n\n"
+                + "You absolutely must include the TodoWrite contents in context when creating the new task. "
+                + "Provide it as structured task-progress content, not XML:\n\n\n"
+                + "TodoWrite Items:\n"
+                + "- content: Step 1: Brief description of first implementation step; status: pending; activeForm: Working on first implementation step\n"
+                + "- content: Step 2: Brief description of second implementation step; status: pending; activeForm: Working on second implementation step\n"
+                + "- content: Step N: Brief description of final implementation step; status: pending; activeForm: Working on final implementation step\n\n\n"
                 + "You also MUST include the path to the markdown file you have created in your new task prompt. "
                 + "You should do this as follows:\n\n"
                 + "Refer to @path/to/file/markdown.md for a complete breakdown of the task requirements and steps. "

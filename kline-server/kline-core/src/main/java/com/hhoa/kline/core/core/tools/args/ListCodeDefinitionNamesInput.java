@@ -7,8 +7,4 @@ public record ListCodeDefinitionNamesInput(
         @JsonProperty(value = "path", required = true)
                 @JsonPropertyDescription(
                         "The path of a directory relative to the current working directory.")
-                String path,
-        @JsonProperty(value = "task_progress", required = false)
-                @JsonPropertyDescription(
-                        "A checklist showing task progress after this tool use is completed.")
-                String taskProgress) {}
+                String path) {}

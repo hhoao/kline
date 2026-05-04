@@ -17,15 +17,13 @@ public class ToolSpec {
 
     private ModelFamily variant;
 
-    private String id;
-
     private String name;
 
     private String description;
 
-    private String instruction;
+    private String prompt;
 
-    private Function<SystemPromptContext, Boolean> contextRequirements;
+    private Function<SystemPromptContext, Boolean> enabled;
 
     private Map<String, Object> inputSchema;
 
@@ -43,11 +41,6 @@ public class ToolSpec {
             return this;
         }
 
-        public ToolSpecBuilder id(String id) {
-            spec.setId(id);
-            return this;
-        }
-
         public ToolSpecBuilder name(String name) {
             spec.setName(name);
             return this;
@@ -58,14 +51,14 @@ public class ToolSpec {
             return this;
         }
 
-        public ToolSpecBuilder instruction(String instruction) {
-            spec.setInstruction(instruction);
+        public ToolSpecBuilder prompt(String prompt) {
+            spec.setPrompt(prompt);
             return this;
         }
 
         public ToolSpecBuilder contextRequirements(
                 Function<SystemPromptContext, Boolean> contextRequirements) {
-            spec.setContextRequirements(contextRequirements);
+            spec.setEnabled(contextRequirements);
             return this;
         }
 

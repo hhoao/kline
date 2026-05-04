@@ -36,7 +36,7 @@ public final class Gpt51DeepPlanningVariant {
     /**
      * Generates the deep-planning template dynamically. Structure is identical to Gemini3 variant.
      *
-     * @param focusChainEnabled Whether focus chain (task_progress) is enabled
+     * @param focusChainEnabled Whether focus chain (TodoWrite) is enabled
      * @param enableNativeToolCalls Whether native tool calling is enabled
      */
     public static String generateTemplate(

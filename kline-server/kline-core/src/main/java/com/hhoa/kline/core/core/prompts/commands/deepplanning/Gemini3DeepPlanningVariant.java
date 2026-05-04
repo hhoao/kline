@@ -36,37 +36,36 @@ public final class Gemini3DeepPlanningVariant {
     /**
      * Generates the deep-planning template dynamically.
      *
-     * @param focusChainEnabled Whether focus chain (task_progress) is enabled
+     * @param focusChainEnabled Whether focus chain (TodoWrite) is enabled
      * @param enableNativeToolCalls Whether native tool calling is enabled
      */
     public static String generateTemplate(
             boolean focusChainEnabled, boolean enableNativeToolCalls) {
         String focusChainTracker =
                 focusChainEnabled
-                        ? "You should track these five steps in your task_progress parameter, and update it only when steps are completed.\n"
+                        ? "You should track these five steps with TodoWrite, and update statuses only when steps are completed.\n"
                         : "";
 
         String implementationOrderExtra =
                 focusChainEnabled
-                        ? "A task_progress list of steps that will need to be completed during the implementation\n"
+                        ? "A TodoWrite list of steps that will need to be completed during the implementation\n"
                         : "";
 
         String step5TaskProgress =
                 focusChainEnabled
-                        ? "The task must include a <task_progress> list that breaks down the implementation into trackable steps."
+                        ? "The task must include a TodoWrite list that breaks down the implementation into trackable steps."
                         : "";
 
         String taskProgressFormat =
                 focusChainEnabled
                         ? """
-                **Task Progress Format:**
-                You absolutely MUST include the task_progress contents in context when creating the new task. When providing it, do not wrap it in XML tags- instead provide it like this:
+                **TodoWrite Task Progress Format:**
+                You absolutely MUST include the TodoWrite contents in context when creating the new task. When providing it, do not wrap it in XML tags; provide it like this:
 
-                task_progress Items:
-                - [ ] Step 1: Brief description of first implementation step
-                - [ ] Step 2: Brief description of second implementation step
-                - [ ] Step 3: Brief description of third implementation step
-                - [ ] Step N: Brief description of subsequent/final implementation step(s)
+                TodoWrite Items:
+                - content: Step 1: Brief description of first implementation step; status: pending; activeForm: Working on first implementation step
+                - content: Step 2: Brief description of second implementation step; status: pending; activeForm: Working on second implementation step
+                - content: Step N: Brief description of subsequent/final implementation step(s); status: pending; activeForm: Working on subsequent/final implementation step(s)
 
                 **Markdown Implementation Plan Path:**
                 You also MUST include the path to the markdown file you have created in your new task prompt. You should do this as follows:

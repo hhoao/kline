@@ -1,7 +1,5 @@
 package com.hhoa.kline.core.core.tools;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.victools.jsonschema.generator.Option;
@@ -16,17 +14,9 @@ import com.github.victools.jsonschema.module.swagger2.Swagger2Module;
 import com.hhoa.ai.kline.commons.utils.JsonUtils;
 import com.hhoa.kline.core.core.prompts.systemprompt.ModelFamily;
 import com.hhoa.kline.core.core.tools.handlers.ToolHandler;
-import com.hhoa.kline.core.core.tools.types.ToolContext;
-import com.hhoa.kline.core.core.tools.types.UIHelpers;
-import com.hhoa.kline.core.enums.ClineDefaultTool;
-import java.lang.reflect.Method;
-import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 /** Resolves a {@link ToolSpec} from typed metadata and argument schema. */
@@ -35,22 +25,17 @@ public final class ToolSpecResolver {
 
     private ToolSpecResolver() {}
 
-    public static <I, H extends ToolHandler> ToolSpec resolve(
-            ToolSpecProvider<I, H> provider, ModelFamily family, H handler) {
-        validateHandlerBinding(provider, handler);
-        if (!provider.enabled(family)) {
-            return null;
-        }
-        MethodInput methodInput = resolveMethodInput(handler.getClass(), "execute");
-        Class<?> inputType = methodInput.primaryInputType();
-        Map<String, Object> inputSchema = generateInputSchema(methodInput);
-        customizeInputSchema(provider, family, inputSchema);
+    public static ToolSpec resolve(ToolSpecProvider<?> provider, ModelFamily family) {
+        ToolHandler<?> handler = provider.handler(family);
+        validateHandlerBinding(provider, handler, family);
+
+        Class<?> inputType = requireProviderInputType(provider, family);
+        Map<String, Object> inputSchema = generateInputSchema(inputType);
         return ToolSpec.builder()
                 .variant(family)
-                .id(provider.id())
                 .name(provider.name())
                 .description(provider.description(family))
-                .instruction(provider.instruction(family))
+                .prompt(provider.prompt(family))
                 .contextRequirements(provider.contextRequirements(family))
                 .inputType(inputType)
                 .inputSchema(inputSchema)
@@ -61,17 +46,15 @@ public final class ToolSpecResolver {
             String id,
             String name,
             String description,
-            String instruction,
+            String prompt,
             Class<?> inputType,
             ModelFamily family) {
         Map<String, Object> inputSchema = generateInputSchema(inputType);
-        applyDefaultSchemaExtensions(inputSchema);
         return ToolSpec.builder()
                 .variant(family)
-                .id(id)
                 .name(name)
                 .description(description)
-                .instruction(instruction)
+                .prompt(prompt)
                 .inputType(inputType)
                 .inputSchema(inputSchema)
                 .build();
@@ -81,66 +64,63 @@ public final class ToolSpecResolver {
             String id,
             String name,
             String description,
-            String instruction,
+            String prompt,
             ModelFamily family,
-            ToolHandler handler) {
-        MethodInput methodInput = resolveMethodInput(handler.getClass(), "execute");
-        Map<String, Object> inputSchema = generateInputSchema(methodInput);
-        applyDefaultSchemaExtensions(inputSchema);
+            ToolHandler<?> handler) {
+        Class<?> inputType = requireArgumentType(handler.getClass());
+        Map<String, Object> inputSchema = generateInputSchema(inputType);
         return ToolSpec.builder()
                 .variant(family != null ? family : ModelFamily.GENERIC)
-                .id(id)
                 .name(name)
                 .description(description)
-                .instruction(instruction)
-                .inputType(methodInput.primaryInputType())
+                .prompt(prompt)
+                .inputType(inputType)
                 .inputSchema(inputSchema)
                 .build();
     }
 
-    private static void customizeInputSchema(
-            ToolSpecProvider<?, ?> provider, ModelFamily family, Map<String, Object> inputSchema) {
-        applyDefaultSchemaExtensions(inputSchema);
-        ToolSchema.exclude(inputSchema, provider.excludedParameters(family));
-        provider.customizeInputSchema(family, inputSchema);
-    }
-
-    private static void applyDefaultSchemaExtensions(Map<String, Object> inputSchema) {
-        if (ToolSchema.property(inputSchema, "task_progress") != null) {
-            ToolSchema.dependencies(
-                    inputSchema, "task_progress", List.of(ClineDefaultTool.TODO.getValue()));
-        }
-    }
-
-    public static <I, H extends ToolHandler> void validateHandlerBinding(
-            ToolSpecProvider<I, H> provider, H handler) {
+    public static void validateHandlerBinding(
+            ToolSpecProvider<?> provider, ToolHandler<?> handler, ModelFamily family) {
         if (handler == null) {
             throw new IllegalArgumentException("Tool handler cannot be null.");
         }
 
-        Class<?> actualInputType =
-                resolveMethodInput(handler.getClass(), "execute").primaryInputType();
-        Class<?> expectedInputType = resolveProviderInputType(provider.getClass());
-        if (expectedInputType != null && !expectedInputType.equals(actualInputType)) {
+        Class<?> handlerArg = requireArgumentType(handler.getClass());
+        Class<?> schemaArg = requireProviderInputType(provider, family);
+        if (!schemaArg.equals(handlerArg)) {
             throw new IllegalArgumentException(
-                    "Tool spec provider '%s' expects input type %s but handler %s uses %s."
+                    ("Tool spec provider %s declares input type %s but handler expects %s.")
                             .formatted(
                                     provider.getClass().getName(),
-                                    expectedInputType.getName(),
-                                    handler.getClass().getName(),
-                                    actualInputType != null
-                                            ? actualInputType.getName()
-                                            : "<none>"));
+                                    schemaArg.getName(),
+                                    handlerArg.getName()));
         }
     }
 
-    public static Class<?> resolveArgumentType(Class<?> handlerType) {
-        return resolveMethodInput(handlerType, "execute").primaryInputType();
+    private static Class<?> requireProviderInputType(
+            ToolSpecProvider<?> provider, ModelFamily family) {
+        Class<?> inputType = provider.inputType(family);
+        if (inputType == null || Object.class.equals(inputType)) {
+            throw new IllegalArgumentException(
+                    "Tool spec provider %s must declare a concrete public input type."
+                            .formatted(provider.getClass().getName()));
+        }
+        return inputType;
     }
 
-    public static Class<?> resolveProviderInputType(Class<?> providerType) {
-        Class<?> resolved = resolveGenericArgumentTypeFrom(providerType, ToolSpecProvider.class, 0);
+    public static Class<?> resolveArgumentType(Class<?> handlerType) {
+        Class<?> resolved = resolveArgumentTypeFrom(handlerType);
         return resolved != null && !Object.class.equals(resolved) ? resolved : null;
+    }
+
+    public static Class<?> requireArgumentType(Class<?> handlerType) {
+        Class<?> inputType = resolveArgumentType(handlerType);
+        if (inputType == null) {
+            throw new IllegalArgumentException(
+                    "Tool handler %s must declare a concrete ToolHandler input type."
+                            .formatted(handlerType.getName()));
+        }
+        return inputType;
     }
 
     private static SchemaGenerator createSchemaGenerator() {
@@ -156,150 +136,13 @@ public final class ToolSpecResolver {
     }
 
     public static Map<String, Object> generateInputSchema(Class<?> argumentType) {
-        if (argumentType == null
-                || Void.class.equals(argumentType)
-                || Void.TYPE.equals(argumentType)) {
-            return emptyObjectSchema();
-        }
         ObjectNode schema = SCHEMA_GENERATOR.generateSchema(argumentType);
-        schema.put("additionalProperties", false);
         @SuppressWarnings("unchecked")
         Map<String, Object> schemaMap =
                 JsonUtils.readValue(
                         schema.toString(), new TypeReference<LinkedHashMap<String, Object>>() {});
         return schemaMap;
     }
-
-    public static Map<String, Object> generateInputSchema(MethodInput input) {
-        if (input == null || input.inputParameters().isEmpty()) {
-            return emptyObjectSchema();
-        }
-        if (input.inputParameters().size() == 1
-                && isAggregateInputType(input.inputParameters().getFirst().getType())) {
-            return generateInputSchema(input.inputParameters().getFirst().getType());
-        }
-
-        Map<String, Object> schema = new LinkedHashMap<>();
-        Map<String, Object> properties = new LinkedHashMap<>();
-        List<String> required = new ArrayList<>();
-        schema.put("type", "object");
-        schema.put("properties", properties);
-        schema.put("required", required);
-        schema.put("additionalProperties", false);
-
-        for (Parameter parameter : input.inputParameters()) {
-            String name = parameterName(parameter);
-            Map<String, Object> propertySchema = generateInputSchema(parameter.getType());
-            propertySchema.remove("additionalProperties");
-            JsonPropertyDescription description =
-                    parameter.getAnnotation(JsonPropertyDescription.class);
-            if (description != null && !description.value().isBlank()) {
-                propertySchema.put("description", description.value());
-            }
-            properties.put(name, propertySchema);
-            JsonProperty jsonProperty = parameter.getAnnotation(JsonProperty.class);
-            if (jsonProperty == null || jsonProperty.required()) {
-                required.add(name);
-            }
-        }
-        return schema;
-    }
-
-    private static Map<String, Object> emptyObjectSchema() {
-        return ToolSchema.objectSchema();
-    }
-
-    public record MethodInput(Method method, List<Parameter> inputParameters) {
-        Class<?> primaryInputType() {
-            if (inputParameters == null || inputParameters.isEmpty()) {
-                return null;
-            }
-            if (inputParameters.size() == 1) {
-                return inputParameters.getFirst().getType();
-            }
-            return null;
-        }
-    }
-
-    public static MethodInput resolveMethodInput(Class<?> handlerType, String methodName) {
-        Method best = null;
-        List<Parameter> bestInputParameters = List.of();
-        for (Method method : methodsOf(handlerType)) {
-            if (!methodName.equals(method.getName())) {
-                continue;
-            }
-            List<Parameter> inputParameters = inputParametersBeforeContext(method);
-            if (inputParameters.isEmpty()) {
-                continue;
-            }
-            if (best == null || isDeclaredCloserTo(handlerType, method, best)) {
-                best = method;
-                bestInputParameters = inputParameters;
-            }
-        }
-        return new MethodInput(best, bestInputParameters);
-    }
-
-    private static List<Method> methodsOf(Class<?> type) {
-        List<Method> methods = new ArrayList<>();
-        Class<?> current = type;
-        while (current != null && !Object.class.equals(current)) {
-            Collections.addAll(methods, current.getDeclaredMethods());
-            current = current.getSuperclass();
-        }
-        for (Class<?> iface : type.getInterfaces()) {
-            Collections.addAll(methods, iface.getMethods());
-        }
-        return methods;
-    }
-
-    private static boolean isDeclaredCloserTo(Class<?> handlerType, Method candidate, Method best) {
-        if (candidate.getDeclaringClass().equals(best.getDeclaringClass())) {
-            return candidate.getParameterCount() > best.getParameterCount();
-        }
-        return candidate.getDeclaringClass().equals(handlerType);
-    }
-
-    private static List<Parameter> inputParametersBeforeContext(Method method) {
-        List<Parameter> inputParameters = new ArrayList<>();
-        for (Parameter parameter : method.getParameters()) {
-            if (isContextParameter(parameter.getType())) {
-                break;
-            }
-            inputParameters.add(parameter);
-        }
-        return inputParameters;
-    }
-
-    public static boolean isContextParameter(Class<?> type) {
-        return ToolContext.class.isAssignableFrom(type)
-                || UIHelpers.class.isAssignableFrom(type)
-                || com.hhoa.kline.core.core.assistant.ToolUse.class.isAssignableFrom(type);
-    }
-
-    private static boolean isAggregateInputType(Class<?> type) {
-        return !(type.isPrimitive()
-                || String.class.equals(type)
-                || Number.class.isAssignableFrom(type)
-                || Boolean.class.equals(type)
-                || Character.class.equals(type)
-                || Map.class.isAssignableFrom(type)
-                || List.class.isAssignableFrom(type));
-    }
-
-    public static String parameterName(Parameter parameter) {
-        JsonProperty jsonProperty = parameter.getAnnotation(JsonProperty.class);
-        if (jsonProperty != null && !jsonProperty.value().isBlank()) {
-            return jsonProperty.value();
-        }
-        if (parameter.isNamePresent()) {
-            return parameter.getName();
-        }
-        throw new IllegalArgumentException(
-                "Tool method parameter '%s' on %s needs @JsonProperty or javac -parameters."
-                        .formatted(parameter, parameter.getDeclaringExecutable()));
-    }
-
     private static Class<?> resolveArgumentTypeFrom(Type type) {
         return resolveGenericArgumentTypeFrom(type, ToolHandler.class, 0);
     }

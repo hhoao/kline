@@ -4,7 +4,7 @@ import com.hhoa.kline.core.core.assistant.ToolUse;
 import com.hhoa.kline.core.core.tools.types.ToolContext;
 import com.hhoa.kline.core.core.tools.types.ToolExecuteResult;
 
-/** 完全托管的工具接口：提供名称、描述与规范；执行入口由 ToolHandlerInvocationSupport 反射解析。 */
+/** 完全托管的工具接口：Input 类型由泛型声明，执行入口由 ToolHandlerInvocationSupport 统一映射。 */
 public interface ToolHandler<T> {
 
     String getDescription(ToolUse block);

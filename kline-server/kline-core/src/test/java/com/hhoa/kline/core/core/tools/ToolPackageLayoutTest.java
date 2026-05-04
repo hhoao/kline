@@ -40,13 +40,13 @@ class ToolPackageLayoutTest {
                 List.of(
                         com.hhoa.kline.core.core.tools.specs.AccessMcpResourceTool.class,
                         com.hhoa.kline.core.core.tools.specs.ActModeRespondTool.class,
+                        com.hhoa.kline.core.core.tools.specs.AgentTool.class,
                         com.hhoa.kline.core.core.tools.specs.ApplyPatchTool.class,
                         com.hhoa.kline.core.core.tools.specs.AskFollowupQuestionTool.class,
                         com.hhoa.kline.core.core.tools.specs.AttemptCompletionTool.class,
                         com.hhoa.kline.core.core.tools.specs.BrowserActionTool.class,
-                        com.hhoa.kline.core.core.tools.specs.CliSubagentsTool.class,
                         com.hhoa.kline.core.core.tools.specs.ExecuteCommandToolSpec.class,
-                        com.hhoa.kline.core.core.tools.specs.FocusChainTool.class,
+                        com.hhoa.kline.core.core.tools.specs.TodoWriteTool.class,
                         com.hhoa.kline.core.core.tools.specs.GenerateExplanationTool.class,
                         com.hhoa.kline.core.core.tools.specs.ListCodeDefinitionNamesTool.class,
                         com.hhoa.kline.core.core.tools.specs.ListFilesTool.class,
@@ -56,7 +56,6 @@ class ToolPackageLayoutTest {
                         com.hhoa.kline.core.core.tools.specs.ReadFileTool.class,
                         com.hhoa.kline.core.core.tools.specs.ReplaceInFileTool.class,
                         com.hhoa.kline.core.core.tools.specs.SearchFilesTool.class,
-                        com.hhoa.kline.core.core.tools.specs.SubagentTool.class,
                         com.hhoa.kline.core.core.tools.specs.UseMcpToolTool.class,
                         com.hhoa.kline.core.core.tools.specs.UseSkillTool.class,
                         com.hhoa.kline.core.core.tools.specs.WebFetchTool.class,
@@ -88,7 +87,6 @@ class ToolPackageLayoutTest {
 
         try (var files = Files.list(specRoot)) {
             files.filter(path -> path.getFileName().toString().endsWith(".java"))
-                    .filter(path -> !path.getFileName().toString().equals("BaseToolSpec.java"))
                     .forEach(
                             path -> {
                                 try {

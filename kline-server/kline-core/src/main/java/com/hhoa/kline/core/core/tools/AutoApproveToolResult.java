@@ -3,7 +3,7 @@ package com.hhoa.kline.core.core.tools;
 import java.util.Objects;
 import lombok.Getter;
 
-/** 工具自动批准结果：单布尔或 (local/safe, external/all) 二元组，与 TS 版本 autoApprove 返回值一致。 */
+/** 工具自动批准结果：单布尔或 (local/safe, external/all) 二元组 */
 @Getter
 public final class AutoApproveToolResult {
     private final boolean single;
